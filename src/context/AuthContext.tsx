@@ -75,22 +75,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     // Restore persisted session and process an initial OAuth callback URL.
     (async () => {
-      const [{ data }, initialUrl] = await Promise.all([
-        supabase.auth.getSession(),
-        Linking.getInitialURL(),
-      ]);
+      try {
+        const [{ data }, initialUrl] = await Promise.all([
+          supabase.auth.getSession(),
+          Linking.getInitialURL(),
+        ]);
 
-      if (!mounted) return;
+        if (!mounted) return;
 
-      setSession(data.session);
-      setUser(data.session?.user ?? null);
+        setSession(data.session);
+        setUser(data.session?.user ?? null);
 
-      if (initialUrl) {
-        await handleDeepLink(initialUrl);
-      }
-
-      if (mounted) {
-        setLoading(false);
+        if (initialUrl) {
+          await handleDeepLink(initialUrl);
+        }
+      } catch (err) {
+        console.error('Auth initialization error:', err);
+      } finally {
+        if (mounted) {
+          setLoading(false);
+        }
       }
     })();
 

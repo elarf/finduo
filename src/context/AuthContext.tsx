@@ -16,6 +16,8 @@ import React, {
 } from 'react';
 import * as WebBrowser from 'expo-web-browser';
 import * as AuthSession from 'expo-auth-session';
+import * as QueryParams from 'expo-auth-session/build/QueryParams';
+import * as Linking from 'expo-linking';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import { AuthContextValue } from '../types/auth';
@@ -30,14 +32,67 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const handleDeepLink = useCallback(async (url: string) => {
+    const { params, errorCode } = QueryParams.getQueryParams(url);
+
+    if (errorCode) {
+      console.error('OAuth callback error:', errorCode);
+      return;
+    }
+
+    const code = typeof params.code === 'string' ? params.code : null;
+
+    if (code) {
+      const { error } = await supabase.auth.exchangeCodeForSession(code);
+      if (error) {
+        console.error('Failed to exchange OAuth code:', error.message);
+      }
+      return;
+    }
+
+    const accessToken = typeof params.access_token === 'string'
+      ? params.access_token
+      : null;
+    const refreshToken = typeof params.refresh_token === 'string'
+      ? params.refresh_token
+      : null;
+
+    if (accessToken && refreshToken) {
+      const { error } = await supabase.auth.setSession({
+        access_token: accessToken,
+        refresh_token: refreshToken,
+      });
+
+      if (error) {
+        console.error('Failed to restore OAuth session from callback:', error.message);
+      }
+    }
+  }, []);
+
   // Listen for Supabase auth state changes and persist them.
   useEffect(() => {
-    // Get the existing session on mount.
-    supabase.auth.getSession().then(({ data }) => {
+    let mounted = true;
+
+    // Restore persisted session and process an initial OAuth callback URL.
+    (async () => {
+      const [{ data }, initialUrl] = await Promise.all([
+        supabase.auth.getSession(),
+        Linking.getInitialURL(),
+      ]);
+
+      if (!mounted) return;
+
       setSession(data.session);
       setUser(data.session?.user ?? null);
-      setLoading(false);
-    });
+
+      if (initialUrl) {
+        await handleDeepLink(initialUrl);
+      }
+
+      if (mounted) {
+        setLoading(false);
+      }
+    })();
 
     const { data: listener } = supabase.auth.onAuthStateChange(
       (_event, newSession) => {
@@ -46,16 +101,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       },
     );
 
-    return () => listener.subscription.unsubscribe();
-  }, []);
+    const sub = Linking.addEventListener('url', ({ url }) => {
+      void handleDeepLink(url);
+    });
+
+    return () => {
+      mounted = false;
+      listener.subscription.unsubscribe();
+      sub.remove();
+    };
+  }, [handleDeepLink]);
 
   /**
    * Initiates Google OAuth via Supabase using expo-auth-session.
-   * The redirect URL is built from the Expo proxy so it works in Expo Go
-   * as well as standalone builds.
+    * The redirect URL is generated per runtime (Expo Go vs native scheme)
+    * so the callback can return to this app in development and production.
    */
   const signInWithGoogle = useCallback(async () => {
-    const redirectTo = AuthSession.makeRedirectUri({ scheme: 'finduo' });
+    const redirectTo = AuthSession.makeRedirectUri({
+      scheme: 'finduo',
+      path: 'auth/callback',
+    });
 
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
@@ -73,18 +139,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
 
     if (result.type === 'success' && result.url) {
-      const url = new URL(result.url);
-      const accessToken = url.searchParams.get('access_token');
-      const refreshToken = url.searchParams.get('refresh_token');
-
-      if (accessToken) {
-        await supabase.auth.setSession({
-          access_token: accessToken,
-          refresh_token: refreshToken ?? '',
-        });
-      }
+      await handleDeepLink(result.url);
     }
-  }, []);
+  }, [handleDeepLink]);
 
   const signOut = useCallback(async () => {
     await supabase.auth.signOut();

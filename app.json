@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "finduo",
-    "slug": "finduo",
+    "slug": "elarf",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -28,6 +28,12 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "a9bb1fc5-8ce5-4722-8056-31a965a95a31"
+      }
+    },
+    "owner": "elarf8769"
   }
 }

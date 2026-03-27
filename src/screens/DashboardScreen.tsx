@@ -408,13 +408,15 @@ export default function DashboardScreen() {
 
     let income = 0;
     let expense = 0;
-    let transferBalance = 0; // transfers still affect net balance
+    let transferIn = 0;
+    let transferOut = 0;
     for (const tx of transactions) {
       if (tx.account_id !== accountId || !inInterval(tx.date)) continue;
       const n = Number(tx.amount) || 0;
       const isTransfer = tx.category_id != null && transferCategoryIds.includes(tx.category_id);
       if (isTransfer) {
-        transferBalance += tx.type === 'income' ? n : -n;
+        if (tx.type === 'income') transferIn += n;
+        else transferOut += n;
       } else {
         if (tx.type === 'income') income += n;
         else expense += n;
@@ -424,14 +426,16 @@ export default function DashboardScreen() {
     return {
       income,
       expense,
+      transferIn,
+      transferOut,
       openingBalance,
-      net: openingBalance + income - expense + transferBalance,
+      net: openingBalance + income - expense + transferIn - transferOut,
     };
   }, [accountSettings, inInterval, interval, intervalBounds.start, transactions, transferCategoryIds]);
 
   const selectedSummary = useMemo(() => {
     if (!selectedAccountId) {
-      return { income: 0, expense: 0, net: 0, openingBalance: 0 };
+      return { income: 0, expense: 0, net: 0, openingBalance: 0, transferIn: 0, transferOut: 0 };
     }
     return buildAccountSummary(selectedAccountId);
   }, [buildAccountSummary, selectedAccountId]);
@@ -467,6 +471,8 @@ export default function DashboardScreen() {
           account,
           income: summary.income,
           expense: summary.expense,
+          transferIn: summary.transferIn,
+          transferOut: summary.transferOut,
           openingBalance: summary.openingBalance,
           balance: summary.net,
         };
@@ -477,18 +483,24 @@ export default function DashboardScreen() {
     let income = 0;
     let expense = 0;
     let openingBalance = 0;
+    let transferIn = 0;
+    let transferOut = 0;
 
     for (const row of includedAccountSummaries) {
       income += row.income;
       expense += row.expense;
       openingBalance += row.openingBalance;
+      transferIn += row.transferIn;
+      transferOut += row.transferOut;
     }
 
     return {
       income,
       expense,
+      transferIn,
+      transferOut,
       openingBalance,
-      net: openingBalance + income - expense,
+      net: openingBalance + income - expense + transferIn - transferOut,
     };
   }, [includedAccountSummaries]);
 
@@ -545,13 +557,6 @@ export default function DashboardScreen() {
       widthPercent: max > 0 ? Math.max(8, Math.round((r.total / max) * 100)) : 0,
     }));
   }, [filteredIncludedTxs, categories, transferCategoryIds]);
-
-  const selectedTransferTotal = useMemo(
-    () => filteredSelectedTxs
-      .filter((tx) => tx.category_id != null && transferCategoryIds.includes(tx.category_id))
-      .reduce((sum, tx) => sum + (Number(tx.amount) || 0), 0),
-    [filteredSelectedTxs, transferCategoryIds],
-  );
 
   const themeColor = useMemo(() => {
     if (overviewSummary.net <= 0) return '#ef4444';
@@ -940,7 +945,7 @@ export default function DashboardScreen() {
     try {
       const { data, error } = await supabase
         .from('tags')
-        .insert({ account_id: null, name: newTagName.trim() })
+        .insert({ account_id: entryAccountId ?? selectedAccountId, name: newTagName.trim() })
         .select('id,account_id,name,color')
         .single();
 
@@ -955,7 +960,7 @@ export default function DashboardScreen() {
     } finally {
       setSaving(false);
     }
-  }, [loadData, newTagName]);
+  }, [entryAccountId, loadData, newTagName, selectedAccountId]);
 
   const openCreateTag = useCallback(() => {
     setEditingTagId(null);
@@ -994,7 +999,7 @@ export default function DashboardScreen() {
       } else {
         const { error } = await supabase
           .from('tags')
-          .insert({ account_id: null, name: tagName.trim(), color: tagColor, icon: tagIcon });
+          .insert({ account_id: selectedAccountId, name: tagName.trim(), color: tagColor, icon: tagIcon });
         if (error) throw error;
       }
 
@@ -1264,8 +1269,9 @@ export default function DashboardScreen() {
 
     setSaving(true);
     try {
-      const sourceNote = transferNote.trim() || `Transfer to ${toAccount.name}`;
-      const targetNote = transferNote.trim() || `Transfer from ${fromAccount.name}`;
+      const customNote = transferNote.trim();
+      const sourceNote = customNote ? `${customNote} (→ ${toAccount.name})` : `Transfer → ${toAccount.name}`;
+      const targetNote = customNote ? `${customNote} (← ${fromAccount.name})` : `Transfer ← ${fromAccount.name}`;
 
       // Find-or-create "Transfer" categories so transfers don't appear as uncategorized
       // Creates per-account categories if no global (account_id=null) one exists.
@@ -1707,6 +1713,16 @@ export default function DashboardScreen() {
                     <Text style={[styles.summaryText, styles.positive]}>Income {formatCurrency(overviewSummary.income)}</Text>
                     <Text style={[styles.summaryText, styles.negative]}>Expenses {formatCurrency(overviewSummary.expense)}</Text>
                   </View>
+                  {(overviewSummary.transferIn > 0 || overviewSummary.transferOut > 0) && (
+                    <View style={styles.summaryRow}>
+                      {overviewSummary.transferIn > 0 && (
+                        <Text style={[styles.summaryText, { color: '#a855f7' }]}>Transfer in ↔ {formatCurrency(overviewSummary.transferIn)}</Text>
+                      )}
+                      {overviewSummary.transferOut > 0 && (
+                        <Text style={[styles.summaryText, { color: '#a855f7' }]}>Transfer out ↔ {formatCurrency(overviewSummary.transferOut)}</Text>
+                      )}
+                    </View>
+                  )}
                   <Text style={styles.summaryText}>Total Included Balance: <Text style={totalIncludedBalance >= 0 ? styles.positive : styles.negative}>{formatCurrency(totalIncludedBalance)}</Text></Text>
                   {!desktopView && includedAccountSummaries.length > 1 && (
                     <Text style={styles.summaryText}>
@@ -1741,6 +1757,9 @@ export default function DashboardScreen() {
                       </Text>
                       <Text style={styles.accountOverviewMeta}>In {formatCurrency(item.income, item.account.currency)}</Text>
                       <Text style={styles.accountOverviewMeta}>Out {formatCurrency(item.expense, item.account.currency)}</Text>
+                      {(item.transferIn > 0 || item.transferOut > 0) && (
+                        <Text style={{ color: '#a855f7', fontSize: 11, marginTop: 1 }}>↔ {formatCurrency(item.transferIn + item.transferOut, item.account.currency)}</Text>
+                      )}
                     </TouchableOpacity>
                   ))}
                 </View>
@@ -1796,7 +1815,7 @@ export default function DashboardScreen() {
             {desktopView && (() => {
               const totalAvailable = overviewSummary.openingBalance + overviewSummary.income;
               const spent = overviewSummary.expense;
-              const transferred = selectedTransferTotal;
+              const transferred = overviewSummary.transferOut;
               const remaining = totalAvailable - spent - transferred;
               const spentPct = totalAvailable > 0 ? Math.min(100, Math.round((spent / totalAvailable) * 100)) : 0;
               const transferPct = totalAvailable > 0 ? Math.min(100 - spentPct, Math.round((transferred / totalAvailable) * 100)) : 0;
@@ -1946,7 +1965,9 @@ export default function DashboardScreen() {
                   return (
                     <TouchableOpacity key={tx.id} style={styles.transactionRow} onPress={() => openEditTransaction(tx)}>
                       <View style={{ flex: 1 }}>
-                        <Text style={styles.transactionTitle}>{tx.note || 'Untitled transaction'}</Text>
+                        <Text style={isTransfer ? [styles.transactionTitle, { color: '#a855f7' }] : styles.transactionTitle}>
+                          {tx.note || (isTransfer ? 'Transfer' : 'Untitled transaction')}
+                        </Text>
                         <Text style={styles.transactionMeta}>
                           {tx.date}{acct ? ` · ${acct.name}` : ''}
                         </Text>
@@ -2030,6 +2051,9 @@ export default function DashboardScreen() {
                     </Text>
                     <Text style={styles.accountOverviewMetaIncome}>In {formatCurrency(item.income, item.account.currency)}</Text>
                     <Text style={styles.accountOverviewMetaExpense}>Out {formatCurrency(item.expense, item.account.currency)}</Text>
+                    {(item.transferIn > 0 || item.transferOut > 0) && (
+                      <Text style={{ color: '#a855f7', fontSize: 11, marginTop: 1 }}>↔ {formatCurrency(item.transferIn + item.transferOut, item.account.currency)}</Text>
+                    )}
                   </TouchableOpacity>
                 ))}
               </View>
@@ -2055,18 +2079,21 @@ export default function DashboardScreen() {
                 <Text style={styles.sectionTitle}>Included Transactions</Text>
               </View>
               <View style={styles.listCard}>
-                {filteredIncludedTxs.slice(0, sidebarTxCount).map((tx) => (
+                {filteredIncludedTxs.slice(0, sidebarTxCount).map((tx) => {
+                  const isSidebarTransfer = tx.category_id != null && transferCategoryIds.includes(tx.category_id);
+                  return (
                   <TouchableOpacity
                     key={tx.id}
                     style={styles.sidebarTxRow}
                     onPress={() => openEditTransaction(tx)}
                   >
-                    <Text style={styles.sidebarTxNote} numberOfLines={1}>{tx.note || 'Untitled'}</Text>
-                    <Text style={[styles.sidebarTxAmount, tx.type === 'income' ? styles.positive : styles.negative]}>
-                      {tx.type === 'income' ? '+' : '-'}{formatCurrency(Math.abs(Number(tx.amount)), accountsById[tx.account_id]?.currency)}
+                    <Text style={isSidebarTransfer ? [styles.sidebarTxNote, { color: '#a855f7' }] : styles.sidebarTxNote} numberOfLines={1}>{tx.note || (isSidebarTransfer ? 'Transfer' : 'Untitled')}</Text>
+                    <Text style={[styles.sidebarTxAmount, isSidebarTransfer ? styles.transferAmount : (tx.type === 'income' ? styles.positive : styles.negative)]}>
+                      {isSidebarTransfer ? '↔' : (tx.type === 'income' ? '+' : '-')}{formatCurrency(Math.abs(Number(tx.amount)), accountsById[tx.account_id]?.currency)}
                     </Text>
                   </TouchableOpacity>
-                ))}
+                  );
+                })}
                 {filteredIncludedTxs.length > sidebarTxCount && (
                   <TouchableOpacity onPress={() => setSidebarTxCount((c) => c + 12)} style={{ paddingVertical: 8 }}>
                     <Text style={styles.linkAction}>Load more</Text>

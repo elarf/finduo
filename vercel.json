@@ -1,5 +1,5 @@
 {
-  "buildCommand": "npm run build:web",
+  "buildCommand": "node scripts/create-env.js && npm run build:web",
   "outputDirectory": "dist",
   "headers": [
     {

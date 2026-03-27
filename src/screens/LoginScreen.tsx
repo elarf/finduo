@@ -1,30 +1,43 @@
 /**
  * LoginScreen.
  *
- * Full-screen logo.png as background, dark overlay at the bottom,
- * "Sign in with Google" button centred at the foot of the image.
+ * Layout:
+ *  - logo.png fills the top portion, full-width, contained (no crop)
+ *  - "Sign in with Google" button sits in a dark strip at the bottom
+ *
+ * Responsiveness:
+ *  - Mobile / narrow: fills all available width
+ *  - Desktop (web ≥ 600 px): a centred 430 px column with black side fillers,
+ *    so it looks like a phone on a dark desk
  */
 import React, { useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  ImageBackground,
+  Image,
+  Platform,
   StyleSheet,
   Text,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 
+const MOBILE_MAX_WIDTH = 430;
+const DESKTOP_BREAKPOINT = 600;
+
 export default function LoginScreen() {
   const { signInWithGoogle } = useAuth();
   const [loading, setLoading] = useState(false);
+  const { width } = useWindowDimensions();
+  const isDesktop = Platform.OS === 'web' && width >= DESKTOP_BREAKPOINT;
 
   const handleGoogleSignIn = async () => {
     try {
       setLoading(true);
       await signInWithGoogle();
-    } catch (err) {
+    } catch {
       Alert.alert('Sign-in failed', 'Unable to sign in with Google. Please try again.');
     } finally {
       setLoading(false);
@@ -32,45 +45,72 @@ export default function LoginScreen() {
   };
 
   return (
-    <ImageBackground
-      source={require('../../assets/logo.png')}
-      style={styles.background}
-      resizeMode="cover"
-    >
-      {/* Dark gradient-style footer so button stays readable */}
-      <View style={styles.footer}>
-        <TouchableOpacity
-          style={styles.googleButton}
-          onPress={handleGoogleSignIn}
-          disabled={loading}
-          accessibilityLabel="Sign in with Google"
-        >
-          {loading ? (
-            <ActivityIndicator color="#060A14" />
-          ) : (
-            <Text style={styles.googleButtonText}>Sign in with Google</Text>
-          )}
-        </TouchableOpacity>
+    /* Outer: full screen black — acts as side filler on desktop */
+    <View style={styles.outer}>
+      {/* Phone column — centred and capped at MOBILE_MAX_WIDTH on desktop */}
+      <View style={[styles.phone, isDesktop && styles.phoneDesktop]}>
+
+        {/* Logo area: takes all vertical space above the footer */}
+        <View style={styles.logoArea}>
+          <Image
+            source={require('../../assets/logo.png')}
+            style={styles.logoImage}
+            resizeMode="contain"
+          />
+        </View>
+
+        {/* Footer strip with the CTA button */}
+        <View style={styles.footer}>
+          <TouchableOpacity
+            style={styles.googleButton}
+            onPress={handleGoogleSignIn}
+            disabled={loading}
+            accessibilityLabel="Sign in with Google"
+          >
+            {loading ? (
+              <ActivityIndicator color="#060A14" />
+            ) : (
+              <Text style={styles.googleButtonText}>Sign in with Google</Text>
+            )}
+          </TouchableOpacity>
+        </View>
+
       </View>
-    </ImageBackground>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  background: {
+  outer: {
     flex: 1,
     backgroundColor: '#060A14',
+    alignItems: 'center',
+  },
+  phone: {
+    flex: 1,
+    width: '100%',
+    backgroundColor: '#060A14',
+  },
+  /** Desktop: cap width and add subtle side borders so it pops from the black background */
+  phoneDesktop: {
+    maxWidth: MOBILE_MAX_WIDTH,
+    borderLeftWidth: 1,
+    borderRightWidth: 1,
+    borderColor: '#1A2B40',
+  },
+  logoArea: {
+    flex: 1,
+    width: '100%',
+  },
+  logoImage: {
+    width: '100%',
+    height: '100%',
   },
   footer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
     paddingBottom: 56,
-    paddingTop: 80,
+    paddingTop: 40,
     paddingHorizontal: 32,
-    // dark fade so the button is always readable regardless of logo colours
-    backgroundColor: 'rgba(6, 10, 20, 0.72)',
+    backgroundColor: 'rgba(6, 10, 20, 0.90)',
     alignItems: 'center',
   },
   googleButton: {

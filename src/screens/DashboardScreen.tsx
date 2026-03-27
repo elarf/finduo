@@ -15,6 +15,7 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
 
@@ -126,6 +127,7 @@ export default function DashboardScreen() {
   const [accountSettings, setAccountSettings] = useState<Record<string, AccountSetting>>({});
 
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
+  const [primaryAccountId, setPrimaryAccountId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -439,6 +441,37 @@ export default function DashboardScreen() {
     setMissingSchemaColumns(missing);
   }, []);
 
+  /** Persist account order + primary selection to device storage. */
+  const saveAccountPrefs = useCallback((orderedAccounts: AppAccount[], primaryId: string | null) => {
+    if (!user) return;
+    void AsyncStorage.setItem(
+      `finduo_account_prefs_${user.id}`,
+      JSON.stringify({ order: orderedAccounts.map((a) => a.id), primaryId }),
+    );
+  }, [user]);
+
+  /** Move an account up or down in the list and persist the new order. */
+  const moveAccount = useCallback((idx: number, direction: 'up' | 'down') => {
+    setAccounts((prev) => {
+      const next = [...prev];
+      const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
+      if (swapIdx < 0 || swapIdx >= next.length) return prev;
+      [next[idx], next[swapIdx]] = [next[swapIdx], next[idx]];
+      saveAccountPrefs(next, primaryAccountId);
+      return next;
+    });
+  }, [primaryAccountId, saveAccountPrefs]);
+
+  /** Set an account as the primary (default on load) and select it now. */
+  const setPrimary = useCallback((id: string) => {
+    setPrimaryAccountId(id);
+    setSelectedAccountId(id);
+    setAccounts((prev) => {
+      saveAccountPrefs(prev, id);
+      return prev;
+    });
+  }, [saveAccountPrefs]);
+
   const loadData = useCallback(async () => {
     if (!user) return;
 
@@ -474,18 +507,44 @@ export default function DashboardScreen() {
         (acc, idx, arr) => arr.findIndex((a) => a.id === acc.id) === idx,
       ) as AppAccount[];
 
-      setAccounts(allAccounts);
+      // Apply stored order + primary preference
+      let orderedAccounts = allAccounts;
+      let storedPrimaryId: string | null = null;
+      try {
+        const raw = await AsyncStorage.getItem(`finduo_account_prefs_${user.id}`);
+        if (raw) {
+          const prefs = JSON.parse(raw) as { order?: string[]; primaryId?: string };
+          if (prefs.order?.length) {
+            const validIds = prefs.order.filter((id) => allAccounts.some((a) => a.id === id));
+            const unordered = allAccounts.filter((a) => !validIds.includes(a.id));
+            orderedAccounts = [
+              ...validIds.map((id) => allAccounts.find((a) => a.id === id)!),
+              ...unordered,
+            ];
+          }
+          if (prefs.primaryId && allAccounts.some((a) => a.id === prefs.primaryId)) {
+            storedPrimaryId = prefs.primaryId;
+          }
+        }
+      } catch {
+        // ignore storage errors — fall back to default ordering
+      }
+
+      setAccounts(orderedAccounts);
+
+      const resolvedPrimary = storedPrimaryId ?? orderedAccounts[0]?.id ?? null;
+      setPrimaryAccountId(resolvedPrimary);
 
       const requestedSelected = pendingSelectedAccountIdRef.current;
       const nextSelected =
-        requestedSelected && allAccounts.some((a) => a.id === requestedSelected)
+        requestedSelected && orderedAccounts.some((a) => a.id === requestedSelected)
           ? requestedSelected
-          : allAccounts[0]?.id ?? null;
+          : resolvedPrimary;
 
       pendingSelectedAccountIdRef.current = null;
       setSelectedAccountId(nextSelected);
       setEntryAccountId((prev) => {
-        if (prev && allAccounts.some((a) => a.id === prev)) {
+        if (prev && orderedAccounts.some((a) => a.id === prev)) {
           return prev;
         }
         return nextSelected ?? null;
@@ -1670,8 +1729,9 @@ export default function DashboardScreen() {
                   <Text style={styles.menuIconActionText}>＋</Text>
                 </TouchableOpacity>
               </View>
-              {menuAccountsExpanded && accounts.map((account) => {
+              {menuAccountsExpanded && accounts.map((account, accountIdx) => {
                 const isOwned = account.created_by === user?.id;
+                const isPrimary = account.id === primaryAccountId;
                 return (
                   <View key={account.id} style={styles.manageRow}>
                     <TouchableOpacity
@@ -1681,7 +1741,10 @@ export default function DashboardScreen() {
                         setMenuOpen(false);
                       }}
                     >
-                      <Text style={styles.manageTitle}>{account.name}</Text>
+                      <View style={styles.manageNameRow}>
+                        {isPrimary && <Text style={styles.managePrimaryBadge}>★ </Text>}
+                        <Text style={styles.manageTitle}>{account.name}</Text>
+                      </View>
                       <Text style={styles.manageMeta}>
                         {account.currency}
                         {' • '}
@@ -1690,6 +1753,33 @@ export default function DashboardScreen() {
                         {(accountSettings[account.id]?.carry_over_balance ?? true) ? 'Carry over' : 'No carry over'}
                       </Text>
                     </TouchableOpacity>
+
+                    {/* Reorder up */}
+                    <TouchableOpacity
+                      style={[styles.manageSmallButton, accountIdx === 0 && styles.manageSmallButtonDisabled]}
+                      onPress={() => moveAccount(accountIdx, 'up')}
+                      disabled={accountIdx === 0}
+                    >
+                      <Text style={styles.manageSmallText}>↑</Text>
+                    </TouchableOpacity>
+
+                    {/* Reorder down */}
+                    <TouchableOpacity
+                      style={[styles.manageSmallButton, accountIdx === accounts.length - 1 && styles.manageSmallButtonDisabled]}
+                      onPress={() => moveAccount(accountIdx, 'down')}
+                      disabled={accountIdx === accounts.length - 1}
+                    >
+                      <Text style={styles.manageSmallText}>↓</Text>
+                    </TouchableOpacity>
+
+                    {/* Set as primary */}
+                    <TouchableOpacity
+                      style={[styles.manageSmallButton, isPrimary && styles.manageSmallButtonActive]}
+                      onPress={() => setPrimary(account.id)}
+                    >
+                      <Text style={[styles.manageSmallText, isPrimary && styles.manageSmallTextActive]}>★</Text>
+                    </TouchableOpacity>
+
                     {isOwned ? (
                       <>
                         <TouchableOpacity style={styles.manageIconButton} onPress={() => {
@@ -2893,6 +2983,37 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     paddingVertical: 6,
     paddingHorizontal: 10,
+  },
+  manageNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  managePrimaryBadge: {
+    color: '#53E3A6',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  manageSmallButton: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#1D304A',
+  },
+  manageSmallButtonDisabled: {
+    opacity: 0.25,
+  },
+  manageSmallButtonActive: {
+    backgroundColor: '#1A3D2E',
+  },
+  manageSmallText: {
+    color: '#EAF3FF',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  manageSmallTextActive: {
+    color: '#53E3A6',
   },
   menuItem: {
     backgroundColor: '#142235',

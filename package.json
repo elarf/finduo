@@ -12,6 +12,7 @@
     "import:monefy": "node scripts/import-monefy.js"
   },
   "dependencies": {
+    "@expo/vector-icons": "^15.0.2",
     "@react-native-async-storage/async-storage": "2.2.0",
     "@react-navigation/native": "^7.2.1",
     "@react-navigation/native-stack": "^7.14.9",

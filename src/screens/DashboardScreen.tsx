@@ -19,6 +19,7 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
+import { MaterialIcons } from '@expo/vector-icons';
 
 type TransactionType = 'income' | 'expense';
 type IntervalKey = 'day' | 'week' | 'month' | 'year' | 'all' | 'custom';
@@ -36,12 +37,15 @@ type AppCategory = {
   account_id?: string | null;
   name: string;
   type: TransactionType;
+  color?: string | null;
+  icon?: string | null;
 };
 
 type AppTag = {
   id: string;
   account_id: string;
   name: string;
+  color?: string | null;
 };
 
 type AppTransaction = {
@@ -84,6 +88,47 @@ type ManagedInvite = {
 };
 
 const CURRENCY_OPTIONS = ['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'JPY', 'HUF'];
+
+// Material icon name → use for category auto-suggestion by name keyword
+const ICON_MAP: Record<string, string> = {
+  food: 'restaurant', grocery: 'shopping_cart', groceries: 'shopping_cart',
+  shopping: 'shopping_cart', transport: 'directions_car', car: 'directions_car',
+  travel: 'flight', health: 'local_hospital', medical: 'local_hospital',
+  entertainment: 'movie', coffee: 'coffee', utility: 'bolt', utilities: 'bolt',
+  electricity: 'bolt', housing: 'home', rent: 'home',
+  salary: 'account_balance_wallet', income: 'account_balance_wallet',
+  gift: 'card_giftcard', fitness: 'fitness_center', sport: 'sports',
+  education: 'school', transfer: 'swap_horiz', insurance: 'security',
+  restaurant: 'restaurant', drink: 'local_bar', bar: 'local_bar',
+  tech: 'devices', phone: 'smartphone', subscription: 'subscriptions',
+  beauty: 'face', pet: 'pets', investment: 'trending_up', savings: 'savings',
+  taxi: 'local_taxi', fuel: 'local_gas_station', game: 'sports_esports',
+  music: 'music_note', sport_activity: 'sports', work: 'work',
+};
+
+const CATEGORY_ICONS: string[] = [
+  'restaurant', 'shopping_cart', 'directions_car', 'local_hospital', 'movie',
+  'coffee', 'bolt', 'home', 'account_balance_wallet', 'card_giftcard',
+  'fitness_center', 'school', 'swap_horiz', 'security', 'local_bar', 'devices',
+  'smartphone', 'subscriptions', 'face', 'pets', 'trending_up', 'savings',
+  'local_taxi', 'local_gas_station', 'sports_esports', 'flight', 'music_note',
+  'work', 'attach_money', 'receipt', 'fastfood', 'sports', 'tv', 'spa',
+  'child_care', 'local_pharmacy', 'local_grocery_store', 'theater_comedy',
+];
+
+const COLOR_PRESETS = [
+  '#53E3A6', '#FB7185', '#60A5FA', '#FBBF24', '#A78BFA',
+  '#34D399', '#F97316', '#22D3EE', '#F472B6', '#A3E635',
+  '#E879F9', '#38BDF8', '#F87171', '#4ADE80', '#94A3B8',
+];
+
+function suggestIcon(name: string): string | null {
+  const lower = name.toLowerCase();
+  for (const [key, icon] of Object.entries(ICON_MAP)) {
+    if (lower.includes(key)) return icon;
+  }
+  return null;
+}
 
 function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
@@ -194,6 +239,12 @@ export default function DashboardScreen() {
   const [transferTargetAmount, setTransferTargetAmount] = useState('');
   const [transferDate, setTransferDate] = useState(todayIso());
   const [transferNote, setTransferNote] = useState('');
+
+  const [categoryColor, setCategoryColor] = useState<string | null>(null);
+  const [categoryIcon, setCategoryIcon] = useState<string | null>(null);
+  const [tagColor, setTagColor] = useState<string | null>(null);
+  const [showCategoryIconPicker, setShowCategoryIconPicker] = useState(false);
+  const [showMobileCategoryPicker, setShowMobileCategoryPicker] = useState(false);
 
   const [showIntervalPicker, setShowIntervalPicker] = useState(false);
   const [showEntryAccountPicker, setShowEntryAccountPicker] = useState(false);
@@ -625,12 +676,12 @@ export default function DashboardScreen() {
       ] = await Promise.all([
         supabase
           .from('categories')
-          .select('id,account_id,name,type')
+          .select('id,account_id,name,type,color,icon')
           .or(`account_id.in.(${accountIdList}),account_id.is.null`)
           .order('name', { ascending: true }),
         supabase
           .from('tags')
-          .select('id,account_id,name')
+          .select('id,account_id,name,color')
           .in('account_id', accountIds)
           .order('name', { ascending: true }),
         supabase
@@ -808,6 +859,7 @@ export default function DashboardScreen() {
     setNewTagName('');
     setEntryAccountId(selectedAccountId);
     setShowEntryAccountPicker(false);
+    setShowMobileCategoryPicker(false);
     setShowEntryModal(true);
   }, [selectedAccountId]);
 
@@ -821,6 +873,7 @@ export default function DashboardScreen() {
     setEntryTagIds(tx.tag_ids);
     setEntryAccountId(tx.account_id);
     setShowEntryAccountPicker(false);
+    setShowMobileCategoryPicker(false);
     setShowEntryModal(true);
   }, []);
 
@@ -926,7 +979,7 @@ export default function DashboardScreen() {
       if (editingCategoryId) {
         const { error } = await supabase
           .from('categories')
-          .update({ name: categoryName.trim(), type: categoryType })
+          .update({ name: categoryName.trim(), type: categoryType, color: categoryColor, icon: categoryIcon })
           .eq('id', editingCategoryId);
         if (error) throw error;
       } else {
@@ -934,9 +987,14 @@ export default function DashboardScreen() {
           account_id: selectedAccountId,
           name: categoryName.trim(),
           type: categoryType,
+          color: categoryColor,
+          icon: categoryIcon,
         });
         if (error) throw error;
       }
+      setCategoryColor(null);
+      setCategoryIcon(null);
+      setShowCategoryIconPicker(false);
       setShowCategoryModal(false);
       await loadData();
     } catch (err) {
@@ -944,7 +1002,7 @@ export default function DashboardScreen() {
     } finally {
       setSaving(false);
     }
-  }, [categoryName, categoryType, editingCategoryId, loadData, selectedAccountId]);
+  }, [categoryColor, categoryIcon, categoryName, categoryType, editingCategoryId, loadData, selectedAccountId]);
 
   const deleteCategory = useCallback(async (categoryId: string) => {
     setSaving(true);
@@ -1008,6 +1066,7 @@ export default function DashboardScreen() {
   const openEditTag = useCallback((tag: AppTag) => {
     setEditingTagId(tag.id);
     setTagName(tag.name);
+    setTagColor(tag.color ?? null);
     setShowTagModal(true);
   }, []);
 
@@ -1026,16 +1085,17 @@ export default function DashboardScreen() {
       if (editingTagId) {
         const { error } = await supabase
           .from('tags')
-          .update({ name: tagName.trim() })
+          .update({ name: tagName.trim(), color: tagColor })
           .eq('id', editingTagId);
         if (error) throw error;
       } else {
         const { error } = await supabase
           .from('tags')
-          .insert({ account_id: selectedAccountId, name: tagName.trim() });
+          .insert({ account_id: selectedAccountId, name: tagName.trim(), color: tagColor });
         if (error) throw error;
       }
 
+      setTagColor(null);
       setShowTagModal(false);
       await loadData();
     } catch (err) {
@@ -1043,7 +1103,7 @@ export default function DashboardScreen() {
     } finally {
       setSaving(false);
     }
-  }, [editingTagId, loadData, selectedAccountId, tagName]);
+  }, [editingTagId, loadData, selectedAccountId, tagColor, tagName]);
 
   const deleteTag = useCallback(async (tagId: string) => {
     setSaving(true);
@@ -1612,14 +1672,16 @@ export default function DashboardScreen() {
                 <TouchableOpacity
                   style={[styles.viewToggleButton, desktopView && styles.viewToggleButtonActive]}
                   onPress={() => setViewModeOverride('desktop')}
+                  accessibilityLabel="Desktop view"
                 >
-                  <Text style={styles.viewToggleText}>Desktop</Text>
+                  <MaterialIcons name="laptop" size={18} color={desktopView ? '#53E3A6' : '#8FA8C9'} />
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.viewToggleButton, framedMobileView && styles.viewToggleButtonActive]}
                   onPress={() => setViewModeOverride('mobile')}
+                  accessibilityLabel="Mobile view"
                 >
-                  <Text style={styles.viewToggleText}>Mobile</Text>
+                  <MaterialIcons name="smartphone" size={18} color={framedMobileView ? '#53E3A6' : '#8FA8C9'} />
                 </TouchableOpacity>
               </View>
             )}
@@ -1759,19 +1821,21 @@ export default function DashboardScreen() {
               {/* Right (or below on mobile): spending by category */}
               <View style={desktopView ? styles.desktopColRight : undefined}>
                 <View style={[styles.cardStrong, { marginBottom: 18 }]}>
-                  <View style={[styles.cardCollapseHeader, { marginBottom: spendingCollapsed ? 0 : 12 }]}>
+                  <TouchableOpacity
+                    style={[styles.cardCollapseHeader, { marginBottom: spendingCollapsed ? 0 : 12 }]}
+                    onPress={() => setSpendingCollapsed((p) => !p)}
+                    activeOpacity={0.7}
+                  >
                     <Text style={styles.cardStrongLabel}>SPENDING BY CATEGORY</Text>
                     <View style={styles.cardCollapseHeaderRight}>
                       {selectedCategoryFilter && !spendingCollapsed && (
-                        <TouchableOpacity onPress={() => setSelectedCategoryFilter(null)}>
+                        <TouchableOpacity onPress={(e) => { e.stopPropagation?.(); setSelectedCategoryFilter(null); }}>
                           <Text style={styles.linkAction}>✕ Clear</Text>
                         </TouchableOpacity>
                       )}
-                      <TouchableOpacity onPress={() => setSpendingCollapsed((p) => !p)}>
-                        <Text style={styles.collapseChevron}>{spendingCollapsed ? '▸' : '▾'}</Text>
-                      </TouchableOpacity>
+                      <Text style={styles.collapseChevron}>{spendingCollapsed ? '▸' : '▾'}</Text>
                     </View>
-                  </View>
+                  </TouchableOpacity>
                   {!spendingCollapsed && (
                     categorySpendData.length === 0 ? (
                       <Text style={styles.emptyText}>No expense data in this interval.</Text>
@@ -1859,9 +1923,12 @@ export default function DashboardScreen() {
                 setEditingCategoryId(null);
                 setCategoryName('');
                 setCategoryType('expense');
+                setCategoryColor(null);
+                setCategoryIcon(null);
+                setShowCategoryIconPicker(false);
                 setShowCategoryModal(true);
               }}>
-                <Text style={styles.linkAction}>+ New</Text>
+                <MaterialIcons name={"add_circle_outline" as any} size={22} color="#6ED8A5" />
               </TouchableOpacity>
             </View>
 
@@ -1870,16 +1937,29 @@ export default function DashboardScreen() {
               {sortedSelectedCategories.map((c) => (
                 <TouchableOpacity
                   key={c.id}
-                  style={styles.categoryChip}
+                  style={[styles.categoryChip, c.color ? { borderColor: c.color } : undefined]}
                   onPress={() => openEntryModal(c.type, c.id)}
                   onLongPress={() => {
                     setEditingCategoryId(c.id);
                     setCategoryName(c.name);
                     setCategoryType(c.type);
+                    setCategoryColor(c.color ?? null);
+                    setCategoryIcon(c.icon ?? null);
+                    setShowCategoryIconPicker(false);
                     setShowCategoryModal(true);
                   }}
                 >
-                  <Text style={styles.categoryChipText}>{c.name}</Text>
+                  <View style={styles.categoryChipInner}>
+                    {c.icon ? (
+                      <MaterialIcons
+                        name={c.icon as any}
+                        size={14}
+                        color={c.color ?? (c.type === 'income' ? '#6ED8A5' : '#FCA5A5')}
+                        style={{ marginRight: 4 }}
+                      />
+                    ) : null}
+                    <Text style={styles.categoryChipText}>{c.name}</Text>
+                  </View>
                   <Text style={[styles.categoryChipType, c.type === 'income' && styles.incomeType]}>{c.type}</Text>
                 </TouchableOpacity>
               ))}
@@ -1904,7 +1984,7 @@ export default function DashboardScreen() {
                   </TouchableOpacity>
                 )}
                 <TouchableOpacity onPress={() => openEntryModal('expense', filterIsExpense ? selectedCategoryFilter : null)}>
-                  <Text style={styles.linkAction}>+ Add</Text>
+                  <MaterialIcons name={"add_circle_outline" as any} size={22} color="#6ED8A5" />
                 </TouchableOpacity>
               </View>
             </View>
@@ -1943,21 +2023,21 @@ export default function DashboardScreen() {
               onPress={() => !filterIsExpense && openEntryModal('income', null)}
               accessibilityLabel="Add income"
             >
-              <Text style={styles.bottomBarIcon}>↑</Text>
+              <MaterialIcons name="add" size={28} color="#EAF2FF" />
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.bottomBarTransfer, filterIsExpense && styles.bottomBarDisabled]}
               onPress={() => !filterIsExpense && openTransfer()}
               accessibilityLabel="Transfer between accounts"
             >
-              <Text style={styles.bottomBarIcon}>⇄</Text>
+              <MaterialIcons name={"swap_horiz" as any} size={28} color="#EAF2FF" />
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.bottomBarExpense}
               onPress={() => openEntryModal('expense', filterIsExpense ? selectedCategoryFilter : null)}
               accessibilityLabel="Add expense"
             >
-              <Text style={styles.bottomBarIcon}>↓</Text>
+              <MaterialIcons name="remove" size={28} color="#EAF2FF" />
             </TouchableOpacity>
           </View>
         </View>
@@ -2072,6 +2152,9 @@ export default function DashboardScreen() {
                   setEditingCategoryId(null);
                   setCategoryName('');
                   setCategoryType('expense');
+                  setCategoryColor(null);
+                  setCategoryIcon(null);
+                  setShowCategoryIconPicker(false);
                   setShowCategoryModal(true);
                 }}>
                   <Text style={styles.menuIconActionText}>＋</Text>
@@ -2094,6 +2177,9 @@ export default function DashboardScreen() {
                     setEditingCategoryId(category.id);
                     setCategoryName(category.name);
                     setCategoryType(category.type);
+                    setCategoryColor(category.color ?? null);
+                    setCategoryIcon(category.icon ?? null);
+                    setShowCategoryIconPicker(false);
                     setShowCategoryModal(true);
                   }}>
                     <Text style={styles.manageIconText}>✎</Text>
@@ -2337,17 +2423,65 @@ export default function DashboardScreen() {
             </View>
 
             <Text style={styles.modalLabel}>Category</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.modalChipsRow}>
-              {entryCategories.map((cat) => (
+            {desktopView ? (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.modalChipsRow}>
+                {entryCategories.map((cat) => (
+                  <TouchableOpacity
+                    key={cat.id}
+                    style={[styles.modalChip, entryCategoryId === cat.id && styles.modalChipActive, cat.color ? { borderColor: cat.color } : undefined]}
+                    onPress={() => setEntryCategoryId(cat.id)}
+                  >
+                    {cat.icon ? <MaterialIcons name={cat.icon as any} size={12} color={cat.color ?? '#EAF3FF'} style={{ marginRight: 3 }} /> : null}
+                    <Text style={styles.modalChipText}>{cat.name}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            ) : (
+              <>
                 <TouchableOpacity
-                  key={cat.id}
-                  style={[styles.modalChip, entryCategoryId === cat.id && styles.modalChipActive]}
-                  onPress={() => setEntryCategoryId(cat.id)}
+                  style={[styles.mobileCategoryPill, showMobileCategoryPicker && styles.mobileCategoryPillOpen]}
+                  onPress={() => setShowMobileCategoryPicker((p) => !p)}
                 >
-                  <Text style={styles.modalChipText}>{cat.name}</Text>
+                  {entryCategoryId ? (() => {
+                    const cat = entryCategories.find((c) => c.id === entryCategoryId);
+                    return (
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        {cat?.icon ? <MaterialIcons name={cat.icon as any} size={16} color={cat?.color ?? '#EAF3FF'} /> : null}
+                        <Text style={styles.mobileCategoryPillText}>{cat?.name ?? 'Category'}</Text>
+                        <MaterialIcons name={(showMobileCategoryPicker ? 'expand_less' : 'expand_more') as any} size={18} color="#8FA8C9" />
+                      </View>
+                    );
+                  })() : (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <MaterialIcons name={"label_outline" as any} size={16} color="#64748B" />
+                      <Text style={[styles.mobileCategoryPillText, { color: '#64748B' }]}>No category</Text>
+                      <MaterialIcons name={(showMobileCategoryPicker ? 'expand_less' : 'expand_more') as any} size={18} color="#64748B" />
+                    </View>
+                  )}
                 </TouchableOpacity>
-              ))}
-            </ScrollView>
+                {showMobileCategoryPicker && (
+                  <View style={styles.mobileCategoryPickerGrid}>
+                    <TouchableOpacity
+                      style={[styles.mobileCategoryPickerItem, !entryCategoryId && styles.mobileCategoryPickerItemActive]}
+                      onPress={() => { setEntryCategoryId(null); setShowMobileCategoryPicker(false); }}
+                    >
+                      <MaterialIcons name="block" size={20} color="#64748B" />
+                      <Text style={styles.mobileCategoryPickerText}>None</Text>
+                    </TouchableOpacity>
+                    {entryCategories.map((cat) => (
+                      <TouchableOpacity
+                        key={cat.id}
+                        style={[styles.mobileCategoryPickerItem, entryCategoryId === cat.id && styles.mobileCategoryPickerItemActive, cat.color ? { borderColor: cat.color } : undefined]}
+                        onPress={() => { setEntryCategoryId(cat.id); setShowMobileCategoryPicker(false); }}
+                      >
+                        <MaterialIcons name={(cat.icon ?? 'label') as any} size={20} color={cat.color ?? (cat.type === 'income' ? '#6ED8A5' : '#FCA5A5')} />
+                        <Text style={styles.mobileCategoryPickerText}>{cat.name}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
+              </>
+            )}
 
             <View style={styles.modalActions}>
               <TouchableOpacity style={styles.modalSecondary} onPress={() => setShowEntryModal(false)}>
@@ -2386,6 +2520,58 @@ export default function DashboardScreen() {
                 <Text style={styles.toggleButtonText}>Expense</Text>
               </TouchableOpacity>
             </View>
+
+            {/* Icon picker */}
+            <Text style={styles.modalLabel}>Icon</Text>
+            <View style={styles.iconPickerRow}>
+              <TouchableOpacity
+                style={[styles.iconPickerPreview, categoryIcon && { borderColor: categoryColor ?? '#53E3A6' }]}
+                onPress={() => setShowCategoryIconPicker((p) => !p)}
+              >
+                {categoryIcon ? (
+                  <MaterialIcons name={categoryIcon as any} size={24} color={categoryColor ?? '#EAF3FF'} />
+                ) : (
+                  <MaterialIcons name={"label_outline" as any} size={24} color="#64748B" />
+                )}
+                <MaterialIcons name={(showCategoryIconPicker ? 'expand_less' : 'expand_more') as any} size={16} color="#64748B" style={{ marginLeft: 4 }} />
+              </TouchableOpacity>
+              {categoryIcon && (
+                <TouchableOpacity onPress={() => setCategoryIcon(null)}>
+                  <Text style={styles.linkAction}>Clear</Text>
+                </TouchableOpacity>
+              )}
+              {categoryName.trim() && suggestIcon(categoryName) && !categoryIcon && (
+                <TouchableOpacity onPress={() => setCategoryIcon(suggestIcon(categoryName))}>
+                  <Text style={styles.linkAction}>Suggest</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+            {showCategoryIconPicker && (
+              <ScrollView style={{ maxHeight: 180 }} contentContainerStyle={styles.iconGrid} showsVerticalScrollIndicator={false}>
+                {CATEGORY_ICONS.map((ic) => (
+                  <TouchableOpacity
+                    key={ic}
+                    style={[styles.iconGridItem, categoryIcon === ic && styles.iconGridItemActive]}
+                    onPress={() => { setCategoryIcon(ic); setShowCategoryIconPicker(false); }}
+                  >
+                    <MaterialIcons name={ic as any} size={22} color={categoryColor ?? (categoryIcon === ic ? '#53E3A6' : '#8FA8C9')} />
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            )}
+
+            {/* Color picker */}
+            <Text style={styles.modalLabel}>Color</Text>
+            <View style={styles.colorPresetRow}>
+              {COLOR_PRESETS.map((preset) => (
+                <TouchableOpacity
+                  key={preset}
+                  style={[styles.colorPresetDot, { backgroundColor: preset }, categoryColor === preset && styles.colorPresetDotActive]}
+                  onPress={() => setCategoryColor(categoryColor === preset ? null : preset)}
+                />
+              ))}
+            </View>
+
             <View style={styles.modalActions}>
               {editingCategoryId && (
                 <TouchableOpacity
@@ -2531,6 +2717,18 @@ export default function DashboardScreen() {
               onChangeText={setTagName}
               style={styles.input}
             />
+
+            {/* Color picker */}
+            <Text style={styles.modalLabel}>Color</Text>
+            <View style={styles.colorPresetRow}>
+              {COLOR_PRESETS.map((preset) => (
+                <TouchableOpacity
+                  key={preset}
+                  style={[styles.colorPresetDot, { backgroundColor: preset }, tagColor === preset && styles.colorPresetDotActive]}
+                  onPress={() => setTagColor(tagColor === preset ? null : preset)}
+                />
+              ))}
+            </View>
 
             <View style={styles.modalActions}>
               {editingTagId && (
@@ -2837,10 +3035,11 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
   },
   headerLogo: {
-    width: 52,
-    height: 52,
+    width: 120,
+    height: 40,
   },
   viewToggleRow: {
     flexDirection: 'row',
@@ -3735,5 +3934,111 @@ const styles = StyleSheet.create({
   // Bottom bar disabled state
   bottomBarDisabled: {
     opacity: 0.3,
+  },
+  // Category chip inner row
+  categoryChipInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  // Mobile category picker
+  mobileCategoryPill: {
+    backgroundColor: '#111F32',
+    borderColor: '#2E496F',
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    marginBottom: 10,
+  },
+  mobileCategoryPillOpen: {
+    borderColor: '#53E3A6',
+    backgroundColor: '#0F2A1E',
+  },
+  mobileCategoryPillText: {
+    color: '#EDF5FF',
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  mobileCategoryPickerGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 10,
+  },
+  mobileCategoryPickerItem: {
+    backgroundColor: '#16283D',
+    borderColor: '#2D486E',
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    alignItems: 'center',
+    gap: 4,
+    minWidth: 72,
+  },
+  mobileCategoryPickerItemActive: {
+    borderColor: '#53E3A6',
+    backgroundColor: '#1D3A3C',
+  },
+  mobileCategoryPickerText: {
+    color: '#D8E6FF',
+    fontSize: 11,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  // Icon picker
+  iconPickerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 10,
+  },
+  iconPickerPreview: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#16283D',
+    borderColor: '#2D486E',
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+  },
+  iconGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    paddingVertical: 4,
+  },
+  iconGridItem: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#16283D',
+    borderColor: '#2D486E',
+    borderWidth: 1,
+    borderRadius: 10,
+  },
+  iconGridItemActive: {
+    borderColor: '#53E3A6',
+    backgroundColor: '#1D3A3C',
+  },
+  // Color presets
+  colorPresetRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginBottom: 10,
+  },
+  colorPresetDot: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  colorPresetDotActive: {
+    borderColor: '#FFFFFF',
+    transform: [{ scale: 1.15 }],
   },
 });

@@ -21,6 +21,11 @@ import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
 import Icon from '../components/Icon';
 
+// Capture native timer functions before they get shadowed by the
+// `const [interval, setInterval]` state declaration inside the component.
+const _setInterval = setInterval;
+const _clearInterval = clearInterval;
+
 type TransactionType = 'income' | 'expense';
 type IntervalKey = 'day' | 'week' | 'month' | 'year' | 'all' | 'custom';
 
@@ -177,6 +182,9 @@ export default function DashboardScreen() {
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
   const [primaryAccountId, setPrimaryAccountId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [reloading, setReloading] = useState(false);
+  /** 0→1 multiplier applied to displayed numbers during the count-up animation after a silent reload. */
+  const [animMultiplier, setAnimMultiplier] = useState(1);
   const [saving, setSaving] = useState(false);
 
   const [interval, setInterval] = useState<IntervalKey>('month');
@@ -262,6 +270,7 @@ export default function DashboardScreen() {
   const pendingSelectedAccountIdRef = useRef<string | null>(null);
   const hasLoadedOnceRef = useRef(false);
   const schemaAlertSignatureRef = useRef('');
+  const animIntervalRef = useRef<ReturnType<typeof _setInterval> | null>(null);
 
   const isDesktopBrowser = Platform.OS === 'web' && width >= 1024;
   const desktopView = isDesktopBrowser && viewModeOverride !== 'mobile';
@@ -286,13 +295,18 @@ export default function DashboardScreen() {
   const selectedTags = useMemo(() => tags, [tags]);
 
   const formatCurrency = useCallback((value: number, currencyOverride?: string) => {
+    if (reloading) return '—';
     const code = currencyOverride ?? selectedCurrency;
+    const display = value * animMultiplier;
+    if (code === 'HUF') {
+      return `${new Intl.NumberFormat('en-US', { style: 'decimal', maximumFractionDigits: 0 }).format(display)} Ft`;
+    }
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: code,
-      maximumFractionDigits: code === 'HUF' ? 0 : 2,
-    }).format(value);
-  }, [selectedCurrency]);
+      maximumFractionDigits: 2,
+    }).format(display);
+  }, [animMultiplier, reloading, selectedCurrency]);
 
   const selectedCategories = useMemo(
     () => categories.filter((c) => c.account_id === selectedAccountId || c.account_id === null),
@@ -584,10 +598,10 @@ export default function DashboardScreen() {
     });
   }, [saveAccountPrefs]);
 
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async (opts?: { silent?: boolean }) => {
     if (!user) return;
 
-    setLoading(true);
+    if (!opts?.silent) setLoading(true);
     try {
       await checkRequiredSchemaColumns();
 
@@ -776,9 +790,39 @@ export default function DashboardScreen() {
       const msg = err instanceof Error ? err.message : 'Failed to load dashboard data.';
       Alert.alert('Dashboard error', msg);
     } finally {
-      setLoading(false);
+      if (!opts?.silent) setLoading(false);
     }
   }, [checkRequiredSchemaColumns, user]);
+
+  /** Counts displayed numbers up from 0 → actual value over ~700 ms (ease-out cubic). */
+  const animateIn = useCallback(() => {
+    if (animIntervalRef.current) _clearInterval(animIntervalRef.current);
+    setReloading(false);
+    setAnimMultiplier(0);
+    let step = 0;
+    const STEPS = 40;
+    const INTERVAL_MS = 700 / STEPS;
+    animIntervalRef.current = _setInterval(() => {
+      step += 1;
+      const t = step / STEPS;
+      const eased = 1 - Math.pow(1 - t, 3); // cubic ease-out
+      if (step >= STEPS) {
+        setAnimMultiplier(1);
+        _clearInterval(animIntervalRef.current!);
+        animIntervalRef.current = null;
+      } else {
+        setAnimMultiplier(eased);
+      }
+    }, INTERVAL_MS);
+  }, []);
+
+  /** Silent reload: fetches fresh data then animates numbers from 0. */
+  const reloadDashboard = useCallback(async () => {
+    if (reloading) return;
+    setReloading(true);
+    await loadData({ silent: true });
+    animateIn();
+  }, [animateIn, loadData, reloading]);
 
   useEffect(() => {
     if (missingSchemaColumns.length === 0) return;
@@ -1666,15 +1710,20 @@ export default function DashboardScreen() {
                 </View>
               )}
             </TouchableOpacity>
-            {/* Logo: absolutely positioned so it's always truly centred */}
-            <View style={StyleSheet.absoluteFill} pointerEvents="none">
-              <View style={styles.headerLogoCenter}>
+            {/* Logo: absolutely positioned so it's always truly centred; tap to reload */}
+            <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
+              <TouchableOpacity
+                style={styles.headerLogoCenter}
+                onPress={() => void reloadDashboard()}
+                activeOpacity={0.7}
+                accessibilityLabel="Reload dashboard"
+              >
                 <Image
                   source={require('../../assets/logo.png')}
-                  style={styles.headerLogo}
+                  style={[styles.headerLogo, reloading && { opacity: 0.5 }]}
                   resizeMode="contain"
                 />
-              </View>
+              </TouchableOpacity>
             </View>
             {/* Spacer so avatar and toggle don't overlap the logo */}
             <View style={{ flex: 1 }} pointerEvents="none" />
@@ -2284,7 +2333,7 @@ export default function DashboardScreen() {
                 </View>
               )}
 
-              <TouchableOpacity style={styles.menuItem} onPress={() => void loadData()}>
+              <TouchableOpacity style={styles.menuItem} onPress={() => { setMenuOpen(false); void reloadDashboard(); }}>
                 <Text style={styles.menuItemText}>Reload dashboard</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.menuItem} onPress={() => {
@@ -3180,8 +3229,7 @@ const styles = StyleSheet.create({
     marginBottom: 18,
   },
   accountOverviewCard: {
-    minWidth: '47%',
-    flexGrow: 1,
+    width: '48%',
     backgroundColor: '#101A2A',
     borderColor: '#263E5F',
     borderWidth: 1,

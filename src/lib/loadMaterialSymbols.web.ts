@@ -22,7 +22,7 @@ export default function loadMaterialSymbols(): void {
     style.id = styleId;
     style.textContent = [
       '.material-symbols-outlined {',
-      '  font-family: "Material Symbols Outlined";',
+      '  font-family: "Material Symbols Outlined" !important;',
       '  font-weight: normal;',
       '  font-style: normal;',
       '  line-height: 1;',

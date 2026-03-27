@@ -30,6 +30,7 @@ type AppAccount = {
   currency: string;
   created_at?: string;
   created_by?: string;
+  tag_ids?: string[] | null;
 };
 
 type AppCategory = {
@@ -39,11 +40,12 @@ type AppCategory = {
   type: TransactionType;
   color?: string | null;
   icon?: string | null;
+  tag_ids?: string[] | null;
 };
 
 type AppTag = {
   id: string;
-  account_id: string;
+  account_id: string | null;
   name: string;
   color?: string | null;
 };
@@ -242,7 +244,9 @@ export default function DashboardScreen() {
 
   const [categoryColor, setCategoryColor] = useState<string | null>(null);
   const [categoryIcon, setCategoryIcon] = useState<string | null>(null);
+  const [categoryTagIds, setCategoryTagIds] = useState<string[]>([]);
   const [tagColor, setTagColor] = useState<string | null>(null);
+  const [accountTagIds, setAccountTagIds] = useState<string[]>([]);
   const [showCategoryIconPicker, setShowCategoryIconPicker] = useState(false);
   const [showMobileCategoryPicker, setShowMobileCategoryPicker] = useState(false);
 
@@ -589,7 +593,7 @@ export default function DashboardScreen() {
 
       const { data: owned, error: ownedError } = await supabase
         .from('accounts')
-        .select('id,name,currency,created_at,created_by')
+        .select('id,name,currency,created_at,created_by,tag_ids')
         .eq('created_by', user.id)
         .order('created_at', { ascending: false });
       if (ownedError) throw ownedError;
@@ -605,7 +609,7 @@ export default function DashboardScreen() {
       if (memberIds.length > 0) {
         const { data, error } = await supabase
           .from('accounts')
-          .select('id,name,currency,created_at,created_by')
+          .select('id,name,currency,created_at,created_by,tag_ids')
           .in('id', memberIds);
         if (error) throw error;
         shared = (data ?? []) as AppAccount[];
@@ -676,13 +680,13 @@ export default function DashboardScreen() {
       ] = await Promise.all([
         supabase
           .from('categories')
-          .select('id,account_id,name,type,color,icon')
+          .select('id,account_id,name,type,color,icon,tag_ids')
           .or(`account_id.in.(${accountIdList}),account_id.is.null`)
           .order('name', { ascending: true }),
         supabase
           .from('tags')
           .select('id,account_id,name,color')
-          .in('account_id', accountIds)
+          .or(`account_id.in.(${accountIdList}),account_id.is.null`)
           .order('name', { ascending: true }),
         supabase
           .from('transactions')
@@ -885,6 +889,7 @@ export default function DashboardScreen() {
     setSettingsCarryOver(true);
     setSettingsInitialBalance('0');
     setSettingsInitialDate(todayIso());
+    setAccountTagIds([]);
     setShowAccountModal(true);
   }, [selectedAccount?.currency]);
 
@@ -897,6 +902,7 @@ export default function DashboardScreen() {
     setSettingsCarryOver(settings?.carry_over_balance ?? true);
     setSettingsInitialBalance(String(settings?.initial_balance ?? 0));
     setSettingsInitialDate(settings?.initial_balance_date ?? account.created_at?.slice(0, 10) ?? todayIso());
+    setAccountTagIds((account.tag_ids ?? []) as string[]);
     setShowAccountModal(true);
   }, [accountSettings]);
 
@@ -979,7 +985,7 @@ export default function DashboardScreen() {
       if (editingCategoryId) {
         const { error } = await supabase
           .from('categories')
-          .update({ name: categoryName.trim(), type: categoryType, color: categoryColor, icon: categoryIcon })
+          .update({ name: categoryName.trim(), type: categoryType, color: categoryColor, icon: categoryIcon, tag_ids: categoryTagIds })
           .eq('id', editingCategoryId);
         if (error) throw error;
       } else {
@@ -989,11 +995,13 @@ export default function DashboardScreen() {
           type: categoryType,
           color: categoryColor,
           icon: categoryIcon,
+          tag_ids: categoryTagIds,
         });
         if (error) throw error;
       }
       setCategoryColor(null);
       setCategoryIcon(null);
+      setCategoryTagIds([]);
       setShowCategoryIconPicker(false);
       setShowCategoryModal(false);
       await loadData();
@@ -1002,7 +1010,7 @@ export default function DashboardScreen() {
     } finally {
       setSaving(false);
     }
-  }, [categoryColor, categoryIcon, categoryName, categoryType, editingCategoryId, loadData, selectedAccountId]);
+  }, [categoryColor, categoryIcon, categoryName, categoryTagIds, categoryType, editingCategoryId, loadData, selectedAccountId]);
 
   const deleteCategory = useCallback(async (categoryId: string) => {
     setSaving(true);
@@ -1029,15 +1037,14 @@ export default function DashboardScreen() {
   }, [loadData]);
 
   const createTag = useCallback(async () => {
-    if (!entryAccountId) return;
     if (!newTagName.trim()) return;
 
     setSaving(true);
     try {
       const { data, error } = await supabase
         .from('tags')
-        .insert({ account_id: entryAccountId, name: newTagName.trim() })
-        .select('id,account_id,name')
+        .insert({ account_id: null, name: newTagName.trim() })
+        .select('id,account_id,name,color')
         .single();
 
       if (error) throw error;
@@ -1051,17 +1058,14 @@ export default function DashboardScreen() {
     } finally {
       setSaving(false);
     }
-  }, [entryAccountId, loadData, newTagName]);
+  }, [loadData, newTagName]);
 
   const openCreateTag = useCallback(() => {
-    if (!selectedAccountId) {
-      Alert.alert('No account selected', 'Select an account first.');
-      return;
-    }
     setEditingTagId(null);
     setTagName('');
+    setTagColor(null);
     setShowTagModal(true);
-  }, [selectedAccountId]);
+  }, []);
 
   const openEditTag = useCallback((tag: AppTag) => {
     setEditingTagId(tag.id);
@@ -1091,7 +1095,7 @@ export default function DashboardScreen() {
       } else {
         const { error } = await supabase
           .from('tags')
-          .insert({ account_id: selectedAccountId, name: tagName.trim(), color: tagColor });
+          .insert({ account_id: null, name: tagName.trim(), color: tagColor });
         if (error) throw error;
       }
 
@@ -1103,7 +1107,7 @@ export default function DashboardScreen() {
     } finally {
       setSaving(false);
     }
-  }, [editingTagId, loadData, selectedAccountId, tagColor, tagName]);
+  }, [editingTagId, loadData, tagColor, tagName]);
 
   const deleteTag = useCallback(async (tagId: string) => {
     setSaving(true);
@@ -1112,7 +1116,7 @@ export default function DashboardScreen() {
         .from('transaction_tags')
         .delete()
         .eq('tag_id', tagId);
-      if (relationError) throw relationError;
+      if (relationError && !isMissingTableError(relationError)) throw relationError;
 
       const { error } = await supabase
         .from('tags')
@@ -1238,13 +1242,13 @@ export default function DashboardScreen() {
       if (editingAccountId) {
         const { error } = await supabase
           .from('accounts')
-          .update({ name: newAccountName.trim(), currency: newAccountCurrency })
+          .update({ name: newAccountName.trim(), currency: newAccountCurrency, tag_ids: accountTagIds })
           .eq('id', editingAccountId);
         if (error) throw error;
       } else {
         const { data, error } = await supabase
           .from('accounts')
-          .insert({ name: newAccountName.trim(), currency: newAccountCurrency, created_by: user.id })
+          .insert({ name: newAccountName.trim(), currency: newAccountCurrency, created_by: user.id, tag_ids: [] })
           .select('id')
           .single();
         if (error) throw error;
@@ -1283,6 +1287,7 @@ export default function DashboardScreen() {
       if (!editingAccountId) {
         setNewAccountName('');
       }
+      setAccountTagIds([]);
       setShowAccountModal(false);
       await loadData();
     } catch (err) {
@@ -1291,6 +1296,7 @@ export default function DashboardScreen() {
       setSaving(false);
     }
   }, [
+    accountTagIds,
     editingAccountId,
     loadData,
     newAccountCurrency,
@@ -1660,30 +1666,30 @@ export default function DashboardScreen() {
                 </View>
               )}
             </TouchableOpacity>
-            <View style={styles.headerCenter}>
-              <Image
-                source={require('../../assets/logo.png')}
-                style={styles.headerLogo}
-                resizeMode="contain"
-              />
-            </View>
-            {isDesktopBrowser && (
-              <View style={styles.viewToggleRow}>
-                <TouchableOpacity
-                  style={[styles.viewToggleButton, desktopView && styles.viewToggleButtonActive]}
-                  onPress={() => setViewModeOverride('desktop')}
-                  accessibilityLabel="Desktop view"
-                >
-                  <MaterialIcons name="laptop" size={18} color={desktopView ? '#53E3A6' : '#8FA8C9'} />
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.viewToggleButton, framedMobileView && styles.viewToggleButtonActive]}
-                  onPress={() => setViewModeOverride('mobile')}
-                  accessibilityLabel="Mobile view"
-                >
-                  <MaterialIcons name="smartphone" size={18} color={framedMobileView ? '#53E3A6' : '#8FA8C9'} />
-                </TouchableOpacity>
+            {/* Logo: absolutely positioned so it's always truly centred */}
+            <View style={StyleSheet.absoluteFill} pointerEvents="none">
+              <View style={styles.headerLogoCenter}>
+                <Image
+                  source={require('../../assets/logo.png')}
+                  style={styles.headerLogo}
+                  resizeMode="contain"
+                />
               </View>
+            </View>
+            {/* Spacer so avatar and toggle don't overlap the logo */}
+            <View style={{ flex: 1 }} pointerEvents="none" />
+            {isDesktopBrowser && (
+              <TouchableOpacity
+                style={styles.viewToggleButton}
+                onPress={() => setViewModeOverride(desktopView ? 'mobile' : 'desktop')}
+                accessibilityLabel={desktopView ? 'Switch to mobile view' : 'Switch to desktop view'}
+              >
+                <MaterialIcons
+                  name={desktopView ? 'smartphone' : 'laptop'}
+                  size={18}
+                  color="#8FA8C9"
+                />
+              </TouchableOpacity>
             )}
           </View>
 
@@ -1925,6 +1931,7 @@ export default function DashboardScreen() {
                 setCategoryType('expense');
                 setCategoryColor(null);
                 setCategoryIcon(null);
+                setCategoryTagIds([]);
                 setShowCategoryIconPicker(false);
                 setShowCategoryModal(true);
               }}>
@@ -1945,6 +1952,7 @@ export default function DashboardScreen() {
                     setCategoryType(c.type);
                     setCategoryColor(c.color ?? null);
                     setCategoryIcon(c.icon ?? null);
+                    setCategoryTagIds((c.tag_ids ?? []) as string[]);
                     setShowCategoryIconPicker(false);
                     setShowCategoryModal(true);
                   }}
@@ -2154,6 +2162,7 @@ export default function DashboardScreen() {
                   setCategoryType('expense');
                   setCategoryColor(null);
                   setCategoryIcon(null);
+                  setCategoryTagIds([]);
                   setShowCategoryIconPicker(false);
                   setShowCategoryModal(true);
                 }}>
@@ -2179,6 +2188,7 @@ export default function DashboardScreen() {
                     setCategoryType(category.type);
                     setCategoryColor(category.color ?? null);
                     setCategoryIcon(category.icon ?? null);
+                    setCategoryTagIds((category.tag_ids ?? []) as string[]);
                     setShowCategoryIconPicker(false);
                     setShowCategoryModal(true);
                   }}>
@@ -2453,7 +2463,7 @@ export default function DashboardScreen() {
                     );
                   })() : (
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                      <MaterialIcons name={"label_outline" as any} size={16} color="#64748B" />
+                      <MaterialIcons name={"label" as any} size={16} color="#64748B" />
                       <Text style={[styles.mobileCategoryPillText, { color: '#64748B' }]}>No category</Text>
                       <MaterialIcons name={(showMobileCategoryPicker ? 'expand_less' : 'expand_more') as any} size={18} color="#64748B" />
                     </View>
@@ -2531,7 +2541,7 @@ export default function DashboardScreen() {
                 {categoryIcon ? (
                   <MaterialIcons name={categoryIcon as any} size={24} color={categoryColor ?? '#EAF3FF'} />
                 ) : (
-                  <MaterialIcons name={"label_outline" as any} size={24} color="#64748B" />
+                  <MaterialIcons name={"label" as any} size={24} color="#64748B" />
                 )}
                 <MaterialIcons name={(showCategoryIconPicker ? 'expand_less' : 'expand_more') as any} size={16} color="#64748B" style={{ marginLeft: 4 }} />
               </TouchableOpacity>
@@ -2571,6 +2581,32 @@ export default function DashboardScreen() {
                 />
               ))}
             </View>
+
+            {/* Tags */}
+            {tags.length > 0 && (
+              <>
+                <Text style={styles.modalLabel}>Tags</Text>
+                <View style={styles.menuChipWrap}>
+                  {tags.map((tag) => (
+                    <TouchableOpacity
+                      key={tag.id}
+                      style={[
+                        styles.modalChip,
+                        categoryTagIds.includes(tag.id) && styles.modalChipActive,
+                        tag.color ? { borderColor: tag.color } : undefined,
+                      ]}
+                      onPress={() => setCategoryTagIds((prev) =>
+                        prev.includes(tag.id) ? prev.filter((x) => x !== tag.id) : [...prev, tag.id]
+                      )}
+                    >
+                      <Text style={[styles.modalChipText, tag.color && categoryTagIds.includes(tag.id) ? { color: tag.color } : undefined]}>
+                        #{tag.name}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </>
+            )}
 
             <View style={styles.modalActions}>
               {editingCategoryId && (
@@ -2674,6 +2710,32 @@ export default function DashboardScreen() {
               onChangeText={setSettingsInitialDate}
               style={styles.input}
             />
+
+            {/* Tags */}
+            {tags.length > 0 && (
+              <>
+                <Text style={styles.modalLabel}>Tags</Text>
+                <View style={styles.menuChipWrap}>
+                  {tags.map((tag) => (
+                    <TouchableOpacity
+                      key={tag.id}
+                      style={[
+                        styles.modalChip,
+                        accountTagIds.includes(tag.id) && styles.modalChipActive,
+                        tag.color ? { borderColor: tag.color } : undefined,
+                      ]}
+                      onPress={() => setAccountTagIds((prev) =>
+                        prev.includes(tag.id) ? prev.filter((x) => x !== tag.id) : [...prev, tag.id]
+                      )}
+                    >
+                      <Text style={[styles.modalChipText, tag.color && accountTagIds.includes(tag.id) ? { color: tag.color } : undefined]}>
+                        #{tag.name}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </>
+            )}
 
             <View style={styles.modalActions}>
               {editingAccountId && editingAccount && editingAccount.created_by === user?.id && (
@@ -3014,7 +3076,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#0E1A2B',
     borderColor: '#1F3A59',
     borderWidth: 1,
-    borderRadius: 12,
+    borderRadius: 4,
     paddingVertical: 8,
     paddingHorizontal: 10,
   },
@@ -3027,40 +3089,26 @@ const styles = StyleSheet.create({
     backgroundColor: '#0E1A2B',
     borderColor: '#1F3A59',
     borderWidth: 1,
-    borderRadius: 14,
+    borderRadius: 4,
     paddingVertical: 10,
     paddingHorizontal: 14,
   },
-  headerCenter: {
+  headerLogoCenter: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    overflow: 'hidden',
   },
   headerLogo: {
     width: 120,
     height: 40,
   },
-  viewToggleRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
   viewToggleButton: {
     backgroundColor: '#0E1A2B',
     borderColor: '#2A4163',
     borderWidth: 1,
-    borderRadius: 10,
+    borderRadius: 4,
     paddingVertical: 8,
     paddingHorizontal: 10,
-  },
-  viewToggleButtonActive: {
-    borderColor: '#53E3A6',
-    backgroundColor: '#173129',
-  },
-  viewToggleText: {
-    color: '#DCEBFF',
-    fontSize: 12,
-    fontWeight: '700',
   },
   greeting: {
     color: '#F2F6FF',
@@ -3081,7 +3129,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#4A1F2A',
     borderColor: '#C7546C',
     borderWidth: 1,
-    borderRadius: 14,
+    borderRadius: 4,
     padding: 12,
     marginBottom: 12,
   },
@@ -3099,7 +3147,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#0E1726',
     borderColor: '#263C5D',
     borderWidth: 1,
-    borderRadius: 18,
+    borderRadius: 4,
     padding: 18,
     marginBottom: 18,
   },
@@ -3137,7 +3185,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#101A2A',
     borderColor: '#263E5F',
     borderWidth: 1,
-    borderRadius: 16,
+    borderRadius: 4,
     padding: 14,
   },
   accountOverviewCardActive: {
@@ -3191,7 +3239,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#121D2E',
     borderWidth: 1,
     borderColor: '#273A58',
-    borderRadius: 14,
+    borderRadius: 4,
     paddingVertical: 8,
     paddingHorizontal: 10,
   },
@@ -3213,7 +3261,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#101A2A',
     borderColor: '#263E5F',
     borderWidth: 1,
-    borderRadius: 14,
+    borderRadius: 4,
     padding: 14,
     marginBottom: 18,
   },
@@ -3278,7 +3326,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#121C2B',
     borderColor: '#35547D',
     borderWidth: 1,
-    borderRadius: 14,
+    borderRadius: 4,
     padding: 14,
     marginBottom: 18,
   },
@@ -3309,19 +3357,25 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#1A5B47',
     paddingVertical: 14,
-    borderRadius: 14,
+    borderRadius: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   bottomBarTransfer: {
     flex: 1,
     backgroundColor: '#214264',
     paddingVertical: 14,
-    borderRadius: 14,
+    borderRadius: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   bottomBarExpense: {
     flex: 1,
     backgroundColor: '#69273A',
     paddingVertical: 14,
-    borderRadius: 14,
+    borderRadius: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   bottomBarIcon: {
     color: '#EAF2FF',
@@ -3435,7 +3489,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#142235',
     borderColor: '#1E3552',
     borderWidth: 1,
-    borderRadius: 12,
+    borderRadius: 4,
     padding: 10,
   },
   managePrimary: {
@@ -3514,9 +3568,11 @@ const styles = StyleSheet.create({
   },
   menuItem: {
     backgroundColor: '#142235',
-    borderRadius: 10,
+    borderRadius: 4,
     paddingVertical: 10,
     paddingHorizontal: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   menuItemText: {
     color: '#D7E6FC',
@@ -3525,9 +3581,11 @@ const styles = StyleSheet.create({
   menuDanger: {
     marginTop: 6,
     backgroundColor: '#5F2434',
-    borderRadius: 10,
+    borderRadius: 4,
     paddingVertical: 10,
     paddingHorizontal: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   menuDangerText: {
     color: '#FFE3E9',
@@ -3546,7 +3604,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#0F1A2B',
     borderColor: '#2A3F60',
     borderWidth: 1,
-    borderRadius: 16,
+    borderRadius: 4,
     padding: 16,
     maxHeight: '94%',
   },
@@ -3575,7 +3633,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#111F32',
     borderColor: '#2E496F',
     borderWidth: 1,
-    borderRadius: 10,
+    borderRadius: 4,
     color: '#EDF5FF',
     paddingVertical: 10,
     paddingHorizontal: 12,
@@ -3593,7 +3651,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#16283D',
     borderColor: '#2D486E',
     borderWidth: 1,
-    borderRadius: 10,
+    borderRadius: 4,
     paddingVertical: 10,
     paddingHorizontal: 12,
   },
@@ -3612,7 +3670,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#13253B',
     borderWidth: 1,
     borderColor: '#2C4669',
-    borderRadius: 10,
+    borderRadius: 4,
     alignItems: 'center',
     paddingVertical: 9,
   },
@@ -3628,7 +3686,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#091426',
     borderColor: '#35527A',
     borderWidth: 1,
-    borderRadius: 12,
+    borderRadius: 4,
     color: '#F1F6FF',
     fontSize: 34,
     fontWeight: '800',
@@ -3649,7 +3707,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#16283D',
     borderColor: '#2D486E',
     borderWidth: 1,
-    borderRadius: 20,
+    borderRadius: 4,
     paddingVertical: 7,
     paddingHorizontal: 10,
   },
@@ -3672,7 +3730,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#142235',
     borderColor: '#2D486E',
     borderWidth: 1,
-    borderRadius: 10,
+    borderRadius: 4,
     paddingVertical: 12,
     alignItems: 'center',
   },
@@ -3694,7 +3752,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#1B2A41',
     borderColor: '#37557F',
     borderWidth: 1,
-    borderRadius: 10,
+    borderRadius: 4,
     paddingVertical: 10,
     paddingHorizontal: 10,
   },
@@ -3713,7 +3771,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#16283D',
     borderColor: '#2D486E',
     borderWidth: 1,
-    borderRadius: 10,
+    borderRadius: 4,
     paddingVertical: 8,
     paddingHorizontal: 10,
   },
@@ -3737,31 +3795,37 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   modalSecondary: {
-    borderRadius: 10,
+    borderRadius: 4,
     borderWidth: 1,
     borderColor: '#3A5378',
     paddingHorizontal: 14,
     paddingVertical: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   modalSecondaryText: {
     color: '#BAD0EE',
     fontWeight: '700',
   },
   modalPrimary: {
-    borderRadius: 10,
+    borderRadius: 4,
     backgroundColor: '#53E3A6',
     paddingHorizontal: 14,
     paddingVertical: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   modalPrimaryText: {
     color: '#082215',
     fontWeight: '800',
   },
   modalDanger: {
-    borderRadius: 10,
+    borderRadius: 4,
     backgroundColor: '#5F2434',
     paddingHorizontal: 14,
     paddingVertical: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   modalDangerText: {
     color: '#FFE3E9',
@@ -3782,7 +3846,7 @@ const styles = StyleSheet.create({
   // Spend row category active highlight
   spendRowActive: {
     backgroundColor: '#15293D',
-    borderRadius: 8,
+    borderRadius: 4,
     marginHorizontal: -4,
     paddingHorizontal: 4,
   },
@@ -3887,7 +3951,7 @@ const styles = StyleSheet.create({
   batteryTrack: {
     flexDirection: 'row',
     height: 36,
-    borderRadius: 10,
+    borderRadius: 4,
     overflow: 'hidden',
     backgroundColor: '#1E2F49',
   },
@@ -3945,7 +4009,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#111F32',
     borderColor: '#2E496F',
     borderWidth: 1,
-    borderRadius: 10,
+    borderRadius: 4,
     paddingVertical: 10,
     paddingHorizontal: 12,
     marginBottom: 10,
@@ -3969,7 +4033,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#16283D',
     borderColor: '#2D486E',
     borderWidth: 1,
-    borderRadius: 12,
+    borderRadius: 4,
     paddingVertical: 8,
     paddingHorizontal: 10,
     alignItems: 'center',
@@ -3999,7 +4063,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#16283D',
     borderColor: '#2D486E',
     borderWidth: 1,
-    borderRadius: 10,
+    borderRadius: 4,
     paddingVertical: 8,
     paddingHorizontal: 12,
   },
@@ -4017,7 +4081,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#16283D',
     borderColor: '#2D486E',
     borderWidth: 1,
-    borderRadius: 10,
+    borderRadius: 4,
   },
   iconGridItemActive: {
     borderColor: '#53E3A6',

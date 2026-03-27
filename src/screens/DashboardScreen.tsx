@@ -11,6 +11,7 @@ import {
   Platform,
   Pressable,
   ScrollView,
+  Share,
   StyleSheet,
   Text,
   TextInput,
@@ -21,7 +22,7 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
-import Icon from '../components/Icon';
+import Icon, { LUCIDE_ICON_NAMES } from '../components/Icon';
 
 // Capture native timer functions before they get shadowed by the
 // `const [interval, setInterval]` state declaration inside the component.
@@ -35,6 +36,7 @@ type AppAccount = {
   id: string;
   name: string;
   currency: string;
+  icon?: string | null;
   created_at?: string;
   created_by?: string;
   tag_ids?: string[] | null;
@@ -55,6 +57,7 @@ type AppTag = {
   account_id: string | null;
   name: string;
   color?: string | null;
+  icon?: string | null;
 };
 
 type AppTransaction = {
@@ -114,16 +117,6 @@ const ICON_MAP: Record<string, string> = {
   taxi: 'local_taxi', fuel: 'local_gas_station', game: 'sports_esports',
   music: 'music_note', sport_activity: 'sports', work: 'work',
 };
-
-const CATEGORY_ICONS: string[] = [
-  'restaurant', 'shopping_cart', 'directions_car', 'local_hospital', 'movie',
-  'coffee', 'bolt', 'home', 'account_balance_wallet', 'card_giftcard',
-  'fitness_center', 'school', 'swap_horiz', 'security', 'local_bar', 'devices',
-  'smartphone', 'subscriptions', 'face', 'pets', 'trending_up', 'savings',
-  'local_taxi', 'local_gas_station', 'sports_esports', 'flight', 'music_note',
-  'work', 'attach_money', 'receipt', 'fastfood', 'sports', 'tv', 'spa',
-  'child_care', 'local_pharmacy', 'local_grocery_store', 'theater_comedy',
-];
 
 const COLOR_PRESETS = [
   '#53E3A6', '#FB7185', '#60A5FA', '#FBBF24', '#A78BFA',
@@ -256,8 +249,13 @@ export default function DashboardScreen() {
   const [categoryIcon, setCategoryIcon] = useState<string | null>(null);
   const [categoryTagIds, setCategoryTagIds] = useState<string[]>([]);
   const [tagColor, setTagColor] = useState<string | null>(null);
+  const [tagIcon, setTagIcon] = useState<string | null>(null);
+  const [newAccountIcon, setNewAccountIcon] = useState<string | null>(null);
   const [accountTagIds, setAccountTagIds] = useState<string[]>([]);
-  const [showCategoryIconPicker, setShowCategoryIconPicker] = useState(false);
+  const [showIconPickerSheet, setShowIconPickerSheet] = useState(false);
+  const [iconPickerTarget, setIconPickerTarget] = useState<'category' | 'account' | 'tag' | null>(null);
+  const [iconSearchQuery, setIconSearchQuery] = useState('');
+  const [sidebarTxCount, setSidebarTxCount] = useState(12);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [entryHadInitialCategory, setEntryHadInitialCategory] = useState(false);
   const [scrollY, setScrollY] = useState(0);
@@ -266,6 +264,9 @@ export default function DashboardScreen() {
   // Date picker navigation state
   const [dpYear, setDpYear] = useState(() => new Date().getFullYear());
   const [dpMonth, setDpMonth] = useState(() => new Date().getMonth());
+
+  const [showAcctPickerSheet, setShowAcctPickerSheet] = useState(false);
+  const [acctPickerSheetTarget, setAcctPickerSheetTarget] = useState<'entry' | 'invite' | null>(null);
 
   const [showIntervalPicker, setShowIntervalPicker] = useState(false);
   const [showEntryAccountPicker, setShowEntryAccountPicker] = useState(false);
@@ -283,6 +284,10 @@ export default function DashboardScreen() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const catPickerAnim = useRef(new Animated.Value(0)).current;
   const isCatPickerOpenRef = useRef(false);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const acctPickerAnim = useRef(new Animated.Value(0)).current;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const iconPickerAnim = useRef(new Animated.Value(0)).current;
   const catCellMeasurements = useRef<Record<string, { x: number; y: number; w: number; h: number }>>({});
   const catCellRefs = useRef<Record<string, View | null>>({});
 
@@ -610,6 +615,50 @@ export default function DashboardScreen() {
     }));
   }, [showAccountOverviewPicker, filteredIncludedTxs, filteredSelectedTxs, categories, selectedCategories, transferCategoryIds]);
 
+  const allIncludedCategorySpendData = useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const tx of filteredIncludedTxs) {
+      if (tx.type !== 'expense') continue;
+      if (tx.category_id && transferCategoryIds.includes(tx.category_id)) continue;
+      const key = tx.category_id ?? 'uncategorized';
+      map[key] = (map[key] ?? 0) + (Number(tx.amount) || 0);
+    }
+    const rows = Object.entries(map)
+      .map(([id, total]) => ({
+        id,
+        name: categories.find((c) => c.id === id)?.name ?? (id === 'uncategorized' ? 'Uncategorized' : 'Other'),
+        total,
+      }))
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 7);
+    const max = rows[0]?.total ?? 0;
+    return rows.map((r) => ({
+      ...r,
+      widthPercent: max > 0 ? Math.max(8, Math.round((r.total / max) * 100)) : 0,
+    }));
+  }, [filteredIncludedTxs, categories, transferCategoryIds]);
+
+  const selectedTransferTotal = useMemo(
+    () => filteredSelectedTxs
+      .filter((tx) => tx.category_id != null && transferCategoryIds.includes(tx.category_id))
+      .reduce((sum, tx) => sum + (Number(tx.amount) || 0), 0),
+    [filteredSelectedTxs, transferCategoryIds],
+  );
+
+  const themeColor = useMemo(() => {
+    if (overviewSummary.net <= 0) return '#ef4444';
+    const ratio = overviewSummary.income > 0 ? overviewSummary.expense / overviewSummary.income : 0;
+    if (ratio > 0.7) return '#f97316';
+    if (ratio > 0.5) return '#eab308';
+    return '#53E3A6';
+  }, [overviewSummary]);
+
+  const filteredIconNames = useMemo(() => {
+    if (!iconSearchQuery.trim()) return LUCIDE_ICON_NAMES;
+    const q = iconSearchQuery.toLowerCase();
+    return LUCIDE_ICON_NAMES.filter((n) => n.toLowerCase().includes(q));
+  }, [iconSearchQuery]);
+
   const categoryFilteredTxs = useMemo(() => {
     if (!selectedCategoryFilter) return null;
     return filteredSelectedTxs.filter((tx) =>
@@ -660,6 +709,22 @@ export default function DashboardScreen() {
       .limit(1);
     if (inviteNameCheck.error && isMissingColumnError(inviteNameCheck.error)) {
       missing.push('account_invites.name');
+    }
+
+    const accountIconCheck = await supabase
+      .from('accounts')
+      .select('icon')
+      .limit(1);
+    if (accountIconCheck.error && isMissingColumnError(accountIconCheck.error)) {
+      missing.push('accounts.icon');
+    }
+
+    const tagIconCheck = await supabase
+      .from('tags')
+      .select('icon')
+      .limit(1);
+    if (tagIconCheck.error && isMissingColumnError(tagIconCheck.error)) {
+      missing.push('tags.icon');
     }
 
     setMissingSchemaColumns(missing);
@@ -714,7 +779,7 @@ export default function DashboardScreen() {
 
       const { data: owned, error: ownedError } = await supabase
         .from('accounts')
-        .select('id,name,currency,created_at,created_by,tag_ids')
+        .select('id,name,currency,icon,created_at,created_by,tag_ids')
         .eq('created_by', user.id)
         .order('created_at', { ascending: false });
       if (ownedError) throw ownedError;
@@ -730,7 +795,7 @@ export default function DashboardScreen() {
       if (memberIds.length > 0) {
         const { data, error } = await supabase
           .from('accounts')
-          .select('id,name,currency,created_at,created_by,tag_ids')
+          .select('id,name,currency,icon,created_at,created_by,tag_ids')
           .in('id', memberIds);
         if (error) throw error;
         shared = (data ?? []) as AppAccount[];
@@ -826,7 +891,7 @@ export default function DashboardScreen() {
           .order('name', { ascending: true }),
         supabase
           .from('tags')
-          .select('id,account_id,name,color')
+          .select('id,account_id,name,color,icon')
           .or(`account_id.in.(${accountIdList}),account_id.is.null`)
           .order('name', { ascending: true }),
         supabase
@@ -921,14 +986,14 @@ export default function DashboardScreen() {
     }
   }, [checkRequiredSchemaColumns, user]);
 
-  /** Counts displayed numbers up from 0 → actual value over ~700 ms (ease-out cubic). */
+  /** Counts displayed numbers up from 0 → actual value over ~200 ms (ease-out cubic). */
   const animateIn = useCallback(() => {
     if (animIntervalRef.current) _clearInterval(animIntervalRef.current);
     setReloading(false);
     setAnimMultiplier(0);
     let step = 0;
-    const STEPS = 40;
-    const INTERVAL_MS = 700 / STEPS;
+    const STEPS = 20;
+    const INTERVAL_MS = 200 / STEPS;
     animIntervalRef.current = _setInterval(() => {
       step += 1;
       const t = step / STEPS;
@@ -950,6 +1015,11 @@ export default function DashboardScreen() {
     await loadData({ silent: true });
     animateIn();
   }, [animateIn, loadData, reloading]);
+
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    (document as any).querySelector('meta[name="theme-color"]')?.setAttribute('content', themeColor);
+  }, [themeColor]);
 
   useEffect(() => {
     if (missingSchemaColumns.length === 0) return;
@@ -978,6 +1048,10 @@ export default function DashboardScreen() {
 
   useEffect(() => {
     setSpendingCollapsed(!desktopView);
+  }, [desktopView]);
+
+  useEffect(() => {
+    if (desktopView) setShowAccountOverviewPicker(false);
   }, [desktopView]);
 
   useEffect(() => {
@@ -1034,6 +1108,49 @@ export default function DashboardScreen() {
     });
   }, [catPickerAnim]);
 
+  const openAcctPickerSheet = useCallback((target: 'entry' | 'invite') => {
+    setAcctPickerSheetTarget(target);
+    setShowAcctPickerSheet(true);
+    Animated.spring(acctPickerAnim, { toValue: 1, useNativeDriver: true, speed: 22, bounciness: 3 }).start();
+  }, [acctPickerAnim]);
+
+  const closeAcctPickerSheet = useCallback(() => {
+    Animated.timing(acctPickerAnim, { toValue: 0, duration: 200, useNativeDriver: true }).start(() => {
+      setShowAcctPickerSheet(false);
+      setAcctPickerSheetTarget(null);
+    });
+  }, [acctPickerAnim]);
+
+  const openIconPickerSheet = useCallback((target: 'category' | 'account' | 'tag') => {
+    setIconPickerTarget(target);
+    setIconSearchQuery('');
+    setShowIconPickerSheet(true);
+    Animated.spring(iconPickerAnim, { toValue: 1, useNativeDriver: true, speed: 22, bounciness: 3 }).start();
+  }, [iconPickerAnim]);
+
+  const closeIconPickerSheet = useCallback(() => {
+    Animated.timing(iconPickerAnim, { toValue: 0, duration: 200, useNativeDriver: true }).start(() => {
+      setShowIconPickerSheet(false);
+      setIconPickerTarget(null);
+    });
+  }, [iconPickerAnim]);
+
+  const shareInvite = useCallback(async (token: string) => {
+    const message = `Join my Finduo shared account!\nToken: ${token}`;
+    try {
+      if (Platform.OS === 'web') {
+        if ((navigator as any).share) {
+          await (navigator as any).share({ title: 'Finduo Invite', text: message });
+        } else {
+          await navigator.clipboard.writeText(message);
+          Alert.alert('Copied', 'Invite copied to clipboard.');
+        }
+      } else {
+        await Share.share({ message });
+      }
+    } catch { /* user cancelled */ }
+  }, []);
+
   const openEntryModal = useCallback((type: TransactionType, categoryId?: string | null) => {
     setEditingTransactionId(null);
     setEntryType(type);
@@ -1078,6 +1195,7 @@ export default function DashboardScreen() {
     setSettingsInitialBalance('0');
     setSettingsInitialDate(todayIso());
     setAccountTagIds([]);
+    setNewAccountIcon(null);
     setShowAccountModal(true);
   }, [selectedAccount?.currency]);
 
@@ -1086,6 +1204,7 @@ export default function DashboardScreen() {
     setEditingAccountId(account.id);
     setNewAccountName(account.name);
     setNewAccountCurrency(account.currency);
+    setNewAccountIcon(account.icon ?? null);
     setSettingsIncluded(settings?.included_in_balance ?? true);
     setSettingsCarryOver(settings?.carry_over_balance ?? true);
     setSettingsInitialBalance(String(settings?.initial_balance ?? 0));
@@ -1189,8 +1308,7 @@ export default function DashboardScreen() {
       }
       setCategoryColor(null);
       setCategoryIcon(null);
-      setCategoryTagIds([]);
-      setShowCategoryIconPicker(false);
+      setCategoryTagIds([]);
       setShowCategoryModal(false);
       await loadData();
     } catch (err) {
@@ -1252,6 +1370,7 @@ export default function DashboardScreen() {
     setEditingTagId(null);
     setTagName('');
     setTagColor(null);
+    setTagIcon(null);
     setShowTagModal(true);
   }, []);
 
@@ -1259,6 +1378,7 @@ export default function DashboardScreen() {
     setEditingTagId(tag.id);
     setTagName(tag.name);
     setTagColor(tag.color ?? null);
+    setTagIcon(tag.icon ?? null);
     setShowTagModal(true);
   }, []);
 
@@ -1277,17 +1397,18 @@ export default function DashboardScreen() {
       if (editingTagId) {
         const { error } = await supabase
           .from('tags')
-          .update({ name: tagName.trim(), color: tagColor })
+          .update({ name: tagName.trim(), color: tagColor, icon: tagIcon })
           .eq('id', editingTagId);
         if (error) throw error;
       } else {
         const { error } = await supabase
           .from('tags')
-          .insert({ account_id: null, name: tagName.trim(), color: tagColor });
+          .insert({ account_id: null, name: tagName.trim(), color: tagColor, icon: tagIcon });
         if (error) throw error;
       }
 
       setTagColor(null);
+      setTagIcon(null);
       setShowTagModal(false);
       await loadData();
     } catch (err) {
@@ -1295,7 +1416,7 @@ export default function DashboardScreen() {
     } finally {
       setSaving(false);
     }
-  }, [editingTagId, loadData, tagColor, tagName]);
+  }, [editingTagId, loadData, tagColor, tagIcon, tagName]);
 
   const deleteTag = useCallback(async (tagId: string) => {
     setSaving(true);
@@ -1430,13 +1551,13 @@ export default function DashboardScreen() {
       if (editingAccountId) {
         const { error } = await supabase
           .from('accounts')
-          .update({ name: newAccountName.trim(), currency: newAccountCurrency, tag_ids: accountTagIds })
+          .update({ name: newAccountName.trim(), currency: newAccountCurrency, tag_ids: accountTagIds, icon: newAccountIcon ?? null })
           .eq('id', editingAccountId);
         if (error) throw error;
       } else {
         const { data, error } = await supabase
           .from('accounts')
-          .insert({ name: newAccountName.trim(), currency: newAccountCurrency, created_by: user.id, tag_ids: [] })
+          .insert({ name: newAccountName.trim(), currency: newAccountCurrency, created_by: user.id, tag_ids: [], icon: newAccountIcon ?? null })
           .select('id')
           .single();
         if (error) throw error;
@@ -1488,6 +1609,7 @@ export default function DashboardScreen() {
     editingAccountId,
     loadData,
     newAccountCurrency,
+    newAccountIcon,
     newAccountName,
     settingsCarryOver,
     settingsIncluded,
@@ -1729,6 +1851,7 @@ export default function DashboardScreen() {
         }
 
         setInviteToken(token);
+        void shareInvite(token);
       }
 
       setInviteName('');
@@ -1740,7 +1863,7 @@ export default function DashboardScreen() {
     } finally {
       setSaving(false);
     }
-  }, [editingInviteId, invitationAccountId, inviteExpiresDays, inviteName, loadManagedInvites, user]);
+  }, [editingInviteId, invitationAccountId, inviteExpiresDays, inviteName, loadManagedInvites, shareInvite, user]);
 
   const removeInviteToken = useCallback(async (inviteId: string) => {
     setSaving(true);
@@ -1887,9 +2010,11 @@ export default function DashboardScreen() {
             )}
           </View>
 
+          <View style={desktopView && includedAccountSummaries.length > 1 ? styles.desktopBodyWrapper : { flex: 1 }}>
           <ScrollView
             ref={mainScrollRef}
             showsVerticalScrollIndicator={false}
+            style={{ flex: 1 }}
             contentContainerStyle={styles.scrollContent}
             onScroll={handleDashboardScroll}
             scrollEventThrottle={16}
@@ -1906,178 +2031,172 @@ export default function DashboardScreen() {
               </View>
             )}
 
-            <View style={desktopView ? styles.desktopTwoColRow : undefined}>
-              {/* Left (or solo on mobile): overview card + account picker */}
-              <View style={desktopView ? styles.desktopColLeft : undefined}>
-                <View style={styles.cardStrong}>
-                  <TouchableOpacity
-                    activeOpacity={0.9}
-                    onPress={() => {
-                      setShowAccountOverviewPicker((prev) => !prev);
-                      setSelectedCategoryFilter(null);
-                    }}
-                  >
-                    <View style={styles.cardCollapseHeader}>
-                      <Text style={styles.cardStrongLabel}>
-                        {showAccountOverviewPicker ? 'Included Accounts Total' : 'Selected Account Balance'}
-                      </Text>
-                      <TouchableOpacity onPress={() => setOverviewCollapsed((p) => !p)}>
-                        <Text style={styles.collapseChevron}>{overviewCollapsed ? '▸' : '▾'}</Text>
-                      </TouchableOpacity>
-                    </View>
-                    <Text style={[styles.cardStrongValue, overviewSummary.net < 0 && styles.negative]}>
-                      {formatCurrency(overviewSummary.net)}
-                    </Text>
+            <View style={styles.cardStrong}>
+              <Pressable
+                disabled={desktopView}
+                onPress={() => {
+                  setShowAccountOverviewPicker((prev) => !prev);
+                  setSelectedCategoryFilter(null);
+                }}
+              >
+                <View style={styles.cardCollapseHeader}>
+                  <Text style={styles.cardStrongLabel}>
+                    {showAccountOverviewPicker ? 'Included Accounts Total' : 'Selected Account Balance'}
+                  </Text>
+                  <TouchableOpacity onPress={() => setOverviewCollapsed((p) => !p)}>
+                    <Text style={styles.collapseChevron}>{overviewCollapsed ? '▸' : '▾'}</Text>
                   </TouchableOpacity>
-                  {!overviewCollapsed && (
-                    <>
-                      <Text style={styles.summaryText}>
-                        Account: {showAccountOverviewPicker ? 'All Included Accounts' : (selectedAccount?.name ?? 'No account selected')}
-                      </Text>
-                      {/* Interval pill inline selector */}
-                      <View style={styles.intervalPillRow}>
-                        <TouchableOpacity
-                          style={styles.intervalPill}
-                          onPress={() => setShowIntervalPicker((p) => !p)}
-                        >
-                          <Text style={styles.intervalPillText}>{interval.toUpperCase()} {showIntervalPicker ? '▾' : '▸'}</Text>
-                        </TouchableOpacity>
+                </View>
+                <Text style={[styles.cardStrongValue, overviewSummary.net < 0 && styles.negative]}>
+                  {formatCurrency(overviewSummary.net)}
+                </Text>
+              </Pressable>
+              {!overviewCollapsed && (
+                <>
+                  <Text style={styles.summaryText}>
+                    Account: {showAccountOverviewPicker ? 'All Included Accounts' : (selectedAccount?.name ?? 'No account selected')}
+                  </Text>
+                  {/* Interval pill inline selector */}
+                  <View style={styles.intervalPillRow}>
+                    <TouchableOpacity
+                      style={styles.intervalPill}
+                      onPress={() => setShowIntervalPicker((p) => !p)}
+                    >
+                      <Text style={styles.intervalPillText}>{interval.toUpperCase()} {showIntervalPicker ? '▾' : '▸'}</Text>
+                    </TouchableOpacity>
+                  </View>
+                  {showIntervalPicker && (
+                    <View style={styles.intervalPickerWrap}>
+                      <View style={styles.menuChipWrap}>
+                        {(['day', 'week', 'month', 'year', 'all', 'custom'] as IntervalKey[]).map((key) => (
+                          <TouchableOpacity
+                            key={key}
+                            style={[styles.menuChip, interval === key && styles.menuChipActive]}
+                            onPress={() => { setInterval(key); if (key !== 'custom') setShowIntervalPicker(false); }}
+                          >
+                            <Text style={styles.menuChipText}>{key.toUpperCase()}</Text>
+                          </TouchableOpacity>
+                        ))}
                       </View>
-                      {showIntervalPicker && (
-                        <View style={styles.intervalPickerWrap}>
-                          <View style={styles.menuChipWrap}>
-                            {(['day', 'week', 'month', 'year', 'all', 'custom'] as IntervalKey[]).map((key) => (
-                              <TouchableOpacity
-                                key={key}
-                                style={[styles.menuChip, interval === key && styles.menuChipActive]}
-                                onPress={() => { setInterval(key); if (key !== 'custom') setShowIntervalPicker(false); }}
-                              >
-                                <Text style={styles.menuChipText}>{key.toUpperCase()}</Text>
-                              </TouchableOpacity>
-                            ))}
-                          </View>
-                          {interval === 'custom' && (
-                            <View style={styles.customRangeStack}>
-                              <TextInput
-                                value={customStart}
-                                onChangeText={setCustomStart}
-                                placeholder="Start YYYY-MM-DD"
-                                placeholderTextColor="#64748B"
-                                style={styles.input}
-                              />
-                              <TextInput
-                                value={customEnd}
-                                onChangeText={setCustomEnd}
-                                placeholder="End YYYY-MM-DD"
-                                placeholderTextColor="#64748B"
-                                style={styles.input}
-                              />
-                            </View>
-                          )}
+                      {interval === 'custom' && (
+                        <View style={styles.customRangeStack}>
+                          <TextInput
+                            value={customStart}
+                            onChangeText={setCustomStart}
+                            placeholder="Start YYYY-MM-DD"
+                            placeholderTextColor="#64748B"
+                            style={styles.input}
+                          />
+                          <TextInput
+                            value={customEnd}
+                            onChangeText={setCustomEnd}
+                            placeholder="End YYYY-MM-DD"
+                            placeholderTextColor="#64748B"
+                            style={styles.input}
+                          />
                         </View>
                       )}
-                      <Text style={styles.summaryText}>Opening: {formatCurrency(overviewSummary.openingBalance)}</Text>
-                      <View style={styles.summaryRow}>
-                        <Text style={styles.summaryText}>Income {formatCurrency(overviewSummary.income)}</Text>
-                        <Text style={styles.summaryText}>Expenses {formatCurrency(overviewSummary.expense)}</Text>
-                      </View>
-                      <Text style={styles.summaryText}>Total Included Balance: {formatCurrency(totalIncludedBalance)}</Text>
-                      {includedAccountSummaries.length > 1 && (
-                        <Text style={styles.summaryText}>
-                          Tap to {showAccountOverviewPicker ? 'hide accounts' : 'change account'}
-                        </Text>
-                      )}
-                    </>
+                    </View>
                   )}
-                </View>
+                  <Text style={styles.summaryText}>Opening: {formatCurrency(overviewSummary.openingBalance)}</Text>
+                  <View style={styles.summaryRow}>
+                    <Text style={styles.summaryText}>Income {formatCurrency(overviewSummary.income)}</Text>
+                    <Text style={styles.summaryText}>Expenses {formatCurrency(overviewSummary.expense)}</Text>
+                  </View>
+                  <Text style={styles.summaryText}>Total Included Balance: {formatCurrency(totalIncludedBalance)}</Text>
+                  {!desktopView && includedAccountSummaries.length > 1 && (
+                    <Text style={styles.summaryText}>
+                      Tap to {showAccountOverviewPicker ? 'hide accounts' : 'change account'}
+                    </Text>
+                  )}
+                </>
+              )}
+            </View>
 
-                {includedAccountSummaries.length > 1 && showAccountOverviewPicker && (
+            {!desktopView && includedAccountSummaries.length > 1 && showAccountOverviewPicker && (
+              <>
+                <View style={styles.sectionHeader}>
+                  <Text style={styles.sectionTitle}>Included Accounts Overview</Text>
+                </View>
+                <View style={styles.accountOverviewGrid}>
+                  {includedAccountSummaries.map((item) => (
+                    <TouchableOpacity
+                      key={item.account.id}
+                      style={[
+                        styles.accountOverviewCard,
+                        selectedAccountId === item.account.id && styles.accountOverviewCardActive,
+                      ]}
+                      onPress={() => {
+                        setSelectedAccountId(item.account.id);
+                        setShowAccountOverviewPicker(false);
+                      }}
+                    >
+                      <Text style={styles.accountOverviewName}>{item.account.name}</Text>
+                      <Text style={[styles.accountOverviewValue, item.balance < 0 && styles.negative]}>
+                        {formatCurrency(item.balance, item.account.currency)}
+                      </Text>
+                      <Text style={styles.accountOverviewMeta}>In {formatCurrency(item.income, item.account.currency)}</Text>
+                      <Text style={styles.accountOverviewMeta}>Out {formatCurrency(item.expense, item.account.currency)}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </>
+            )}
+
+            <View style={[styles.cardStrong, { marginBottom: 18 }]}>
+              <TouchableOpacity
+                style={[styles.cardCollapseHeader, { marginBottom: spendingCollapsed ? 0 : 12 }]}
+                onPress={() => setSpendingCollapsed((p) => !p)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.cardStrongLabel}>SPENDING BY CATEGORY</Text>
+                <View style={styles.cardCollapseHeaderRight}>
+                  {selectedCategoryFilter && !spendingCollapsed && (
+                    <TouchableOpacity onPress={(e) => { e.stopPropagation?.(); setSelectedCategoryFilter(null); }}>
+                      <Text style={styles.linkAction}>✕ Clear</Text>
+                    </TouchableOpacity>
+                  )}
+                  <Text style={styles.collapseChevron}>{spendingCollapsed ? '▸' : '▾'}</Text>
+                </View>
+              </TouchableOpacity>
+              {!spendingCollapsed && (
+                categorySpendData.length === 0 ? (
+                  <Text style={styles.emptyText}>No expense data in this interval.</Text>
+                ) : (
                   <>
-                    <View style={styles.sectionHeader}>
-                      <Text style={styles.sectionTitle}>Included Accounts Overview</Text>
-                    </View>
-                    <View style={styles.accountOverviewGrid}>
-                      {includedAccountSummaries.map((item) => (
+                    {categorySpendData.map((row) => {
+                      const isActive = selectedCategoryFilter === row.id;
+                      return (
                         <TouchableOpacity
-                          key={item.account.id}
-                          style={[
-                            styles.accountOverviewCard,
-                            selectedAccountId === item.account.id && styles.accountOverviewCardActive,
-                          ]}
-                          onPress={() => {
-                            setSelectedAccountId(item.account.id);
-                            setShowAccountOverviewPicker(false);
-                          }}
+                          key={row.id}
+                          style={[styles.spendRow, isActive && styles.spendRowActive]}
+                          activeOpacity={0.7}
+                          onPress={() => setSelectedCategoryFilter(isActive ? null : row.id)}
                         >
-                          <Text style={styles.accountOverviewName}>{item.account.name}</Text>
-                          <Text style={[styles.accountOverviewValue, item.balance < 0 && styles.negative]}>
-                            {formatCurrency(item.balance, item.account.currency)}
-                          </Text>
-                          <Text style={styles.accountOverviewMeta}>In {formatCurrency(item.income, item.account.currency)}</Text>
-                          <Text style={styles.accountOverviewMeta}>Out {formatCurrency(item.expense, item.account.currency)}</Text>
+                          <View style={styles.spendLabelRow}>
+                            <Text style={[styles.spendName, isActive && styles.spendNameActive]}>{row.name}</Text>
+                            <Text style={styles.spendAmount}>{formatCurrency(row.total)}</Text>
+                          </View>
+                          <View style={styles.spendBarTrack}>
+                            <View style={[styles.spendBarFill, { width: `${row.widthPercent}%` }, isActive && styles.spendBarFillActive]} />
+                          </View>
                         </TouchableOpacity>
-                      ))}
-                    </View>
+                      );
+                    })}
                   </>
-                )}
-              </View>
-
-              {/* Right (or below on mobile): spending by category */}
-              <View style={desktopView ? styles.desktopColRight : undefined}>
-                <View style={[styles.cardStrong, { marginBottom: 18 }]}>
-                  <TouchableOpacity
-                    style={[styles.cardCollapseHeader, { marginBottom: spendingCollapsed ? 0 : 12 }]}
-                    onPress={() => setSpendingCollapsed((p) => !p)}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={styles.cardStrongLabel}>SPENDING BY CATEGORY</Text>
-                    <View style={styles.cardCollapseHeaderRight}>
-                      {selectedCategoryFilter && !spendingCollapsed && (
-                        <TouchableOpacity onPress={(e) => { e.stopPropagation?.(); setSelectedCategoryFilter(null); }}>
-                          <Text style={styles.linkAction}>✕ Clear</Text>
-                        </TouchableOpacity>
-                      )}
-                      <Text style={styles.collapseChevron}>{spendingCollapsed ? '▸' : '▾'}</Text>
-                    </View>
-                  </TouchableOpacity>
-                  {!spendingCollapsed && (
-                    categorySpendData.length === 0 ? (
-                      <Text style={styles.emptyText}>No expense data in this interval.</Text>
-                    ) : (
-                      <>
-                        {categorySpendData.map((row) => {
-                          const isActive = selectedCategoryFilter === row.id;
-                          return (
-                            <TouchableOpacity
-                              key={row.id}
-                              style={[styles.spendRow, isActive && styles.spendRowActive]}
-                              activeOpacity={0.7}
-                              onPress={() => setSelectedCategoryFilter(isActive ? null : row.id)}
-                            >
-                              <View style={styles.spendLabelRow}>
-                                <Text style={[styles.spendName, isActive && styles.spendNameActive]}>{row.name}</Text>
-                                <Text style={styles.spendAmount}>{formatCurrency(row.total)}</Text>
-                              </View>
-                              <View style={styles.spendBarTrack}>
-                                <View style={[styles.spendBarFill, { width: `${row.widthPercent}%` }, isActive && styles.spendBarFillActive]} />
-                              </View>
-                            </TouchableOpacity>
-                          );
-                        })}
-                      </>
-                    )
-                  )}
-                </View>
-              </View>
+                )
+              )}
             </View>
 
             {/* Desktop battery chart */}
             {desktopView && (() => {
               const totalAvailable = overviewSummary.openingBalance + overviewSummary.income;
               const spent = overviewSummary.expense;
-              const unspent = totalAvailable - spent;
+              const transferred = selectedTransferTotal;
+              const remaining = totalAvailable - spent - transferred;
               const spentPct = totalAvailable > 0 ? Math.min(100, Math.round((spent / totalAvailable) * 100)) : 0;
-              const unspentPct = 100 - spentPct;
+              const transferPct = totalAvailable > 0 ? Math.min(100 - spentPct, Math.round((transferred / totalAvailable) * 100)) : 0;
+              const unspentPct = 100 - spentPct - transferPct;
               return (
                 <View style={styles.batteryWrap}>
                   <View style={styles.batteryTrack}>
@@ -2092,6 +2211,11 @@ export default function DashboardScreen() {
                             {spentPct >= 12 && <Text style={styles.batterySegLabel}>{spentPct}%</Text>}
                           </View>
                         )}
+                        {transferPct > 0 && (
+                          <View style={[styles.batterySegmentTransfer, { flex: transferPct }]}>
+                            {transferPct >= 12 && <Text style={styles.batterySegLabel}>{transferPct}%</Text>}
+                          </View>
+                        )}
                         {unspentPct > 0 && (
                           <View style={[styles.batterySegmentUnspent, { flex: unspentPct }]}>
                             {unspentPct >= 12 && <Text style={styles.batterySegLabel}>{unspentPct}%</Text>}
@@ -2102,12 +2226,18 @@ export default function DashboardScreen() {
                   </View>
                   <View style={styles.batteryLegend}>
                     <View style={styles.batteryLegendItem}>
-                      <View style={[styles.batteryLegendDot, { backgroundColor: '#FB7185' }]} />
+                      <View style={[styles.batteryLegendDot, { backgroundColor: '#f87171' }]} />
                       <Text style={styles.batteryLegendText}>Spent {formatCurrency(spent)} ({spentPct}%)</Text>
                     </View>
+                    {transferred > 0 && (
+                      <View style={styles.batteryLegendItem}>
+                        <View style={[styles.batteryLegendDot, { backgroundColor: '#a855f7' }]} />
+                        <Text style={styles.batteryLegendText}>Transferred {formatCurrency(transferred)} ({transferPct}%)</Text>
+                      </View>
+                    )}
                     <View style={styles.batteryLegendItem}>
                       <View style={[styles.batteryLegendDot, { backgroundColor: '#53E3A6' }]} />
-                      <Text style={styles.batteryLegendText}>Remaining {formatCurrency(Math.max(0, unspent))} ({unspentPct}%)</Text>
+                      <Text style={styles.batteryLegendText}>Remaining {formatCurrency(Math.max(0, remaining))} ({unspentPct}%)</Text>
                     </View>
                   </View>
                 </View>
@@ -2131,8 +2261,7 @@ export default function DashboardScreen() {
                 setCategoryType('expense');
                 setCategoryColor(null);
                 setCategoryIcon(null);
-                setCategoryTagIds([]);
-                setShowCategoryIconPicker(false);
+                setCategoryTagIds([]);
                 setShowCategoryModal(true);
               }}>
                 <Icon name={"add_circle" as any} size={22} color="#6ED8A5" />
@@ -2152,8 +2281,7 @@ export default function DashboardScreen() {
                     setCategoryType(c.type);
                     setCategoryColor(c.color ?? null);
                     setCategoryIcon(c.icon ?? null);
-                    setCategoryTagIds((c.tag_ids ?? []) as string[]);
-                    setShowCategoryIconPicker(false);
+                    setCategoryTagIds((c.tag_ids ?? []) as string[]);
                     setShowCategoryModal(true);
                   }}
                 >
@@ -2247,11 +2375,103 @@ export default function DashboardScreen() {
 
             {!!inviteToken && (
               <View style={styles.pendingCard}>
-                <Text style={styles.pendingTitle}>Latest invite token</Text>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Text style={styles.pendingTitle}>Latest invite token</Text>
+                  <TouchableOpacity onPress={() => void shareInvite(inviteToken)}>
+                    <Icon name="share" size={18} color="#8FA8C9" />
+                  </TouchableOpacity>
+                </View>
                 <Text style={styles.pendingAccountName}>{inviteToken}</Text>
               </View>
             )}
           </ScrollView>
+
+          {/* ─── Desktop sidebar ─── */}
+          {desktopView && includedAccountSummaries.length > 1 && (
+            <ScrollView
+              style={styles.desktopSidebar}
+              contentContainerStyle={styles.desktopSidebarContent}
+              showsVerticalScrollIndicator={false}
+            >
+              {/* Total card */}
+              <View style={[styles.cardStrong, { marginBottom: 12 }]}>
+                <Text style={styles.cardStrongLabel}>ALL ACCOUNTS</Text>
+                <Text style={[styles.cardStrongValue, totalIncludedSummary.net < 0 && styles.negative]}>
+                  {formatCurrency(totalIncludedSummary.net)}
+                </Text>
+                <View style={styles.summaryRow}>
+                  <Text style={[styles.summaryText, styles.positive]}>In {formatCurrency(totalIncludedSummary.income)}</Text>
+                  <Text style={[styles.summaryText, styles.negative]}>Out {formatCurrency(totalIncludedSummary.expense)}</Text>
+                </View>
+              </View>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>Included Accounts</Text>
+              </View>
+              <View style={styles.accountOverviewGrid}>
+                {includedAccountSummaries.map((item) => (
+                  <TouchableOpacity
+                    key={item.account.id}
+                    style={[
+                      styles.accountOverviewCard,
+                      selectedAccountId === item.account.id && styles.accountOverviewCardActive,
+                    ]}
+                    onPress={() => setSelectedAccountId(item.account.id)}
+                  >
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      {item.account.icon && <Icon name={item.account.icon} size={16} color="#8FA8C9" />}
+                      <Text style={styles.accountOverviewName}>{item.account.name}</Text>
+                    </View>
+                    <Text style={[styles.accountOverviewValue, item.balance < 0 && styles.negative]}>
+                      {formatCurrency(item.balance, item.account.currency)}
+                    </Text>
+                    <Text style={styles.accountOverviewMetaIncome}>In {formatCurrency(item.income, item.account.currency)}</Text>
+                    <Text style={styles.accountOverviewMetaExpense}>Out {formatCurrency(item.expense, item.account.currency)}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <View style={[styles.cardStrong, { marginTop: 12 }]}>
+                <Text style={[styles.cardStrongLabel, { marginBottom: 12 }]}>SPENDING (ALL ACCOUNTS)</Text>
+                {allIncludedCategorySpendData.length === 0 ? (
+                  <Text style={styles.emptyText}>No expense data.</Text>
+                ) : (
+                  allIncludedCategorySpendData.map((row) => (
+                    <View key={row.id} style={styles.spendRow}>
+                      <View style={styles.spendLabelRow}>
+                        <Text style={styles.spendName}>{row.name}</Text>
+                        <Text style={styles.spendAmount}>{formatCurrency(row.total)}</Text>
+                      </View>
+                      <View style={styles.spendBarTrack}>
+                        <View style={[styles.spendBarFill, { width: `${row.widthPercent}%` as any }]} />
+                      </View>
+                    </View>
+                  ))
+                )}
+              </View>
+              <View style={[styles.sectionHeader, { marginTop: 12 }]}>
+                <Text style={styles.sectionTitle}>Included Transactions</Text>
+              </View>
+              <View style={styles.listCard}>
+                {filteredIncludedTxs.slice(0, sidebarTxCount).map((tx) => (
+                  <TouchableOpacity
+                    key={tx.id}
+                    style={styles.sidebarTxRow}
+                    onPress={() => openEditTransaction(tx)}
+                  >
+                    <Text style={styles.sidebarTxNote} numberOfLines={1}>{tx.note || 'Untitled'}</Text>
+                    <Text style={[styles.sidebarTxAmount, tx.type === 'income' ? styles.positive : styles.negative]}>
+                      {tx.type === 'income' ? '+' : '-'}{formatCurrency(Math.abs(Number(tx.amount)), accountsById[tx.account_id]?.currency)}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+                {filteredIncludedTxs.length > sidebarTxCount && (
+                  <TouchableOpacity onPress={() => setSidebarTxCount((c) => c + 12)} style={{ paddingVertical: 8 }}>
+                    <Text style={styles.linkAction}>Load more</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            </ScrollView>
+          )}
+          </View>{/* desktopBodyWrapper */}
 
           {scrollY > 320 && (
             <TouchableOpacity
@@ -2402,8 +2622,7 @@ export default function DashboardScreen() {
                   setCategoryType('expense');
                   setCategoryColor(null);
                   setCategoryIcon(null);
-                  setCategoryTagIds([]);
-                  setShowCategoryIconPicker(false);
+                  setCategoryTagIds([]);
                   setShowCategoryModal(true);
                 }}>
                   <Text style={styles.menuIconActionText}>＋</Text>
@@ -2429,7 +2648,6 @@ export default function DashboardScreen() {
                     setCategoryColor(category.color ?? null);
                     setCategoryIcon(category.icon ?? null);
                     setCategoryTagIds((category.tag_ids ?? []) as string[]);
-                    setShowCategoryIconPicker(false);
                     setShowCategoryModal(true);
                   }}>
                     <Text style={styles.manageIconText}>✎</Text>
@@ -2695,25 +2913,12 @@ export default function DashboardScreen() {
                 {editingTransactionId ? 'Edit' : (entryType === 'income' ? 'Income' : 'Expense')}
               </Text>
               <TouchableOpacity
-                style={[styles.entryAccountBtn, showEntryAccountPicker && styles.entryAccountBtnActive]}
-                onPress={() => setShowEntryAccountPicker((p) => !p)}
+                style={styles.entryAccountBtn}
+                onPress={() => openAcctPickerSheet('entry')}
               >
                 <Text style={styles.entryAccountBtnText}>{entryAccount?.name ?? 'Account'}</Text>
               </TouchableOpacity>
             </View>
-            {showEntryAccountPicker && (
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[styles.modalChipsRow, { paddingHorizontal: 16, paddingBottom: 6 }]}>
-                {accounts.map((a) => (
-                  <TouchableOpacity
-                    key={a.id}
-                    style={[styles.modalChip, entryAccountId === a.id && styles.modalChipActive]}
-                    onPress={() => { setEntryAccountId(a.id); setShowEntryAccountPicker(false); }}
-                  >
-                    <Text style={styles.modalChipText}>{a.name}</Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-            )}
             {/* Type toggle */}
             <View style={[styles.entryTypeRow, { marginHorizontal: 16 }]}>
               <TouchableOpacity
@@ -2937,14 +3142,14 @@ export default function DashboardScreen() {
             <View style={styles.iconPickerRow}>
               <TouchableOpacity
                 style={[styles.iconPickerPreview, categoryIcon && { borderColor: categoryColor ?? '#53E3A6' }]}
-                onPress={() => setShowCategoryIconPicker((p) => !p)}
+                onPress={() => openIconPickerSheet('category')}
               >
                 {categoryIcon ? (
                   <Icon name={categoryIcon as any} size={24} color={categoryColor ?? '#EAF3FF'} />
                 ) : (
                   <Icon name={"label" as any} size={24} color="#64748B" />
                 )}
-                <Icon name={(showCategoryIconPicker ? 'expand_less' : 'expand_more') as any} size={16} color="#64748B" style={{ marginLeft: 4 }} />
+                <Icon name="expand_more" size={16} color="#64748B" style={{ marginLeft: 4 }} />
               </TouchableOpacity>
               {categoryIcon && (
                 <TouchableOpacity onPress={() => setCategoryIcon(null)}>
@@ -2957,19 +3162,6 @@ export default function DashboardScreen() {
                 </TouchableOpacity>
               )}
             </View>
-            {showCategoryIconPicker && (
-              <ScrollView style={{ maxHeight: 180 }} contentContainerStyle={styles.iconGrid} showsVerticalScrollIndicator={false}>
-                {CATEGORY_ICONS.map((ic) => (
-                  <TouchableOpacity
-                    key={ic}
-                    style={[styles.iconGridItem, categoryIcon === ic && styles.iconGridItemActive]}
-                    onPress={() => { setCategoryIcon(ic); setShowCategoryIconPicker(false); }}
-                  >
-                    <Icon name={ic as any} size={22} color={categoryColor ?? (categoryIcon === ic ? '#53E3A6' : '#8FA8C9')} />
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-            )}
 
             {/* Color picker */}
             <Text style={styles.modalLabel}>Color</Text>
@@ -3051,6 +3243,25 @@ export default function DashboardScreen() {
               onChangeText={setNewAccountName}
               style={styles.input}
             />
+            <Text style={styles.modalLabel}>Icon</Text>
+            <View style={styles.iconPickerRow}>
+              <TouchableOpacity
+                style={[styles.iconPickerPreview, newAccountIcon ? { borderColor: '#53E3A6' } : undefined]}
+                onPress={() => openIconPickerSheet('account')}
+              >
+                {newAccountIcon ? (
+                  <Icon name={newAccountIcon} size={24} color="#EAF3FF" />
+                ) : (
+                  <Icon name="House" size={24} color="#64748B" />
+                )}
+                <Icon name="expand_more" size={16} color="#64748B" style={{ marginLeft: 4 }} />
+              </TouchableOpacity>
+              {newAccountIcon && (
+                <TouchableOpacity onPress={() => setNewAccountIcon(null)}>
+                  <Text style={styles.linkAction}>Clear</Text>
+                </TouchableOpacity>
+              )}
+            </View>
             <Text style={styles.modalLabel}>Currency</Text>
             <View style={styles.currencyGrid}>
               {CURRENCY_OPTIONS.map((code) => (
@@ -3193,6 +3404,27 @@ export default function DashboardScreen() {
               ))}
             </View>
 
+            {/* Tag icon picker */}
+            <Text style={styles.modalLabel}>Icon</Text>
+            <View style={styles.iconPickerRow}>
+              <TouchableOpacity
+                style={[styles.iconPickerPreview, tagIcon ? { borderColor: tagColor ?? '#53E3A6' } : undefined]}
+                onPress={() => openIconPickerSheet('tag')}
+              >
+                {tagIcon ? (
+                  <Icon name={tagIcon} size={24} color={tagColor ?? '#EAF3FF'} />
+                ) : (
+                  <Icon name="Tag" size={24} color="#64748B" />
+                )}
+                <Icon name="expand_more" size={16} color="#64748B" style={{ marginLeft: 4 }} />
+              </TouchableOpacity>
+              {tagIcon && (
+                <TouchableOpacity onPress={() => setTagIcon(null)}>
+                  <Text style={styles.linkAction}>Clear</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+
             <View style={styles.modalActions}>
               {editingTagId && (
                 <TouchableOpacity
@@ -3318,20 +3550,32 @@ export default function DashboardScreen() {
             <Text style={styles.modalTitle}>Invitations</Text>
 
             <Text style={styles.modalLabel}>Account</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.modalChipsRow}>
-              {accounts.map((account) => (
-                <TouchableOpacity
-                  key={account.id}
-                  style={[styles.modalChip, invitationAccountId === account.id && styles.modalChipActive]}
-                  onPress={() => {
-                    setInvitationAccountId(account.id);
-                    void loadManagedInvites(account.id);
-                  }}
-                >
-                  <Text style={styles.modalChipText}>{account.name}</Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
+            {desktopView ? (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.modalChipsRow}>
+                {accounts.map((account) => (
+                  <TouchableOpacity
+                    key={account.id}
+                    style={[styles.modalChip, invitationAccountId === account.id && styles.modalChipActive]}
+                    onPress={() => {
+                      setInvitationAccountId(account.id);
+                      void loadManagedInvites(account.id);
+                    }}
+                  >
+                    <Text style={styles.modalChipText}>{account.name}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            ) : (
+              <TouchableOpacity
+                style={[styles.entryAccountBtn, styles.entryAccountBtnFull]}
+                onPress={() => openAcctPickerSheet('invite')}
+              >
+                <Text style={styles.entryAccountBtnText}>
+                  {accounts.find((a) => a.id === invitationAccountId)?.name ?? 'Select account'}
+                </Text>
+                <Icon name="expand_more" size={16} color="#8FA8C9" />
+              </TouchableOpacity>
+            )}
 
             <TextInput
               placeholder="Invite name"
@@ -3380,6 +3624,12 @@ export default function DashboardScreen() {
                       {invite.used_at ? 'Used by another user' : 'Available'} • Expires {formatShortDate(invite.expires_at)}
                     </Text>
                   </View>
+                  <TouchableOpacity
+                    style={styles.manageIconButton}
+                    onPress={() => void shareInvite(invite.token)}
+                  >
+                    <Icon name="share" size={16} color="#8FA8C9" />
+                  </TouchableOpacity>
                   <TouchableOpacity
                     style={styles.manageIconButton}
                     onPress={() => {
@@ -3492,6 +3742,128 @@ export default function DashboardScreen() {
         </Pressable>
       </Modal>
 
+      {/* ─── Full-screen account picker sheet ─── */}
+      <Modal
+        visible={showAcctPickerSheet}
+        transparent
+        animationType="none"
+        onRequestClose={closeAcctPickerSheet}
+      >
+        <Animated.View
+          style={[
+            StyleSheet.absoluteFill,
+            {
+              backgroundColor: '#060A14',
+              zIndex: 200,
+              transform: [
+                {
+                  translateY: acctPickerAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [height, 0],
+                  }),
+                },
+              ],
+            },
+          ]}
+        >
+          <View style={styles.catPickerHeader}>
+            <Text style={styles.catPickerTitle}>Choose Account</Text>
+            <TouchableOpacity onPress={closeAcctPickerSheet}>
+              <Icon name="close" size={24} color="#8FA8C9" />
+            </TouchableOpacity>
+          </View>
+          <ScrollView contentContainerStyle={styles.catPickerGrid} showsVerticalScrollIndicator={false}>
+            {accounts.map((a) => (
+              <TouchableOpacity
+                key={a.id}
+                style={[
+                  styles.catPickerItem,
+                  ((acctPickerSheetTarget === 'entry' && entryAccountId === a.id) ||
+                   (acctPickerSheetTarget === 'invite' && invitationAccountId === a.id)) && styles.catPickerItemActive,
+                ]}
+                onPress={() => {
+                  if (acctPickerSheetTarget === 'entry') {
+                    setEntryAccountId(a.id);
+                  } else if (acctPickerSheetTarget === 'invite') {
+                    setInvitationAccountId(a.id);
+                    void loadManagedInvites(a.id);
+                  }
+                  closeAcctPickerSheet();
+                }}
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+                  {a.icon && <Icon name={a.icon} size={20} color="#8FA8C9" />}
+                  <Text style={styles.catPickerItemText}>{a.name}</Text>
+                </View>
+                <Text style={styles.catPickerItemSub}>{a.currency}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </Animated.View>
+      </Modal>
+
+      {/* ─── Full-screen icon picker sheet ─── */}
+      <Modal
+        visible={showIconPickerSheet}
+        transparent
+        animationType="none"
+        onRequestClose={closeIconPickerSheet}
+      >
+        <Animated.View
+          style={[
+            StyleSheet.absoluteFill,
+            {
+              backgroundColor: '#060A14',
+              zIndex: 300,
+              transform: [
+                {
+                  translateY: iconPickerAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [height, 0],
+                  }),
+                },
+              ],
+            },
+          ]}
+        >
+          <View style={styles.catPickerHeader}>
+            <Text style={styles.catPickerTitle}>Choose Icon</Text>
+            <TouchableOpacity onPress={closeIconPickerSheet}>
+              <Icon name="close" size={24} color="#8FA8C9" />
+            </TouchableOpacity>
+          </View>
+          <TextInput
+            style={styles.iconSearchInput}
+            placeholder="Search icons..."
+            placeholderTextColor="#64748B"
+            value={iconSearchQuery}
+            onChangeText={setIconSearchQuery}
+          />
+          <ScrollView contentContainerStyle={styles.catPickerGrid} showsVerticalScrollIndicator={false}>
+            {filteredIconNames.map((iconName) => {
+              const isActive = iconPickerTarget === 'category' ? categoryIcon === iconName
+                : iconPickerTarget === 'account' ? newAccountIcon === iconName
+                : tagIcon === iconName;
+              return (
+                <TouchableOpacity
+                  key={iconName}
+                  style={[styles.catPickerItem, isActive && styles.catPickerItemActive]}
+                  onPress={() => {
+                    if (iconPickerTarget === 'category') setCategoryIcon(iconName);
+                    else if (iconPickerTarget === 'account') setNewAccountIcon(iconName);
+                    else if (iconPickerTarget === 'tag') setTagIcon(iconName);
+                    closeIconPickerSheet();
+                  }}
+                >
+                  <Icon name={iconName} size={28} color="#8FA8C9" />
+                  <Text style={styles.catPickerItemSub}>{iconName}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        </Animated.View>
+      </Modal>
+
     </View>
   );
 }
@@ -3508,7 +3880,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#060A14',
   },
   surfaceFrameDesktop: {
-    maxWidth: 1180,
+    maxWidth: 1920,
   },
   surfaceFrameMobile: {
     maxWidth: 430,
@@ -3538,6 +3910,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
+    backgroundColor: '#000000',
   },
   menuButton: {
     backgroundColor: '#0E1A2B',
@@ -3566,8 +3939,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   headerLogo: {
-    width: 120,
-    height: 40,
+    width: 168,
+    height: 52,
   },
   viewToggleButton: {
     backgroundColor: '#0E1A2B',
@@ -3673,6 +4046,46 @@ const styles = StyleSheet.create({
     color: '#8EA4C3',
     fontSize: 12,
     marginTop: 4,
+  },
+  accountOverviewMetaIncome: {
+    color: '#4ade80',
+    fontSize: 12,
+    marginTop: 4,
+  },
+  accountOverviewMetaExpense: {
+    color: '#f87171',
+    fontSize: 12,
+    marginTop: 4,
+  },
+  iconSearchInput: {
+    backgroundColor: '#0E1A2B',
+    borderColor: '#1F3A59',
+    borderWidth: 1,
+    borderRadius: 4,
+    marginHorizontal: 16,
+    marginBottom: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    color: '#EAF3FF',
+    fontSize: 14,
+  },
+  sidebarTxRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: '#1A2E45',
+  },
+  sidebarTxNote: {
+    color: '#C5D9F3',
+    fontSize: 13,
+    flex: 1,
+    marginRight: 8,
+  },
+  sidebarTxAmount: {
+    fontSize: 13,
+    fontWeight: '600',
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -3784,10 +4197,10 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   positive: {
-    color: '#6EE7A8',
+    color: '#4ade80',
   },
   negative: {
-    color: '#FB7185',
+    color: '#f87171',
   },
   pendingCard: {
     backgroundColor: '#121C2B',
@@ -3822,7 +4235,7 @@ const styles = StyleSheet.create({
   },
   bottomBarIncome: {
     flex: 1,
-    backgroundColor: '#1A5B47',
+    backgroundColor: '#166534',
     paddingVertical: 14,
     borderRadius: 4,
     alignItems: 'center',
@@ -3838,7 +4251,7 @@ const styles = StyleSheet.create({
   },
   bottomBarExpense: {
     flex: 1,
-    backgroundColor: '#69273A',
+    backgroundColor: '#9f1239',
     paddingVertical: 14,
     borderRadius: 4,
     alignItems: 'center',
@@ -4127,6 +4540,13 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontSize: 12,
   },
+  entryAccountBtnFull: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    width: '100%',
+    marginBottom: 8,
+  },
   entryTypeRow: {
     flexDirection: 'row',
     gap: 8,
@@ -4310,6 +4730,22 @@ const styles = StyleSheet.create({
   desktopColRight: {
     flex: 1,
   },
+  // Desktop body wrapper (main scroll + sidebar)
+  desktopBodyWrapper: {
+    flex: 1,
+    flexDirection: 'row',
+  },
+  desktopSidebar: {
+    width: '30%' as any,
+    minWidth: 280,
+    maxWidth: 480,
+    borderLeftWidth: 1,
+    borderLeftColor: '#1A2E45',
+  },
+  desktopSidebarContent: {
+    padding: 12,
+    paddingBottom: 80,
+  },
   // Spend row category active highlight
   spendRowActive: {
     backgroundColor: '#15293D',
@@ -4424,7 +4860,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#1E2F49',
   },
   batterySegmentSpent: {
-    backgroundColor: '#FB7185',
+    backgroundColor: '#f87171',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  batterySegmentTransfer: {
+    backgroundColor: '#a855f7',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -4809,5 +5250,11 @@ const styles = StyleSheet.create({
     fontSize: 10,
     textTransform: 'uppercase',
     fontWeight: '600',
+  },
+  catPickerItemSub: {
+    color: '#8FA8C9',
+    fontSize: 11,
+    textAlign: 'center',
+    marginTop: 2,
   },
 });

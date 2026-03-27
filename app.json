@@ -27,7 +27,16 @@
       "predictiveBackGestureEnabled": false
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/favicon.png",
+      "output": "single",
+      "name": "Finduo",
+      "shortName": "Finduo",
+      "description": "Financial tracking app for couples",
+      "themeColor": "#53E3A6",
+      "backgroundColor": "#060A14",
+      "display": "standalone",
+      "orientation": "portrait",
+      "startUrl": "/"
     },
     "extra": {
       "eas": {

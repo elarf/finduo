@@ -7,6 +7,8 @@
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
+    "build:web": "expo export --platform web && node scripts/patch-web.js",
+    "serve:web": "npx serve dist",
     "import:monefy": "node scripts/import-monefy.js"
   },
   "dependencies": {

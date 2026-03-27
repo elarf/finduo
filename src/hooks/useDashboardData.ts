@@ -166,7 +166,7 @@ export function useDashboardData(user: User | null) {
           .from('user_preferences')
           .select('account_order, primary_account_id')
           .eq('user_id', user.id)
-          .single();
+          .maybeSingle();
         if (dbPrefs) {
           order = dbPrefs.account_order as string[] | undefined;
           primaryId = dbPrefs.primary_account_id as string | undefined;

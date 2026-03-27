@@ -38,6 +38,7 @@ import {
 } from '../types/dashboard';
 import { styles } from './DashboardScreen.styles';
 import { useDashboardData } from '../hooks/useDashboardData';
+import { useFriends } from '../hooks/useFriends';
 import CategoryModal from '../components/dashboard/CategoryModal';
 import TagModal from '../components/dashboard/TagModal';
 import TransferModal from '../components/dashboard/TransferModal';
@@ -47,6 +48,7 @@ import AccountPickerSheet from '../components/dashboard/AccountPickerSheet';
 import EntryModal from '../components/dashboard/EntryModal';
 import AccountModal from '../components/dashboard/AccountModal';
 import InvitationsModal from '../components/dashboard/InvitationsModal';
+import FriendsModal from '../components/dashboard/FriendsModal';
 
 export default function DashboardScreen() {
   const { user, signOut } = useAuth();
@@ -72,6 +74,19 @@ export default function DashboardScreen() {
     moveAccount, setPrimary,
   } = data;
 
+  const {
+    friends,
+    pendingRequests,
+    loading: friendsLoading,
+    loadFriends,
+    sendRequest: friendSendRequest,
+    acceptRequest: friendAcceptRequest,
+    rejectRequest: friendRejectRequest,
+    cancelRequest: friendCancelRequest,
+    removeFriend,
+    blockUser,
+  } = useFriends(user);
+
   const [interval, setInterval] = useState<IntervalKey>('month');
   const [customStart, setCustomStart] = useState(todayIso());
   const [customEnd, setCustomEnd] = useState(todayIso());
@@ -92,8 +107,14 @@ export default function DashboardScreen() {
   const [showAccountOverviewPicker, setShowAccountOverviewPicker] = useState(false);
   const [visibleTransactionsCount, setVisibleTransactionsCount] = useState(12);
   const [menuAccountsExpanded, setMenuAccountsExpanded] = useState(false);
-  const [menuCategoriesExpanded, setMenuCategoriesExpanded] = useState(false);
+  const [menuIncomeCatExpanded, setMenuIncomeCatExpanded] = useState(false);
+  const [menuExpenseCatExpanded, setMenuExpenseCatExpanded] = useState(false);
   const [menuTagsExpanded, setMenuTagsExpanded] = useState(false);
+  const [menuAccountsEditMode, setMenuAccountsEditMode] = useState(false);
+  const [menuIncomeCatEditMode, setMenuIncomeCatEditMode] = useState(false);
+  const [menuExpenseCatEditMode, setMenuExpenseCatEditMode] = useState(false);
+  const [menuTagsEditMode, setMenuTagsEditMode] = useState(false);
+  const [showFriendsModal, setShowFriendsModal] = useState(false);
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<string | null>(null);
 
   const [entryType, setEntryType] = useState<TransactionType>('expense');
@@ -1243,27 +1264,28 @@ export default function DashboardScreen() {
       const sourceNote = transferNote.trim() || `Transfer to ${toAccount.name}`;
       const targetNote = transferNote.trim() || `Transfer from ${fromAccount.name}`;
 
-      // Find-or-create global "Transfer" categories so transfers don't appear as uncategorized
-      const findOrCreateCat = async (type: 'expense' | 'income') => {
+      // Find-or-create "Transfer" categories so transfers don't appear as uncategorized
+      // Creates per-account categories if no global (account_id=null) one exists.
+      const findOrCreateCat = async (type: 'expense' | 'income', accountId: string) => {
         const existing = await supabase
           .from('categories')
           .select('id')
-          .is('account_id', null)
           .eq('name', 'Transfer')
           .eq('type', type)
+          .limit(1)
           .maybeSingle();
         if (existing.data?.id) return existing.data.id as string;
         const created = await supabase
           .from('categories')
-          .insert({ account_id: null, name: 'Transfer', type })
+          .insert({ account_id: accountId, name: 'Transfer', type })
           .select('id')
           .single();
         return (created.data?.id ?? null) as string | null;
       };
 
       const [transferExpenseCatId, transferIncomeCatId] = await Promise.all([
-        findOrCreateCat('expense'),
-        findOrCreateCat('income'),
+        findOrCreateCat('expense', transferFromId!),
+        findOrCreateCat('income', transferToId!),
       ]);
 
       const { error: sourceError } = await supabase.from('transactions').insert({
@@ -1505,6 +1527,13 @@ export default function DashboardScreen() {
   if (loading) {
     return (
       <View style={styles.loadingWrap}>
+        {!desktopView ? (
+          <Image
+            source={require('../../assets/logo.png')}
+            style={[styles.headerLogo, { marginBottom: 24 }]}
+            resizeMode="contain"
+          />
+        ) : null}
         <ActivityIndicator size="large" color="#53E3A6" />
         <Text style={styles.loadingText}>Loading dashboard...</Text>
       </View>
@@ -1526,8 +1555,13 @@ export default function DashboardScreen() {
               style={styles.avatarBtn}
               onPress={() => {
                 setMenuAccountsExpanded(false);
-                setMenuCategoriesExpanded(false);
+                setMenuIncomeCatExpanded(false);
+                setMenuExpenseCatExpanded(false);
                 setMenuTagsExpanded(false);
+                setMenuAccountsEditMode(false);
+                setMenuIncomeCatEditMode(false);
+                setMenuExpenseCatEditMode(false);
+                setMenuTagsEditMode(false);
                 setMenuOpen(true);
               }}
             >
@@ -1665,12 +1699,12 @@ export default function DashboardScreen() {
                       )}
                     </View>
                   )}
-                  <Text style={styles.summaryText}>Opening: {formatCurrency(overviewSummary.openingBalance)}</Text>
+                  <Text style={styles.summaryText}>Opening: <Text style={overviewSummary.openingBalance >= 0 ? styles.positive : styles.negative}>{formatCurrency(overviewSummary.openingBalance)}</Text></Text>
                   <View style={styles.summaryRow}>
-                    <Text style={styles.summaryText}>Income {formatCurrency(overviewSummary.income)}</Text>
-                    <Text style={styles.summaryText}>Expenses {formatCurrency(overviewSummary.expense)}</Text>
+                    <Text style={[styles.summaryText, styles.positive]}>Income {formatCurrency(overviewSummary.income)}</Text>
+                    <Text style={[styles.summaryText, styles.negative]}>Expenses {formatCurrency(overviewSummary.expense)}</Text>
                   </View>
-                  <Text style={styles.summaryText}>Total Included Balance: {formatCurrency(totalIncludedBalance)}</Text>
+                  <Text style={styles.summaryText}>Total Included Balance: <Text style={totalIncludedBalance >= 0 ? styles.positive : styles.negative}>{formatCurrency(totalIncludedBalance)}</Text></Text>
                   {!desktopView && includedAccountSummaries.length > 1 && (
                     <Text style={styles.summaryText}>
                       Tap to {showAccountOverviewPicker ? 'hide accounts' : 'change account'}
@@ -2089,18 +2123,28 @@ export default function DashboardScreen() {
                 <TouchableOpacity onPress={() => setMenuAccountsExpanded((prev) => !prev)}>
                   <Text style={styles.menuSectionTitle}>Accounts {menuAccountsExpanded ? '▾' : '▸'}</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.menuIconAction} onPress={() => {
-                  setMenuOpen(false);
-                  openCreateAccount();
-                }}>
-                  <Text style={styles.menuIconActionText}>＋</Text>
-                </TouchableOpacity>
+                <View style={{ flexDirection: 'row', gap: 6 }}>
+                  {menuAccountsExpanded && (
+                    <TouchableOpacity style={[styles.menuIconAction, menuAccountsEditMode && { backgroundColor: '#2C4669' }]} onPress={() => setMenuAccountsEditMode((p) => !p)}>
+                      <Text style={styles.manageIconText}>✎</Text>
+                    </TouchableOpacity>
+                  )}
+                  <TouchableOpacity style={styles.menuIconAction} onPress={() => {
+                    setMenuOpen(false);
+                    openCreateAccount();
+                  }}>
+                    <Text style={styles.menuIconActionText}>＋</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
               {menuAccountsExpanded && accounts.map((account, accountIdx) => {
                 const isOwned = account.created_by === user?.id;
                 const isPrimary = account.id === primaryAccountId;
                 return (
                   <View key={account.id} style={styles.manageRow}>
+                    {!menuAccountsEditMode && account.icon && (
+                      <Icon name={account.icon as any} size={36} color="#8FA8C9" />
+                    )}
                     <TouchableOpacity
                       style={styles.managePrimary}
                       onPress={() => {
@@ -2121,132 +2165,210 @@ export default function DashboardScreen() {
                       </Text>
                     </TouchableOpacity>
 
-                    {/* Reorder up */}
-                    <TouchableOpacity
-                      style={[styles.manageSmallButton, accountIdx === 0 && styles.manageSmallButtonDisabled]}
-                      onPress={() => moveAccount(accountIdx, 'up')}
-                      disabled={accountIdx === 0}
-                    >
-                      <Text style={styles.manageSmallText}>↑</Text>
-                    </TouchableOpacity>
+                    {menuAccountsEditMode && (
+                      <>
+                        {/* Reorder up */}
+                        <TouchableOpacity
+                          style={[styles.manageSmallButton, accountIdx === 0 && styles.manageSmallButtonDisabled]}
+                          onPress={() => moveAccount(accountIdx, 'up')}
+                          disabled={accountIdx === 0}
+                        >
+                          <Text style={styles.manageSmallText}>↑</Text>
+                        </TouchableOpacity>
 
-                    {/* Reorder down */}
-                    <TouchableOpacity
-                      style={[styles.manageSmallButton, accountIdx === accounts.length - 1 && styles.manageSmallButtonDisabled]}
-                      onPress={() => moveAccount(accountIdx, 'down')}
-                      disabled={accountIdx === accounts.length - 1}
-                    >
-                      <Text style={styles.manageSmallText}>↓</Text>
-                    </TouchableOpacity>
+                        {/* Reorder down */}
+                        <TouchableOpacity
+                          style={[styles.manageSmallButton, accountIdx === accounts.length - 1 && styles.manageSmallButtonDisabled]}
+                          onPress={() => moveAccount(accountIdx, 'down')}
+                          disabled={accountIdx === accounts.length - 1}
+                        >
+                          <Text style={styles.manageSmallText}>↓</Text>
+                        </TouchableOpacity>
 
-                    {/* Set as primary */}
-                    <TouchableOpacity
-                      style={[styles.manageSmallButton, isPrimary && styles.manageSmallButtonActive]}
-                      onPress={() => setPrimary(account.id)}
-                    >
-                      <Text style={[styles.manageSmallText, isPrimary && styles.manageSmallTextActive]}>★</Text>
-                    </TouchableOpacity>
+                        {/* Set as primary */}
+                        <TouchableOpacity
+                          style={[styles.manageSmallButton, isPrimary && styles.manageSmallButtonActive]}
+                          onPress={() => setPrimary(account.id)}
+                        >
+                          <Text style={[styles.manageSmallText, isPrimary && styles.manageSmallTextActive]}>★</Text>
+                        </TouchableOpacity>
 
-                    {isOwned ? (
+                        {isOwned ? (
+                          <>
+                            <TouchableOpacity style={styles.manageIconButton} onPress={() => {
+                              setMenuOpen(false);
+                              openEditAccount(account);
+                            }}>
+                              <Text style={styles.manageIconText}>✎</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={styles.manageIconButtonDanger} onPress={() => {
+                              Alert.alert('Remove account', `Remove ${account.name}?`, [
+                                { text: 'Cancel', style: 'cancel' },
+                                {
+                                  text: 'Remove',
+                                  style: 'destructive',
+                                  onPress: () => {
+                                    setMenuOpen(false);
+                                    void deleteAccount(account);
+                                  },
+                                },
+                              ]);
+                            }}>
+                              <Text style={styles.manageIconText}>✕</Text>
+                            </TouchableOpacity>
+                          </>
+                        ) : (
+                          <Text style={styles.managePill}>Shared</Text>
+                        )}
+                      </>
+                    )}
+                  </View>
+                );
+              })}
+
+              {/* ── Income Categories ── */}
+              <View style={styles.menuSectionHeader}>
+                <TouchableOpacity onPress={() => setMenuIncomeCatExpanded((prev) => !prev)}>
+                  <Text style={[styles.menuSectionTitle, { color: '#4ade80' }]}>Income {menuIncomeCatExpanded ? '▾' : '▸'}</Text>
+                </TouchableOpacity>
+                <View style={{ flexDirection: 'row', gap: 6 }}>
+                  {menuIncomeCatExpanded && (
+                    <TouchableOpacity style={[styles.menuIconAction, menuIncomeCatEditMode && { backgroundColor: '#2C4669' }]} onPress={() => setMenuIncomeCatEditMode((p) => !p)}>
+                      <Text style={styles.manageIconText}>✎</Text>
+                    </TouchableOpacity>
+                  )}
+                  <TouchableOpacity style={styles.menuIconAction} onPress={() => {
+                    setMenuOpen(false);
+                    setEditingCategoryId(null);
+                    setCategoryName('');
+                    setCategoryType('income');
+                    setCategoryColor(null);
+                    setCategoryIcon(null);
+                    setCategoryTagIds([]);
+                    setShowCategoryModal(true);
+                  }}>
+                    <Text style={styles.menuIconActionText}>＋</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+              {menuIncomeCatExpanded && selectedCategories.filter((c) => c.type === 'income').map((category) => {
+                const catColor = category.color ?? '#4ade80';
+                return (
+                  <View key={category.id} style={styles.manageRow}>
+                    <TouchableOpacity style={styles.managePrimary} onPress={() => { setMenuOpen(false); openEntryModal(category.type, category.id); }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        {category.icon ? <Icon name={category.icon as any} size={16} color={catColor} /> : null}
+                        <Text style={[styles.manageTitle, { color: catColor }]}>{category.name}</Text>
+                      </View>
+                    </TouchableOpacity>
+                    {menuIncomeCatEditMode && (
                       <>
                         <TouchableOpacity style={styles.manageIconButton} onPress={() => {
                           setMenuOpen(false);
-                          openEditAccount(account);
+                          setEditingCategoryId(category.id);
+                          setCategoryName(category.name);
+                          setCategoryType(category.type);
+                          setCategoryColor(category.color ?? null);
+                          setCategoryIcon(category.icon ?? null);
+                          setCategoryTagIds((category.tag_ids ?? []) as string[]);
+                          setShowCategoryModal(true);
                         }}>
                           <Text style={styles.manageIconText}>✎</Text>
                         </TouchableOpacity>
                         <TouchableOpacity style={styles.manageIconButtonDanger} onPress={() => {
-                          Alert.alert('Remove account', `Remove ${account.name}?`, [
+                          Alert.alert('Remove category', `Remove ${category.name}?`, [
                             { text: 'Cancel', style: 'cancel' },
-                            {
-                              text: 'Remove',
-                              style: 'destructive',
-                              onPress: () => {
-                                setMenuOpen(false);
-                                void deleteAccount(account);
-                              },
-                            },
+                            { text: 'Remove', style: 'destructive', onPress: () => { setMenuOpen(false); void deleteCategory(category.id); } },
                           ]);
                         }}>
                           <Text style={styles.manageIconText}>✕</Text>
                         </TouchableOpacity>
                       </>
-                    ) : (
-                      <Text style={styles.managePill}>Shared</Text>
+                    )}
+                  </View>
+                );
+              })}
+
+              {/* ── Expense Categories ── */}
+              <View style={styles.menuSectionHeader}>
+                <TouchableOpacity onPress={() => setMenuExpenseCatExpanded((prev) => !prev)}>
+                  <Text style={[styles.menuSectionTitle, { color: '#f87171' }]}>Expense {menuExpenseCatExpanded ? '▾' : '▸'}</Text>
+                </TouchableOpacity>
+                <View style={{ flexDirection: 'row', gap: 6 }}>
+                  {menuExpenseCatExpanded && (
+                    <TouchableOpacity style={[styles.menuIconAction, menuExpenseCatEditMode && { backgroundColor: '#2C4669' }]} onPress={() => setMenuExpenseCatEditMode((p) => !p)}>
+                      <Text style={styles.manageIconText}>✎</Text>
+                    </TouchableOpacity>
+                  )}
+                  <TouchableOpacity style={styles.menuIconAction} onPress={() => {
+                    setMenuOpen(false);
+                    setEditingCategoryId(null);
+                    setCategoryName('');
+                    setCategoryType('expense');
+                    setCategoryColor(null);
+                    setCategoryIcon(null);
+                    setCategoryTagIds([]);
+                    setShowCategoryModal(true);
+                  }}>
+                    <Text style={styles.menuIconActionText}>＋</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+              {menuExpenseCatExpanded && selectedCategories.filter((c) => c.type === 'expense').map((category) => {
+                const catColor = category.color ?? '#f87171';
+                return (
+                  <View key={category.id} style={styles.manageRow}>
+                    <TouchableOpacity style={styles.managePrimary} onPress={() => { setMenuOpen(false); openEntryModal(category.type, category.id); }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        {category.icon ? <Icon name={category.icon as any} size={16} color={catColor} /> : null}
+                        <Text style={[styles.manageTitle, { color: catColor }]}>{category.name}</Text>
+                      </View>
+                    </TouchableOpacity>
+                    {menuExpenseCatEditMode && (
+                      <>
+                        <TouchableOpacity style={styles.manageIconButton} onPress={() => {
+                          setMenuOpen(false);
+                          setEditingCategoryId(category.id);
+                          setCategoryName(category.name);
+                          setCategoryType(category.type);
+                          setCategoryColor(category.color ?? null);
+                          setCategoryIcon(category.icon ?? null);
+                          setCategoryTagIds((category.tag_ids ?? []) as string[]);
+                          setShowCategoryModal(true);
+                        }}>
+                          <Text style={styles.manageIconText}>✎</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity style={styles.manageIconButtonDanger} onPress={() => {
+                          Alert.alert('Remove category', `Remove ${category.name}?`, [
+                            { text: 'Cancel', style: 'cancel' },
+                            { text: 'Remove', style: 'destructive', onPress: () => { setMenuOpen(false); void deleteCategory(category.id); } },
+                          ]);
+                        }}>
+                          <Text style={styles.manageIconText}>✕</Text>
+                        </TouchableOpacity>
+                      </>
                     )}
                   </View>
                 );
               })}
 
               <View style={styles.menuSectionHeader}>
-                <TouchableOpacity onPress={() => setMenuCategoriesExpanded((prev) => !prev)}>
-                  <Text style={styles.menuSectionTitle}>Categories {menuCategoriesExpanded ? '▾' : '▸'}</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.menuIconAction} onPress={() => {
-                  setMenuOpen(false);
-                  setEditingCategoryId(null);
-                  setCategoryName('');
-                  setCategoryType('expense');
-                  setCategoryColor(null);
-                  setCategoryIcon(null);
-                  setCategoryTagIds([]);
-                  setShowCategoryModal(true);
-                }}>
-                  <Text style={styles.menuIconActionText}>＋</Text>
-                </TouchableOpacity>
-              </View>
-              {menuCategoriesExpanded && selectedCategories.map((category) => (
-                <View key={category.id} style={styles.manageRow}>
-                  <TouchableOpacity
-                    style={styles.managePrimary}
-                    onPress={() => {
-                      setMenuOpen(false);
-                      openEntryModal(category.type, category.id);
-                    }}
-                  >
-                    <Text style={styles.manageTitle}>{category.name}</Text>
-                    <Text style={styles.manageMeta}>{category.type.toUpperCase()}</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.manageIconButton} onPress={() => {
-                    setMenuOpen(false);
-                    setEditingCategoryId(category.id);
-                    setCategoryName(category.name);
-                    setCategoryType(category.type);
-                    setCategoryColor(category.color ?? null);
-                    setCategoryIcon(category.icon ?? null);
-                    setCategoryTagIds((category.tag_ids ?? []) as string[]);
-                    setShowCategoryModal(true);
-                  }}>
-                    <Text style={styles.manageIconText}>✎</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.manageIconButtonDanger} onPress={() => {
-                    Alert.alert('Remove category', `Remove ${category.name}?`, [
-                      { text: 'Cancel', style: 'cancel' },
-                      {
-                        text: 'Remove',
-                        style: 'destructive',
-                        onPress: () => {
-                          setMenuOpen(false);
-                          void deleteCategory(category.id);
-                        },
-                      },
-                    ]);
-                  }}>
-                    <Text style={styles.manageIconText}>✕</Text>
-                  </TouchableOpacity>
-                </View>
-              ))}
-
-              <View style={styles.menuSectionHeader}>
                 <TouchableOpacity onPress={() => setMenuTagsExpanded((prev) => !prev)}>
                   <Text style={styles.menuSectionTitle}>Tags {menuTagsExpanded ? '▾' : '▸'}</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.menuIconAction} onPress={() => {
-                  setMenuOpen(false);
-                  openCreateTag();
-                }}>
-                  <Text style={styles.menuIconActionText}>＋</Text>
-                </TouchableOpacity>
+                <View style={{ flexDirection: 'row', gap: 6 }}>
+                  {menuTagsExpanded && (
+                    <TouchableOpacity style={[styles.menuIconAction, menuTagsEditMode && { backgroundColor: '#2C4669' }]} onPress={() => setMenuTagsEditMode((p) => !p)}>
+                      <Text style={styles.manageIconText}>✎</Text>
+                    </TouchableOpacity>
+                  )}
+                  <TouchableOpacity style={styles.menuIconAction} onPress={() => {
+                    setMenuOpen(false);
+                    openCreateTag();
+                  }}>
+                    <Text style={styles.menuIconActionText}>＋</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
               {menuTagsExpanded && selectedTags.map((tag) => (
                 <View key={tag.id} style={styles.manageRow}>
@@ -2254,27 +2376,31 @@ export default function DashboardScreen() {
                     <Text style={styles.manageTitle}>#{tag.name}</Text>
                     <Text style={styles.manageMeta}>{accounts.find((a) => a.id === tag.account_id)?.name ?? 'Global'}</Text>
                   </View>
-                  <TouchableOpacity style={styles.manageIconButton} onPress={() => {
-                    setMenuOpen(false);
-                    openEditTag(tag);
-                  }}>
-                    <Text style={styles.manageIconText}>✎</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.manageIconButtonDanger} onPress={() => {
-                    Alert.alert('Remove tag', `Remove #${tag.name}?`, [
-                      { text: 'Cancel', style: 'cancel' },
-                      {
-                        text: 'Remove',
-                        style: 'destructive',
-                        onPress: () => {
-                          setMenuOpen(false);
-                          void deleteTag(tag.id);
-                        },
-                      },
-                    ]);
-                  }}>
-                    <Text style={styles.manageIconText}>✕</Text>
-                  </TouchableOpacity>
+                  {menuTagsEditMode && (
+                    <>
+                      <TouchableOpacity style={styles.manageIconButton} onPress={() => {
+                        setMenuOpen(false);
+                        openEditTag(tag);
+                      }}>
+                        <Text style={styles.manageIconText}>✎</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity style={styles.manageIconButtonDanger} onPress={() => {
+                        Alert.alert('Remove tag', `Remove #${tag.name}?`, [
+                          { text: 'Cancel', style: 'cancel' },
+                          {
+                            text: 'Remove',
+                            style: 'destructive',
+                            onPress: () => {
+                              setMenuOpen(false);
+                              void deleteTag(tag.id);
+                            },
+                          },
+                        ]);
+                      }}>
+                        <Text style={styles.manageIconText}>✕</Text>
+                      </TouchableOpacity>
+                    </>
+                  )}
                 </View>
               ))}
 
@@ -2309,8 +2435,21 @@ export default function DashboardScreen() {
                 </View>
               )}
 
-              <TouchableOpacity style={styles.menuItem} onPress={() => { setMenuOpen(false); void reloadDashboard(); }}>
-                <Text style={styles.menuItemText}>Reload dashboard</Text>
+              <TouchableOpacity style={styles.menuItem} onPress={() => {
+                setMenuOpen(false);
+                setShowFriendsModal(true);
+              }}>
+                <Text style={styles.menuItemText}>Friends</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.menuItem} onPress={() => {
+                setMenuOpen(false);
+                if (Platform.OS === 'web') {
+                  (window as any).location.reload();
+                } else {
+                  void reloadDashboard();
+                }
+              }}>
+                <Text style={styles.menuItemText}>Reload app</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.menuItem} onPress={() => {
                 setMenuOpen(false);
@@ -2488,6 +2627,21 @@ export default function DashboardScreen() {
         joinByToken={joinByToken}
         shareInvite={shareInvite}
         saving={saving}
+      />
+
+      <FriendsModal
+        visible={showFriendsModal}
+        onClose={() => setShowFriendsModal(false)}
+        friends={friends}
+        pendingRequests={pendingRequests}
+        loading={friendsLoading}
+        onOpen={loadFriends}
+        sendRequest={friendSendRequest}
+        acceptRequest={friendAcceptRequest}
+        rejectRequest={friendRejectRequest}
+        cancelRequest={friendCancelRequest}
+        removeFriend={removeFriend}
+        blockUser={blockUser}
       />
 
       {/* ─── Date Picker Modal ─── */}

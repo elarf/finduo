@@ -125,6 +125,9 @@ const EntryModal = React.memo(function EntryModal(props: EntryModalProps) {
     saving,
   } = props;
 
+  const isIncome = entryType === 'income';
+  const amountColor = isIncome ? '#4ade80' : '#f87171';
+
   return (
     <Modal visible={visible} transparent animationType={desktopView ? 'none' : 'slide'} onRequestClose={onClose}>
       {desktopView ? (
@@ -132,6 +135,7 @@ const EntryModal = React.memo(function EntryModal(props: EntryModalProps) {
         <Pressable style={styles.modalBackdrop} onPress={onClose}>
           <Pressable style={[styles.modalCard, styles.entryModalCard]} onPress={(event) => event.stopPropagation()}>
             <ScrollView showsVerticalScrollIndicator={false}>
+              {/* Date + Account row */}
               <View style={styles.entryTopRow}>
                 <TouchableOpacity
                   style={[styles.datePressable, styles.entryDateInput, { marginBottom: 10 }]}
@@ -160,22 +164,24 @@ const EntryModal = React.memo(function EntryModal(props: EntryModalProps) {
                   ))}
                 </ScrollView>
               )}
+              {/* Income/Expense toggle */}
               <View style={styles.entryTypeRow}>
                 <TouchableOpacity
-                  style={[styles.toggleButton, entryType === 'income' && styles.toggleButtonActive]}
+                  style={[styles.toggleButton, isIncome && styles.toggleButtonActiveIncome]}
                   onPress={() => setEntryType('income')}
                 >
-                  <Text style={styles.toggleButtonText}>Income</Text>
+                  <Text style={isIncome ? styles.toggleButtonTextIncome : styles.toggleButtonText}>Income</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[styles.toggleButton, entryType === 'expense' && styles.toggleButtonActive]}
+                  style={[styles.toggleButton, !isIncome && styles.toggleButtonActiveExpense]}
                   onPress={() => setEntryType('expense')}
                 >
-                  <Text style={styles.toggleButtonText}>Expense</Text>
+                  <Text style={!isIncome ? styles.toggleButtonTextExpense : styles.toggleButtonText}>Expense</Text>
                 </TouchableOpacity>
               </View>
+              {/* Amount display */}
               <View style={styles.entryAmountDisplay}>
-                <Text style={styles.entryAmountDisplayText}>{entryAmount || '0'}</Text>
+                <Text style={[styles.entryAmountDisplayText, { color: amountColor }]}>{entryAmount || '0'}</Text>
               </View>
               <Text style={styles.entryCurrencyText}>{entryAccount?.currency ?? selectedCurrency}</Text>
               {recentCategoryAmounts.length > 0 && (
@@ -187,13 +193,7 @@ const EntryModal = React.memo(function EntryModal(props: EntryModalProps) {
                   ))}
                 </ScrollView>
               )}
-              <View style={styles.numpadGrid}>
-                {['7', '8', '9', '4', '5', '6', '1', '2', '3', 'C', '0', '<'].map((k) => (
-                  <TouchableOpacity key={k} style={styles.numpadKey} onPress={() => appendNumpad(k)}>
-                    <Text style={styles.numpadKeyText}>{k}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
+              {/* Note */}
               <TextInput
                 ref={noteInputRef}
                 value={entryNote}
@@ -215,6 +215,7 @@ const EntryModal = React.memo(function EntryModal(props: EntryModalProps) {
                   ))}
                 </ScrollView>
               )}
+              {/* Tags */}
               <Text style={styles.modalLabel}>Tags</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.modalChipsRow}>
                 {entryTags.map((tag) => (
@@ -239,6 +240,15 @@ const EntryModal = React.memo(function EntryModal(props: EntryModalProps) {
                   <Text style={styles.smallActionText}>Add Tag</Text>
                 </TouchableOpacity>
               </View>
+              {/* Numpad */}
+              <View style={styles.numpadGrid}>
+                {['7', '8', '9', '4', '5', '6', '1', '2', '3', 'C', '0', '<'].map((k) => (
+                  <TouchableOpacity key={k} style={styles.numpadKey} onPress={() => appendNumpad(k)}>
+                    <Text style={styles.numpadKeyText}>{k}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              {/* Category */}
               <Text style={styles.modalLabel}>Category</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.modalChipsRow}>
                 {entryCategories.map((cat) => (
@@ -272,7 +282,7 @@ const EntryModal = React.memo(function EntryModal(props: EntryModalProps) {
               <Icon name="close" size={22} color="#8FA8C9" />
             </TouchableOpacity>
             <Text style={styles.entryModalTitle}>
-              {editingTransactionId ? 'Edit' : (entryType === 'income' ? 'Income' : 'Expense')}
+              {editingTransactionId ? 'Edit' : (isIncome ? 'Income' : 'Expense')}
             </Text>
             <TouchableOpacity
               style={styles.entryAccountBtn}
@@ -281,25 +291,34 @@ const EntryModal = React.memo(function EntryModal(props: EntryModalProps) {
               <Text style={styles.entryAccountBtnText}>{entryAccount?.name ?? 'Account'}</Text>
             </TouchableOpacity>
           </View>
-          {/* Type toggle */}
+          {/* Income/Expense type toggle */}
           <View style={[styles.entryTypeRow, { marginHorizontal: 16 }]}>
             <TouchableOpacity
-              style={[styles.toggleButton, entryType === 'income' && styles.toggleButtonActive]}
+              style={[styles.toggleButton, isIncome && styles.toggleButtonActiveIncome]}
               onPress={() => setEntryType('income')}
             >
-              <Text style={styles.toggleButtonText}>Income</Text>
+              <Text style={isIncome ? styles.toggleButtonTextIncome : styles.toggleButtonText}>Income</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.toggleButton, entryType === 'expense' && styles.toggleButtonActive]}
+              style={[styles.toggleButton, !isIncome && styles.toggleButtonActiveExpense]}
               onPress={() => setEntryType('expense')}
             >
-              <Text style={styles.toggleButtonText}>Expense</Text>
+              <Text style={!isIncome ? styles.toggleButtonTextExpense : styles.toggleButtonText}>Expense</Text>
             </TouchableOpacity>
           </View>
-          <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={styles.entryModalScrollContent}>
-            {/* Amount display-only */}
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={styles.entryModalScrollContent}
+          >
+            {/* 1. Date picker */}
+            <TouchableOpacity style={styles.datePressable} onPress={openDatePicker}>
+              <Icon name="calendar" size={18} color="#8FA8C9" />
+              <Text style={styles.datePressableText}>{entryDate || 'Select date'}</Text>
+            </TouchableOpacity>
+            {/* 2. Amount display + suggested values */}
             <View style={styles.entryAmountDisplay}>
-              <Text style={styles.entryAmountDisplayText}>{entryAmount || '0'}</Text>
+              <Text style={[styles.entryAmountDisplayText, { color: amountColor }]}>{entryAmount || '0'}</Text>
             </View>
             <Text style={styles.entryCurrencyText}>{entryAccount?.currency ?? selectedCurrency}</Text>
             {recentCategoryAmounts.length > 0 && (
@@ -311,23 +330,7 @@ const EntryModal = React.memo(function EntryModal(props: EntryModalProps) {
                 ))}
               </ScrollView>
             )}
-            {/* Numpad */}
-            <View style={styles.numpadGrid}>
-              {['7', '8', '9', '4', '5', '6', '1', '2', '3', 'C', '0', '<'].map((k) => (
-                <TouchableOpacity key={k} style={styles.numpadKey} onPress={() => appendNumpad(k)}>
-                  <Text style={styles.numpadKeyText}>{k}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-            {/* Date picker row */}
-            <TouchableOpacity
-              style={styles.datePressable}
-              onPress={openDatePicker}
-            >
-              <Icon name="calendar" size={18} color="#8FA8C9" />
-              <Text style={styles.datePressableText}>{entryDate || 'Select date'}</Text>
-            </TouchableOpacity>
-            {/* Note */}
+            {/* 3. Note */}
             <TextInput
               ref={noteInputRef}
               value={entryNote}
@@ -349,7 +352,7 @@ const EntryModal = React.memo(function EntryModal(props: EntryModalProps) {
                 ))}
               </ScrollView>
             )}
-            {/* Tags */}
+            {/* 4. Tags */}
             {entryTags.length > 0 && (
               <>
                 <Text style={styles.modalLabel}>Tags</Text>
@@ -366,45 +369,52 @@ const EntryModal = React.memo(function EntryModal(props: EntryModalProps) {
                 </ScrollView>
               </>
             )}
-          </ScrollView>
-          {/* Bottom bar — conditional on category */}
-          {(!entryCategoryId && !entryHadInitialCategory) ? (
+            {/* 5. Numpad */}
+            <View style={styles.numpadGrid}>
+              {['7', '8', '9', '4', '5', '6', '1', '2', '3', 'C', '0', '<'].map((k) => (
+                <TouchableOpacity key={k} style={styles.numpadKey} onPress={() => appendNumpad(k)}>
+                  <Text style={styles.numpadKeyText}>{k}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            {/* 6. Category selector */}
             <View
               {...chooseCatPanResponder.panHandlers}
-              style={styles.chooseCategoryBtn}
+              style={{ marginTop: 8 }}
             >
-              <Icon name="label" size={22} color="#060A14" />
-              <Text style={styles.chooseCategoryBtnText}>Choose Category</Text>
-            </View>
-          ) : (
-            <View style={styles.entryModalBottomBar}>
-              <TouchableOpacity
-                style={styles.categoryIndicatorBtn}
-                onPress={openCatPicker}
-              >
-                {(() => {
-                  const cat = entryCategories.find((c) => c.id === entryCategoryId);
-                  return (
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                      {cat?.icon
-                        ? <Icon name={cat.icon as any} size={16} color={cat?.color ?? '#EAF3FF'} />
-                        : <Icon name="label" size={16} color="#64748B" />}
-                      <Text style={styles.categoryIndicatorText}>{cat?.name ?? 'No category'}</Text>
-                      <Icon name="expand_more" size={14} color="#8FA8C9" />
-                    </View>
-                  );
-                })()}
-              </TouchableOpacity>
-              <View style={styles.entryModalActions}>
-                <TouchableOpacity style={styles.modalSecondary} onPress={onClose}>
-                  <Text style={styles.modalSecondaryText}>Cancel</Text>
+              {(!entryCategoryId && !entryHadInitialCategory) ? (
+                <TouchableOpacity style={styles.chooseCategoryBtn} onPress={openCatPicker}>
+                  <Icon name="label" size={22} color="#060A14" />
+                  <Text style={styles.chooseCategoryBtnText}>Choose Category</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.modalPrimary} onPress={() => void saveEntry()} disabled={saving}>
-                  <Text style={styles.modalPrimaryText}>{editingTransactionId ? 'Update' : 'Save'}</Text>
+              ) : (
+                <TouchableOpacity style={styles.categoryIndicatorBtn} onPress={openCatPicker}>
+                  {(() => {
+                    const cat = entryCategories.find((c) => c.id === entryCategoryId);
+                    return (
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        {cat?.icon
+                          ? <Icon name={cat.icon as any} size={16} color={cat?.color ?? '#EAF3FF'} />
+                          : <Icon name="label" size={16} color="#64748B" />}
+                        <Text style={styles.categoryIndicatorText}>{cat?.name ?? 'No category'}</Text>
+                        <Icon name="expand_more" size={14} color="#8FA8C9" />
+                      </View>
+                    );
+                  })()}
                 </TouchableOpacity>
-              </View>
+              )}
             </View>
-          )}
+          </ScrollView>
+
+          {/* 7. Bottom bar — always visible with Cancel + Save */}
+          <View style={entryModalBottomBarStyles.bottomBar}>
+            <TouchableOpacity style={entryModalBottomBarStyles.cancelBtn} onPress={onClose}>
+              <Text style={entryModalBottomBarStyles.cancelText}>Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={entryModalBottomBarStyles.saveBtn} onPress={() => void saveEntry()} disabled={saving}>
+              <Text style={entryModalBottomBarStyles.saveText}>{editingTransactionId ? 'Update' : 'Save'}</Text>
+            </TouchableOpacity>
+          </View>
 
           {/* ─── Embedded fullscreen category picker (swipe-up overlay) ─── */}
           <Animated.View
@@ -437,7 +447,6 @@ const EntryModal = React.memo(function EntryModal(props: EntryModalProps) {
                   key={cat.id}
                   ref={(r) => { catCellRefs.current[cat.id] = r as any as View; }}
                   onLayout={() => {
-                    // Measure after layout so we get correct window-relative coordinates
                     const ref = catCellRefs.current[cat.id];
                     if (ref) {
                       (ref as any).measureInWindow((x: number, y: number, w: number, h: number) => {
@@ -468,6 +477,46 @@ const EntryModal = React.memo(function EntryModal(props: EntryModalProps) {
       )}
     </Modal>
   );
+});
+
+const entryModalBottomBarStyles = StyleSheet.create({
+  bottomBar: {
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    gap: 12,
+    backgroundColor: '#060A14',
+    borderTopWidth: 1,
+    borderTopColor: '#1E2F49',
+  },
+  cancelBtn: {
+    flex: 1,
+    backgroundColor: '#13253B',
+    borderWidth: 1,
+    borderColor: '#2C4669',
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+  },
+  cancelText: {
+    color: '#8FA8C9',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  saveBtn: {
+    flex: 2,
+    backgroundColor: '#53E3A6',
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+  },
+  saveText: {
+    color: '#060A14',
+    fontSize: 16,
+    fontWeight: '700',
+  },
 });
 
 export default EntryModal;

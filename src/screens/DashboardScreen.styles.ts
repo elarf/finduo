@@ -697,8 +697,24 @@ export const styles = StyleSheet.create({
     borderColor: '#53E3A6',
     backgroundColor: '#1D3A3C',
   },
+  toggleButtonActiveIncome: {
+    borderColor: '#4ade80',
+    backgroundColor: '#0f2a1a',
+  },
+  toggleButtonActiveExpense: {
+    borderColor: '#f87171',
+    backgroundColor: '#2a0f0f',
+  },
   toggleButtonText: {
     color: '#EAF1FF',
+    fontWeight: '700',
+  },
+  toggleButtonTextIncome: {
+    color: '#4ade80',
+    fontWeight: '700',
+  },
+  toggleButtonTextExpense: {
+    color: '#f87171',
     fontWeight: '700',
   },
   entryAmountInput: {

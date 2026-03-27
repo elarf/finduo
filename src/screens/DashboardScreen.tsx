@@ -1,11 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Animated,
   ActivityIndicator,
   Alert,
   Image,
   Modal,
   NativeScrollEvent,
   NativeSyntheticEvent,
+  PanResponder,
   Platform,
   Pressable,
   ScrollView,
@@ -171,7 +173,7 @@ function isMissingColumnError(error: unknown): boolean {
 
 export default function DashboardScreen() {
   const { user, signOut } = useAuth();
-  const { width } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
 
   const [accounts, setAccounts] = useState<AppAccount[]>([]);
   const [categories, setCategories] = useState<AppCategory[]>([]);
@@ -257,6 +259,14 @@ export default function DashboardScreen() {
   const [accountTagIds, setAccountTagIds] = useState<string[]>([]);
   const [showCategoryIconPicker, setShowCategoryIconPicker] = useState(false);
   const [showMobileCategoryPicker, setShowMobileCategoryPicker] = useState(false);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [entryHadInitialCategory, setEntryHadInitialCategory] = useState(false);
+  const [scrollY, setScrollY] = useState(0);
+  const [isCatPickerOpen, setIsCatPickerOpen] = useState(false);
+  const [dragHighlightedCatId, setDragHighlightedCatId] = useState<string | null>(null);
+  // Date picker navigation state
+  const [dpYear, setDpYear] = useState(() => new Date().getFullYear());
+  const [dpMonth, setDpMonth] = useState(() => new Date().getMonth());
 
   const [showIntervalPicker, setShowIntervalPicker] = useState(false);
   const [showEntryAccountPicker, setShowEntryAccountPicker] = useState(false);
@@ -264,13 +274,73 @@ export default function DashboardScreen() {
   const [spendingCollapsed, setSpendingCollapsed] = useState(true);
   const [categoriesCollapsed, setCategoriesCollapsed] = useState(false);
 
-  const amountInputRef = useRef<TextInput | null>(null);
-  const dateInputRef = useRef<TextInput | null>(null);
   const noteInputRef = useRef<TextInput | null>(null);
+  const mainScrollRef = useRef<ScrollView | null>(null);
   const pendingSelectedAccountIdRef = useRef<string | null>(null);
   const hasLoadedOnceRef = useRef(false);
   const schemaAlertSignatureRef = useRef('');
   const animIntervalRef = useRef<ReturnType<typeof _setInterval> | null>(null);
+  // Category picker swipe gesture
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const catPickerAnim = useRef(new Animated.Value(0)).current;
+  const isCatPickerOpenRef = useRef(false);
+  const catCellMeasurements = useRef<Record<string, { x: number; y: number; w: number; h: number }>>({});
+  const catCellRefs = useRef<Record<string, View | null>>({});
+
+  // PanResponder for the "Choose Category" button – swipe-to-select
+  const chooseCatPanResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderGrant: () => {
+        isCatPickerOpenRef.current = true;
+        setIsCatPickerOpen(true);
+        Animated.spring(catPickerAnim, {
+          toValue: 1,
+          useNativeDriver: true,
+          speed: 22,
+          bounciness: 3,
+        }).start();
+      },
+      onPanResponderMove: (evt) => {
+        if (!isCatPickerOpenRef.current) return;
+        const { pageX, pageY } = evt.nativeEvent;
+        let hitId: string | null = null;
+        for (const [id, m] of Object.entries(catCellMeasurements.current)) {
+          if (pageX >= m.x && pageX <= m.x + m.w && pageY >= m.y && pageY <= m.y + m.h) {
+            hitId = id;
+            break;
+          }
+        }
+        setDragHighlightedCatId(hitId);
+      },
+      onPanResponderRelease: (evt) => {
+        const { pageX, pageY } = evt.nativeEvent;
+        let hitId: string | null = null;
+        for (const [id, m] of Object.entries(catCellMeasurements.current)) {
+          if (pageX >= m.x && pageX <= m.x + m.w && pageY >= m.y && pageY <= m.y + m.h) {
+            hitId = id;
+            break;
+          }
+        }
+        if (hitId) {
+          // Finger released over a category → select it immediately
+          setEntryCategoryId(hitId);
+          setDragHighlightedCatId(null);
+          isCatPickerOpenRef.current = false;
+          Animated.timing(catPickerAnim, { toValue: 0, duration: 200, useNativeDriver: true }).start(() => {
+            setIsCatPickerOpen(false);
+          });
+        } else {
+          // Short tap or missed target → keep picker open for normal tap selection
+          setDragHighlightedCatId(null);
+        }
+      },
+      onPanResponderTerminate: () => {
+        setDragHighlightedCatId(null);
+      },
+    }),
+  ).current;
 
   const isDesktopBrowser = Platform.OS === 'web' && width >= 1024;
   const desktopView = isDesktopBrowser && viewModeOverride !== 'mobile';
@@ -311,6 +381,12 @@ export default function DashboardScreen() {
   const selectedCategories = useMemo(
     () => categories.filter((c) => c.account_id === selectedAccountId || c.account_id === null),
     [categories, selectedAccountId],
+  );
+
+  /** IDs of global "Transfer" categories — excluded from income/expense totals. */
+  const transferCategoryIds = useMemo(
+    () => categories.filter((c) => c.name === 'Transfer').map((c) => c.id),
+    [categories],
   );
 
   const entryCategories = useMemo(
@@ -420,20 +496,26 @@ export default function DashboardScreen() {
 
     let income = 0;
     let expense = 0;
+    let transferBalance = 0; // transfers still affect net balance
     for (const tx of transactions) {
       if (tx.account_id !== accountId || !inInterval(tx.date)) continue;
       const n = Number(tx.amount) || 0;
-      if (tx.type === 'income') income += n;
-      else expense += n;
+      const isTransfer = tx.category_id != null && transferCategoryIds.includes(tx.category_id);
+      if (isTransfer) {
+        transferBalance += tx.type === 'income' ? n : -n;
+      } else {
+        if (tx.type === 'income') income += n;
+        else expense += n;
+      }
     }
 
     return {
       income,
       expense,
       openingBalance,
-      net: openingBalance + income - expense,
+      net: openingBalance + income - expense + transferBalance,
     };
-  }, [accountSettings, inInterval, interval, intervalBounds.start, transactions]);
+  }, [accountSettings, inInterval, interval, intervalBounds.start, transactions, transferCategoryIds]);
 
   const selectedSummary = useMemo(() => {
     if (!selectedAccountId) {
@@ -492,6 +574,7 @@ export default function DashboardScreen() {
     const map: Record<string, number> = {};
     for (const tx of filteredSelectedTxs) {
       if (tx.type !== 'expense') continue;
+      if (tx.category_id && transferCategoryIds.includes(tx.category_id)) continue;
       const key = tx.category_id ?? 'uncategorized';
       map[key] = (map[key] ?? 0) + (Number(tx.amount) || 0);
     }
@@ -854,16 +937,13 @@ export default function DashboardScreen() {
   }, [desktopView]);
 
   useEffect(() => {
-    if (!showEntryModal) return;
-    const t = setTimeout(() => amountInputRef.current?.focus(), 20);
-    return () => clearTimeout(t);
-  }, [showEntryModal]);
-
-  useEffect(() => {
     setVisibleTransactionsCount(12);
   }, [selectedAccountId, interval, customStart, customEnd, transactions.length, selectedCategoryFilter]);
 
   const handleDashboardScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const currentY = event.nativeEvent.contentOffset.y;
+    setScrollY(currentY);
+
     if (!hasMoreTransactions) return;
 
     const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
@@ -896,20 +976,38 @@ export default function DashboardScreen() {
     });
   }, []);
 
+  const openCatPicker = useCallback(() => {
+    isCatPickerOpenRef.current = true;
+    setIsCatPickerOpen(true);
+    Animated.spring(catPickerAnim, { toValue: 1, useNativeDriver: true, speed: 22, bounciness: 3 }).start();
+  }, [catPickerAnim]);
+
+  const closeCatPicker = useCallback(() => {
+    isCatPickerOpenRef.current = false;
+    Animated.timing(catPickerAnim, { toValue: 0, duration: 200, useNativeDriver: true }).start(() => {
+      setIsCatPickerOpen(false);
+      setDragHighlightedCatId(null);
+    });
+  }, [catPickerAnim]);
+
   const openEntryModal = useCallback((type: TransactionType, categoryId?: string | null) => {
     setEditingTransactionId(null);
     setEntryType(type);
     setEntryAmount('');
     setEntryDate(todayIso());
     setEntryCategoryId(categoryId ?? null);
+    setEntryHadInitialCategory(!!categoryId);
     setEntryNote('');
     setEntryTagIds([]);
     setNewTagName('');
     setEntryAccountId(selectedAccountId);
     setShowEntryAccountPicker(false);
     setShowMobileCategoryPicker(false);
+    isCatPickerOpenRef.current = false;
+    setIsCatPickerOpen(false);
+    catPickerAnim.setValue(0);
     setShowEntryModal(true);
-  }, [selectedAccountId]);
+  }, [catPickerAnim, selectedAccountId]);
 
   const openEditTransaction = useCallback((tx: AppTransaction) => {
     setEditingTransactionId(tx.id);
@@ -917,13 +1015,17 @@ export default function DashboardScreen() {
     setEntryAmount(String(Math.abs(Number(tx.amount) || 0)));
     setEntryDate(tx.date);
     setEntryCategoryId(tx.category_id ?? null);
+    setEntryHadInitialCategory(true); // editing always has context
     setEntryNote(tx.note ?? '');
     setEntryTagIds(tx.tag_ids);
     setEntryAccountId(tx.account_id);
     setShowEntryAccountPicker(false);
     setShowMobileCategoryPicker(false);
+    isCatPickerOpenRef.current = false;
+    setIsCatPickerOpen(false);
+    catPickerAnim.setValue(0);
     setShowEntryModal(true);
-  }, []);
+  }, [catPickerAnim]);
 
   const openCreateAccount = useCallback(() => {
     setEditingAccountId(null);
@@ -1710,20 +1812,21 @@ export default function DashboardScreen() {
                 </View>
               )}
             </TouchableOpacity>
-            {/* Logo: absolutely positioned so it's always truly centred; tap to reload */}
+            {/* Logo: absolutely centred; only the image itself is the tap target */}
             <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
-              <TouchableOpacity
-                style={styles.headerLogoCenter}
-                onPress={() => void reloadDashboard()}
-                activeOpacity={0.7}
-                accessibilityLabel="Reload dashboard"
-              >
-                <Image
-                  source={require('../../assets/logo.png')}
-                  style={[styles.headerLogo, reloading && { opacity: 0.5 }]}
-                  resizeMode="contain"
-                />
-              </TouchableOpacity>
+              <View style={styles.headerLogoCenter} pointerEvents="box-none">
+                <TouchableOpacity
+                  onPress={() => void reloadDashboard()}
+                  activeOpacity={0.7}
+                  accessibilityLabel="Reload dashboard"
+                >
+                  <Image
+                    source={require('../../assets/logo.png')}
+                    style={[styles.headerLogo, reloading && { opacity: 0.5 }]}
+                    resizeMode="contain"
+                  />
+                </TouchableOpacity>
+              </View>
             </View>
             {/* Spacer so avatar and toggle don't overlap the logo */}
             <View style={{ flex: 1 }} pointerEvents="none" />
@@ -1743,6 +1846,7 @@ export default function DashboardScreen() {
           </View>
 
           <ScrollView
+            ref={mainScrollRef}
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.scrollContent}
             onScroll={handleDashboardScroll}
@@ -2047,17 +2151,23 @@ export default function DashboardScreen() {
             </View>
 
             <View style={styles.listCard}>
-              {(selectedCategoryFilter ? categoryFilteredTxsVisible ?? [] : visibleSelectedTxs).map((tx) => (
-                <TouchableOpacity key={tx.id} style={styles.transactionRow} onPress={() => openEditTransaction(tx)}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.transactionTitle}>{tx.note || 'Untitled transaction'}</Text>
-                    <Text style={styles.transactionMeta}>{tx.date} • {formatShortDate(tx.created_at)}</Text>
-                  </View>
-                  <Text style={[styles.transactionAmount, tx.type === 'income' ? styles.positive : styles.negative]}>
-                    {tx.type === 'income' ? '+' : '-'}{formatCurrency(Number(tx.amount) || 0)}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+              {(selectedCategoryFilter ? categoryFilteredTxsVisible ?? [] : visibleSelectedTxs).map((tx) => {
+                const isTransfer = tx.category_id != null && transferCategoryIds.includes(tx.category_id);
+                return (
+                  <TouchableOpacity key={tx.id} style={styles.transactionRow} onPress={() => openEditTransaction(tx)}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.transactionTitle}>{tx.note || 'Untitled transaction'}</Text>
+                      <Text style={styles.transactionMeta}>{tx.date}</Text>
+                    </View>
+                    <Text style={[
+                      styles.transactionAmount,
+                      isTransfer ? styles.transferAmount : (tx.type === 'income' ? styles.positive : styles.negative),
+                    ]}>
+                      {isTransfer ? '↔' : (tx.type === 'income' ? '+' : '-')}{formatCurrency(Number(tx.amount) || 0)}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
               {(selectedCategoryFilter ? (categoryFilteredTxsVisible?.length ?? 0) : visibleSelectedTxs.length) === 0 && (
                 <Text style={styles.emptyText}>No transactions in this interval.</Text>
               )}
@@ -2073,6 +2183,16 @@ export default function DashboardScreen() {
               </View>
             )}
           </ScrollView>
+
+          {scrollY > 320 && (
+            <TouchableOpacity
+              style={styles.scrollTopFab}
+              onPress={() => mainScrollRef.current?.scrollTo({ y: 0, animated: true })}
+              accessibilityLabel="Scroll to top"
+            >
+              <Icon name="arrow_up" size={22} color="#060A14" />
+            </TouchableOpacity>
+          )}
 
           <View style={styles.bottomBar}>
             <TouchableOpacity
@@ -2350,29 +2470,168 @@ export default function DashboardScreen() {
         </View>
       </Modal>
 
-      <Modal visible={showEntryModal} transparent animationType="none" onRequestClose={() => setShowEntryModal(false)}>
-        <Pressable style={styles.modalBackdrop} onPress={() => setShowEntryModal(false)}>
-          <Pressable style={[styles.modalCard, styles.entryModalCard]} onPress={(event) => event.stopPropagation()}>
-            <View style={styles.entryTopRow}>
-              <TextInput
-                ref={dateInputRef}
-                value={entryDate}
-                onChangeText={setEntryDate}
-                placeholder="YYYY-MM-DD"
-                placeholderTextColor="#64748B"
-                style={[styles.input, styles.entryDateInput]}
-                returnKeyType="next"
-                onSubmitEditing={() => noteInputRef.current?.focus()}
-              />
+      <Modal visible={showEntryModal} transparent animationType={desktopView ? 'none' : 'slide'} onRequestClose={() => setShowEntryModal(false)}>
+        {desktopView ? (
+          /* ─── DESKTOP: centred card modal ─── */
+          <Pressable style={styles.modalBackdrop} onPress={() => setShowEntryModal(false)}>
+            <Pressable style={[styles.modalCard, styles.entryModalCard]} onPress={(event) => event.stopPropagation()}>
+              <ScrollView showsVerticalScrollIndicator={false}>
+                <View style={styles.entryTopRow}>
+                  <TouchableOpacity
+                    style={[styles.datePressable, styles.entryDateInput, { marginBottom: 10 }]}
+                    onPress={() => {
+                      const parts = entryDate.split('-');
+                      setDpYear(Number(parts[0]) || new Date().getFullYear());
+                      setDpMonth((Number(parts[1]) || new Date().getMonth() + 1) - 1);
+                      setShowDatePicker(true);
+                    }}
+                  >
+                    <Text style={styles.datePressableText}>{entryDate || 'Select date'}</Text>
+                    <Icon name="calendar" size={16} color="#64748B" />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.entryAccountBtn, showEntryAccountPicker && styles.entryAccountBtnActive]}
+                    onPress={() => setShowEntryAccountPicker((p) => !p)}
+                  >
+                    <Text style={styles.entryAccountBtnText}>{entryAccount?.name ?? 'Account'} {showEntryAccountPicker ? '▾' : '▸'}</Text>
+                  </TouchableOpacity>
+                </View>
+                {showEntryAccountPicker && (
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[styles.modalChipsRow, { marginBottom: 8 }]}>
+                    {accounts.map((a) => (
+                      <TouchableOpacity
+                        key={a.id}
+                        style={[styles.modalChip, entryAccountId === a.id && styles.modalChipActive]}
+                        onPress={() => { setEntryAccountId(a.id); setShowEntryAccountPicker(false); }}
+                      >
+                        <Text style={styles.modalChipText}>{a.name}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                )}
+                <View style={styles.entryTypeRow}>
+                  <TouchableOpacity
+                    style={[styles.toggleButton, entryType === 'income' && styles.toggleButtonActive]}
+                    onPress={() => setEntryType('income')}
+                  >
+                    <Text style={styles.toggleButtonText}>Income</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.toggleButton, entryType === 'expense' && styles.toggleButtonActive]}
+                    onPress={() => setEntryType('expense')}
+                  >
+                    <Text style={styles.toggleButtonText}>Expense</Text>
+                  </TouchableOpacity>
+                </View>
+                <View style={styles.entryAmountDisplay}>
+                  <Text style={styles.entryAmountDisplayText}>{entryAmount || '0'}</Text>
+                </View>
+                <Text style={styles.entryCurrencyText}>{entryAccount?.currency ?? selectedCurrency}</Text>
+                {recentCategoryAmounts.length > 0 && (
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.modalChipsRow}>
+                    {recentCategoryAmounts.map((v) => (
+                      <TouchableOpacity key={`${entryType}-${v}`} style={styles.modalChip} onPress={() => setEntryAmount(String(v))}>
+                        <Text style={styles.modalChipText}>{formatCurrency(v, entryAccount?.currency)}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                )}
+                <View style={styles.numpadGrid}>
+                  {['7', '8', '9', '4', '5', '6', '1', '2', '3', 'C', '0', '<'].map((k) => (
+                    <TouchableOpacity key={k} style={styles.numpadKey} onPress={() => appendNumpad(k)}>
+                      <Text style={styles.numpadKeyText}>{k}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                <TextInput
+                  ref={noteInputRef}
+                  value={entryNote}
+                  onChangeText={setEntryNote}
+                  placeholder="Note"
+                  placeholderTextColor="#64748B"
+                  style={styles.input}
+                  returnKeyType="done"
+                  onSubmitEditing={() => void saveEntry()}
+                  onFocus={() => setNoteFieldFocused(true)}
+                  onBlur={() => setTimeout(() => setNoteFieldFocused(false), 150)}
+                />
+                {noteFieldFocused && noteSuggestions.length > 0 && (
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[styles.modalChipsRow, { marginBottom: 6 }]}>
+                    {noteSuggestions.map((s) => (
+                      <TouchableOpacity key={s} style={styles.modalChip} onPress={() => setEntryNote(s)}>
+                        <Text style={styles.modalChipText}>{s}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                )}
+                <Text style={styles.modalLabel}>Tags</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.modalChipsRow}>
+                  {entryTags.map((tag) => (
+                    <TouchableOpacity
+                      key={tag.id}
+                      style={[styles.modalChip, entryTagIds.includes(tag.id) && styles.modalChipActive]}
+                      onPress={() => toggleTag(tag.id)}
+                    >
+                      <Text style={styles.modalChipText}>#{tag.name}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+                <View style={styles.tagCreateRow}>
+                  <TextInput
+                    placeholder="New tag"
+                    placeholderTextColor="#64748B"
+                    value={newTagName}
+                    onChangeText={setNewTagName}
+                    style={[styles.input, styles.tagInput]}
+                  />
+                  <TouchableOpacity style={styles.smallAction} onPress={() => void createTag()}>
+                    <Text style={styles.smallActionText}>Add Tag</Text>
+                  </TouchableOpacity>
+                </View>
+                <Text style={styles.modalLabel}>Category</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.modalChipsRow}>
+                  {entryCategories.map((cat) => (
+                    <TouchableOpacity
+                      key={cat.id}
+                      style={[styles.modalChip, entryCategoryId === cat.id && styles.modalChipActive, cat.color ? { borderColor: cat.color } : undefined]}
+                      onPress={() => setEntryCategoryId(cat.id)}
+                    >
+                      {cat.icon ? <Icon name={cat.icon as any} size={12} color={cat.color ?? '#EAF3FF'} style={{ marginRight: 3 }} /> : null}
+                      <Text style={styles.modalChipText}>{cat.name}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </ScrollView>
+              <View style={styles.modalActions}>
+                <TouchableOpacity style={styles.modalSecondary} onPress={() => setShowEntryModal(false)}>
+                  <Text style={styles.modalSecondaryText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.modalPrimary} onPress={() => void saveEntry()} disabled={saving}>
+                  <Text style={styles.modalPrimaryText}>{editingTransactionId ? 'Update' : 'Save'}</Text>
+                </TouchableOpacity>
+              </View>
+            </Pressable>
+          </Pressable>
+        ) : (
+          /* ─── MOBILE: full-screen slide-up modal ─── */
+          <View style={styles.entryModalFullscreen}>
+            {/* Top bar */}
+            <View style={styles.entryModalTopBar}>
+              <TouchableOpacity onPress={() => setShowEntryModal(false)} style={styles.entryModalCloseBtn}>
+                <Icon name="close" size={22} color="#8FA8C9" />
+              </TouchableOpacity>
+              <Text style={styles.entryModalTitle}>
+                {editingTransactionId ? 'Edit' : (entryType === 'income' ? 'Income' : 'Expense')}
+              </Text>
               <TouchableOpacity
                 style={[styles.entryAccountBtn, showEntryAccountPicker && styles.entryAccountBtnActive]}
                 onPress={() => setShowEntryAccountPicker((p) => !p)}
               >
-                <Text style={styles.entryAccountBtnText}>{entryAccount?.name ?? 'Account'} {showEntryAccountPicker ? '▾' : '▸'}</Text>
+                <Text style={styles.entryAccountBtnText}>{entryAccount?.name ?? 'Account'}</Text>
               </TouchableOpacity>
             </View>
             {showEntryAccountPicker && (
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[styles.modalChipsRow, { marginBottom: 8 }]}>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[styles.modalChipsRow, { paddingHorizontal: 16, paddingBottom: 6 }]}>
                 {accounts.map((a) => (
                   <TouchableOpacity
                     key={a.id}
@@ -2384,8 +2643,8 @@ export default function DashboardScreen() {
                 ))}
               </ScrollView>
             )}
-
-            <View style={styles.entryTypeRow}>
+            {/* Type toggle */}
+            <View style={[styles.entryTypeRow, { marginHorizontal: 16 }]}>
               <TouchableOpacity
                 style={[styles.toggleButton, entryType === 'income' && styles.toggleButtonActive]}
                 onPress={() => setEntryType('income')}
@@ -2399,159 +2658,181 @@ export default function DashboardScreen() {
                 <Text style={styles.toggleButtonText}>Expense</Text>
               </TouchableOpacity>
             </View>
-
-            <TextInput
-              ref={amountInputRef}
-              autoFocus
-              value={entryAmount}
-              onChangeText={setEntryAmount}
-              placeholder="0"
-              placeholderTextColor="#64748B"
-              keyboardType="decimal-pad"
-              style={styles.entryAmountInput}
-              returnKeyType="next"
-              onSubmitEditing={() => dateInputRef.current?.focus()}
-              showSoftInputOnFocus={Platform.OS !== 'android'}
-            />
-            <Text style={styles.entryCurrencyText}>{entryAccount?.currency ?? selectedCurrency}</Text>
-
-            {recentCategoryAmounts.length > 0 && (
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.modalChipsRow}>
-                {recentCategoryAmounts.map((v) => (
-                  <TouchableOpacity key={`${entryType}-${v}`} style={styles.modalChip} onPress={() => setEntryAmount(String(v))}>
-                    <Text style={styles.modalChipText}>{formatCurrency(v, entryAccount?.currency)}</Text>
+            <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={styles.entryModalScrollContent}>
+              {/* Amount display-only */}
+              <View style={styles.entryAmountDisplay}>
+                <Text style={styles.entryAmountDisplayText}>{entryAmount || '0'}</Text>
+              </View>
+              <Text style={styles.entryCurrencyText}>{entryAccount?.currency ?? selectedCurrency}</Text>
+              {recentCategoryAmounts.length > 0 && (
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.modalChipsRow}>
+                  {recentCategoryAmounts.map((v) => (
+                    <TouchableOpacity key={`${entryType}-${v}`} style={styles.modalChip} onPress={() => setEntryAmount(String(v))}>
+                      <Text style={styles.modalChipText}>{formatCurrency(v, entryAccount?.currency)}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              )}
+              {/* Numpad */}
+              <View style={styles.numpadGrid}>
+                {['7', '8', '9', '4', '5', '6', '1', '2', '3', 'C', '0', '<'].map((k) => (
+                  <TouchableOpacity key={k} style={styles.numpadKey} onPress={() => appendNumpad(k)}>
+                    <Text style={styles.numpadKeyText}>{k}</Text>
                   </TouchableOpacity>
                 ))}
-              </ScrollView>
-            )}
-
-            <View style={styles.numpadGrid}>
-              {['7', '8', '9', '4', '5', '6', '1', '2', '3', 'C', '0', '<'].map((k) => (
-                <TouchableOpacity key={k} style={styles.numpadKey} onPress={() => appendNumpad(k)}>
-                  <Text style={styles.numpadKeyText}>{k}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            <TextInput
-              ref={noteInputRef}
-              value={entryNote}
-              onChangeText={setEntryNote}
-              placeholder="Note"
-              placeholderTextColor="#64748B"
-              style={styles.input}
-              returnKeyType="done"
-              onSubmitEditing={() => void saveEntry()}
-              onFocus={() => setNoteFieldFocused(true)}
-              onBlur={() => setTimeout(() => setNoteFieldFocused(false), 150)}
-            />
-            {noteFieldFocused && noteSuggestions.length > 0 && (
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[styles.modalChipsRow, { marginBottom: 6 }]}>
-                {noteSuggestions.map((s) => (
-                  <TouchableOpacity key={s} style={styles.modalChip} onPress={() => setEntryNote(s)}>
-                    <Text style={styles.modalChipText}>{s}</Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-            )}
-
-            <Text style={styles.modalLabel}>Tags</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.modalChipsRow}>
-              {entryTags.map((tag) => (
-                <TouchableOpacity
-                  key={tag.id}
-                  style={[styles.modalChip, entryTagIds.includes(tag.id) && styles.modalChipActive]}
-                  onPress={() => toggleTag(tag.id)}
-                >
-                  <Text style={styles.modalChipText}>#{tag.name}</Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-
-            <View style={styles.tagCreateRow}>
-              <TextInput
-                placeholder="New tag"
-                placeholderTextColor="#64748B"
-                value={newTagName}
-                onChangeText={setNewTagName}
-                style={[styles.input, styles.tagInput]}
-              />
-              <TouchableOpacity style={styles.smallAction} onPress={() => void createTag()}>
-                <Text style={styles.smallActionText}>Add Tag</Text>
+              </View>
+              {/* Date picker row */}
+              <TouchableOpacity
+                style={styles.datePressable}
+                onPress={() => {
+                  const parts = entryDate.split('-');
+                  setDpYear(Number(parts[0]) || new Date().getFullYear());
+                  setDpMonth((Number(parts[1]) || new Date().getMonth() + 1) - 1);
+                  setShowDatePicker(true);
+                }}
+              >
+                <Icon name="calendar" size={18} color="#8FA8C9" />
+                <Text style={styles.datePressableText}>{entryDate || 'Select date'}</Text>
               </TouchableOpacity>
-            </View>
-
-            <Text style={styles.modalLabel}>Category</Text>
-            {desktopView ? (
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.modalChipsRow}>
-                {entryCategories.map((cat) => (
-                  <TouchableOpacity
-                    key={cat.id}
-                    style={[styles.modalChip, entryCategoryId === cat.id && styles.modalChipActive, cat.color ? { borderColor: cat.color } : undefined]}
-                    onPress={() => setEntryCategoryId(cat.id)}
-                  >
-                    {cat.icon ? <Icon name={cat.icon as any} size={12} color={cat.color ?? '#EAF3FF'} style={{ marginRight: 3 }} /> : null}
-                    <Text style={styles.modalChipText}>{cat.name}</Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
+              {/* Note */}
+              <TextInput
+                ref={noteInputRef}
+                value={entryNote}
+                onChangeText={setEntryNote}
+                placeholder="Note"
+                placeholderTextColor="#64748B"
+                style={styles.input}
+                returnKeyType="done"
+                onSubmitEditing={() => void saveEntry()}
+                onFocus={() => setNoteFieldFocused(true)}
+                onBlur={() => setTimeout(() => setNoteFieldFocused(false), 150)}
+              />
+              {noteFieldFocused && noteSuggestions.length > 0 && (
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[styles.modalChipsRow, { marginBottom: 6 }]}>
+                  {noteSuggestions.map((s) => (
+                    <TouchableOpacity key={s} style={styles.modalChip} onPress={() => setEntryNote(s)}>
+                      <Text style={styles.modalChipText}>{s}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              )}
+              {/* Tags */}
+              {entryTags.length > 0 && (
+                <>
+                  <Text style={styles.modalLabel}>Tags</Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[styles.modalChipsRow, { marginBottom: 8 }]}>
+                    {entryTags.map((tag) => (
+                      <TouchableOpacity
+                        key={tag.id}
+                        style={[styles.modalChip, entryTagIds.includes(tag.id) && styles.modalChipActive]}
+                        onPress={() => toggleTag(tag.id)}
+                      >
+                        <Text style={styles.modalChipText}>#{tag.name}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </>
+              )}
+            </ScrollView>
+            {/* Bottom bar — conditional on category */}
+            {(!entryCategoryId && !entryHadInitialCategory) ? (
+              <View
+                {...chooseCatPanResponder.panHandlers}
+                style={styles.chooseCategoryBtn}
+              >
+                <Icon name="label" size={22} color="#060A14" />
+                <Text style={styles.chooseCategoryBtnText}>Choose Category</Text>
+              </View>
             ) : (
-              <>
+              <View style={styles.entryModalBottomBar}>
                 <TouchableOpacity
-                  style={[styles.mobileCategoryPill, showMobileCategoryPicker && styles.mobileCategoryPillOpen]}
-                  onPress={() => setShowMobileCategoryPicker((p) => !p)}
+                  style={styles.categoryIndicatorBtn}
+                  onPress={openCatPicker}
                 >
-                  {entryCategoryId ? (() => {
+                  {(() => {
                     const cat = entryCategories.find((c) => c.id === entryCategoryId);
                     return (
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                        {cat?.icon ? <Icon name={cat.icon as any} size={16} color={cat?.color ?? '#EAF3FF'} /> : null}
-                        <Text style={styles.mobileCategoryPillText}>{cat?.name ?? 'Category'}</Text>
-                        <Icon name={(showMobileCategoryPicker ? 'expand_less' : 'expand_more') as any} size={18} color="#8FA8C9" />
+                        {cat?.icon
+                          ? <Icon name={cat.icon as any} size={16} color={cat?.color ?? '#EAF3FF'} />
+                          : <Icon name="label" size={16} color="#64748B" />}
+                        <Text style={styles.categoryIndicatorText}>{cat?.name ?? 'No category'}</Text>
+                        <Icon name="expand_more" size={14} color="#8FA8C9" />
                       </View>
                     );
-                  })() : (
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                      <Icon name={"label" as any} size={16} color="#64748B" />
-                      <Text style={[styles.mobileCategoryPillText, { color: '#64748B' }]}>No category</Text>
-                      <Icon name={(showMobileCategoryPicker ? 'expand_less' : 'expand_more') as any} size={18} color="#64748B" />
-                    </View>
-                  )}
+                  })()}
                 </TouchableOpacity>
-                {showMobileCategoryPicker && (
-                  <View style={styles.mobileCategoryPickerGrid}>
-                    <TouchableOpacity
-                      style={[styles.mobileCategoryPickerItem, !entryCategoryId && styles.mobileCategoryPickerItemActive]}
-                      onPress={() => { setEntryCategoryId(null); setShowMobileCategoryPicker(false); }}
-                    >
-                      <Icon name="block" size={20} color="#64748B" />
-                      <Text style={styles.mobileCategoryPickerText}>None</Text>
-                    </TouchableOpacity>
-                    {entryCategories.map((cat) => (
-                      <TouchableOpacity
-                        key={cat.id}
-                        style={[styles.mobileCategoryPickerItem, entryCategoryId === cat.id && styles.mobileCategoryPickerItemActive, cat.color ? { borderColor: cat.color } : undefined]}
-                        onPress={() => { setEntryCategoryId(cat.id); setShowMobileCategoryPicker(false); }}
-                      >
-                        <Icon name={(cat.icon ?? 'label') as any} size={20} color={cat.color ?? (cat.type === 'income' ? '#6ED8A5' : '#FCA5A5')} />
-                        <Text style={styles.mobileCategoryPickerText}>{cat.name}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                )}
-              </>
+                <View style={styles.entryModalActions}>
+                  <TouchableOpacity style={styles.modalSecondary} onPress={() => setShowEntryModal(false)}>
+                    <Text style={styles.modalSecondaryText}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.modalPrimary} onPress={() => void saveEntry()} disabled={saving}>
+                    <Text style={styles.modalPrimaryText}>{editingTransactionId ? 'Update' : 'Save'}</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
             )}
 
-            <View style={styles.modalActions}>
-              <TouchableOpacity style={styles.modalSecondary} onPress={() => setShowEntryModal(false)}>
-                <Text style={styles.modalSecondaryText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.modalPrimary} onPress={() => void saveEntry()} disabled={saving}>
-                <Text style={styles.modalPrimaryText}>{editingTransactionId ? 'Update' : 'Save'}</Text>
-              </TouchableOpacity>
-            </View>
-          </Pressable>
-        </Pressable>
+            {/* ─── Embedded fullscreen category picker (swipe-up overlay) ─── */}
+            <Animated.View
+              style={[
+                StyleSheet.absoluteFill,
+                {
+                  backgroundColor: '#060A14',
+                  zIndex: 50,
+                  transform: [
+                    {
+                      translateY: catPickerAnim.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [height, 0],
+                      }),
+                    },
+                  ],
+                },
+              ]}
+              pointerEvents={isCatPickerOpen ? 'box-none' : 'none'}
+            >
+              <View style={styles.catPickerHeader}>
+                <Text style={styles.catPickerTitle}>Choose Category</Text>
+                <TouchableOpacity onPress={closeCatPicker}>
+                  <Icon name="close" size={24} color="#8FA8C9" />
+                </TouchableOpacity>
+              </View>
+              <ScrollView contentContainerStyle={styles.catPickerGrid} showsVerticalScrollIndicator={false}>
+                {entryCategories.map((cat) => (
+                  <TouchableOpacity
+                    key={cat.id}
+                    ref={(r) => { catCellRefs.current[cat.id] = r as any as View; }}
+                    onLayout={() => {
+                      // Measure after layout so we get correct window-relative coordinates
+                      const ref = catCellRefs.current[cat.id];
+                      if (ref) {
+                        (ref as any).measureInWindow((x: number, y: number, w: number, h: number) => {
+                          catCellMeasurements.current[cat.id] = { x, y, w, h };
+                        });
+                      }
+                    }}
+                    style={[
+                      styles.catPickerItem,
+                      (entryCategoryId === cat.id || dragHighlightedCatId === cat.id) && styles.catPickerItemActive,
+                      cat.color ? { borderColor: cat.color } : undefined,
+                      dragHighlightedCatId === cat.id ? { backgroundColor: `${cat.color ?? '#EAF2FF'}28` } : undefined,
+                    ]}
+                    onPress={() => { setEntryCategoryId(cat.id); closeCatPicker(); }}
+                  >
+                    <Icon
+                      name={(cat.icon ?? 'label') as any}
+                      size={32}
+                      color={cat.color ?? (cat.type === 'income' ? '#6ED8A5' : '#FCA5A5')}
+                    />
+                    <Text style={styles.catPickerItemText}>{cat.name}</Text>
+                    <Text style={[styles.catPickerItemType, cat.type === 'income' && styles.incomeType]}>{cat.type}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </Animated.View>
+          </View>
+        )}
       </Modal>
 
       <Modal visible={showCategoryModal} transparent animationType="none" onRequestClose={() => setShowCategoryModal(false)}>
@@ -3074,6 +3355,72 @@ export default function DashboardScreen() {
           </Pressable>
         </Pressable>
       </Modal>
+
+      {/* ─── Date Picker Modal ─── */}
+      <Modal visible={showDatePicker} transparent animationType="fade" onRequestClose={() => setShowDatePicker(false)}>
+        <Pressable style={styles.modalBackdrop} onPress={() => setShowDatePicker(false)}>
+          <Pressable style={[styles.modalCard, styles.datePickerCard]} onPress={(e) => e.stopPropagation()}>
+            <Text style={styles.modalTitle}>Select Date</Text>
+            <View style={styles.dpMonthNav}>
+              <TouchableOpacity style={styles.dpNavBtn} onPress={() => {
+                if (dpMonth === 0) { setDpMonth(11); setDpYear((y) => y - 1); }
+                else { setDpMonth((m) => m - 1); }
+              }}>
+                <Text style={styles.dpNavBtnText}>‹</Text>
+              </TouchableOpacity>
+              <Text style={styles.dpMonthTitle}>
+                {new Date(dpYear, dpMonth, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+              </Text>
+              <TouchableOpacity style={styles.dpNavBtn} onPress={() => {
+                if (dpMonth === 11) { setDpMonth(0); setDpYear((y) => y + 1); }
+                else { setDpMonth((m) => m + 1); }
+              }}>
+                <Text style={styles.dpNavBtnText}>›</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={styles.dpWeekRow}>
+              {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map((d) => (
+                <Text key={d} style={styles.dpWeekDay}>{d}</Text>
+              ))}
+            </View>
+            <View style={styles.dpDayGrid}>
+              {(() => {
+                const firstDay = new Date(dpYear, dpMonth, 1).getDay();
+                const daysInMonth = new Date(dpYear, dpMonth + 1, 0).getDate();
+                const cells: React.ReactNode[] = [];
+                for (let i = 0; i < firstDay; i++) {
+                  cells.push(<View key={`blank-${i}`} style={styles.dpDayCell} />);
+                }
+                for (let d = 1; d <= daysInMonth; d++) {
+                  const isoDate = `${dpYear}-${String(dpMonth + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+                  const isSelected = entryDate === isoDate;
+                  const isToday = todayIso() === isoDate;
+                  cells.push(
+                    <TouchableOpacity
+                      key={d}
+                      style={[
+                        styles.dpDayCell,
+                        isSelected && styles.dpDayCellSelected,
+                        isToday && !isSelected && styles.dpDayCellToday,
+                      ]}
+                      onPress={() => { setEntryDate(isoDate); setShowDatePicker(false); }}
+                    >
+                      <Text style={[styles.dpDayText, isSelected && styles.dpDayTextSelected]}>{d}</Text>
+                    </TouchableOpacity>,
+                  );
+                }
+                return cells;
+              })()}
+            </View>
+            <View style={styles.modalActions}>
+              <TouchableOpacity style={styles.modalSecondary} onPress={() => setShowDatePicker(false)}>
+                <Text style={styles.modalSecondaryText}>Close</Text>
+              </TouchableOpacity>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
     </View>
   );
 }
@@ -4152,5 +4499,242 @@ const styles = StyleSheet.create({
   colorPresetDotActive: {
     borderColor: '#FFFFFF',
     transform: [{ scale: 1.15 }],
+  },
+  // Scroll-to-top FAB
+  scrollTopFab: {
+    position: 'absolute',
+    right: 20,
+    bottom: 100,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#53E3A6',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 6,
+  },
+  // Transfer amount colour
+  transferAmount: {
+    color: '#60A5FA',
+  },
+  // Date pressable row
+  datePressable: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#111F32',
+    borderColor: '#2E496F',
+    borderWidth: 1,
+    borderRadius: 4,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    marginBottom: 10,
+  },
+  datePressableText: {
+    flex: 1,
+    color: '#EDF5FF',
+    fontSize: 14,
+  },
+  // Entry modal – full-screen mobile
+  entryModalFullscreen: {
+    flex: 1,
+    backgroundColor: '#060A14',
+  },
+  entryModalTopBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingTop: Platform.OS === 'web' ? 16 : 52,
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#1A2B40',
+  },
+  entryModalCloseBtn: {
+    padding: 4,
+  },
+  entryModalTitle: {
+    color: '#F0F7FF',
+    fontWeight: '800',
+    fontSize: 16,
+  },
+  entryModalScrollContent: {
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+    paddingTop: 8,
+  },
+  // Amount display-only
+  entryAmountDisplay: {
+    backgroundColor: '#091426',
+    borderColor: '#35527A',
+    borderWidth: 1,
+    borderRadius: 4,
+    paddingVertical: 10,
+    marginBottom: 4,
+    alignItems: 'center',
+  },
+  entryAmountDisplayText: {
+    color: '#F1F6FF',
+    fontSize: 40,
+    fontWeight: '800',
+    letterSpacing: 1,
+  },
+  // Bottom bar (mobile entry modal)
+  chooseCategoryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    backgroundColor: '#53E3A6',
+    margin: 16,
+    paddingVertical: 16,
+    borderRadius: 8,
+  },
+  chooseCategoryBtnText: {
+    color: '#060A14',
+    fontSize: 17,
+    fontWeight: '800',
+  },
+  entryModalBottomBar: {
+    borderTopWidth: 1,
+    borderTopColor: '#1A2B40',
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    paddingBottom: Platform.OS === 'web' ? 16 : 28,
+    gap: 8,
+  },
+  categoryIndicatorBtn: {
+    backgroundColor: '#111F32',
+    borderColor: '#2A4060',
+    borderWidth: 1,
+    borderRadius: 6,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+  },
+  categoryIndicatorText: {
+    color: '#EDF5FF',
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  entryModalActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 8,
+  },
+  // Date Picker modal
+  datePickerCard: {
+    width: 320,
+    maxWidth: '95%',
+  },
+  dpMonthNav: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  dpNavBtn: {
+    padding: 8,
+  },
+  dpNavBtnText: {
+    color: '#53E3A6',
+    fontSize: 22,
+    fontWeight: '700',
+  },
+  dpMonthTitle: {
+    color: '#EAF3FF',
+    fontWeight: '700',
+    fontSize: 15,
+  },
+  dpWeekRow: {
+    flexDirection: 'row',
+    marginBottom: 6,
+  },
+  dpWeekDay: {
+    flex: 1,
+    textAlign: 'center',
+    color: '#8FA8C9',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  dpDayGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+  dpDayCell: {
+    width: `${100 / 7}%` as any,
+    aspectRatio: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dpDayCellSelected: {
+    backgroundColor: '#53E3A6',
+    borderRadius: 99,
+  },
+  dpDayCellToday: {
+    borderWidth: 1,
+    borderColor: '#53E3A6',
+    borderRadius: 99,
+  },
+  dpDayText: {
+    color: '#D8E6FF',
+    fontSize: 14,
+  },
+  dpDayTextSelected: {
+    color: '#060A14',
+    fontWeight: '800',
+  },
+  // Fullscreen category picker
+  catPickerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingTop: Platform.OS === 'web' ? 20 : 56,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#1A2B40',
+  },
+  catPickerTitle: {
+    color: '#F0F7FF',
+    fontWeight: '800',
+    fontSize: 20,
+  },
+  catPickerGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    padding: 12,
+    gap: 10,
+  },
+  catPickerItem: {
+    width: '30%',
+    minWidth: 96,
+    backgroundColor: '#101E30',
+    borderColor: '#263E5F',
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingVertical: 16,
+    paddingHorizontal: 8,
+    alignItems: 'center',
+    gap: 8,
+  },
+  catPickerItemActive: {
+    borderColor: '#53E3A6',
+    backgroundColor: '#1D3A3C',
+  },
+  catPickerItemText: {
+    color: '#D8E6FF',
+    fontSize: 12,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  catPickerItemType: {
+    color: '#FCA5A5',
+    fontSize: 10,
+    textTransform: 'uppercase',
+    fontWeight: '600',
   },
 });

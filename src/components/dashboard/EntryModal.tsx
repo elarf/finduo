@@ -56,7 +56,7 @@ type EntryModalProps = {
   saveEntry: () => Promise<void>;
   formatCurrency: (value: number, currencyOverride?: string) => string;
   openDatePicker: () => void;
-  openAcctPickerSheet: (target: 'entry' | 'invite') => void;
+  openAcctPickerSheet: (target: 'entry' | 'invite' | 'transfer-from' | 'transfer-to') => void;
   // Category picker (mobile)
   chooseCatPanResponder: { panHandlers: any };
   catPickerAnim: Animated.Value;
@@ -309,7 +309,7 @@ const EntryModal = React.memo(function EntryModal(props: EntryModalProps) {
           <ScrollView
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
-            contentContainerStyle={styles.entryModalScrollContent}
+            contentContainerStyle={[styles.entryModalScrollContent, { flexGrow: 1 }]}
           >
             {/* 1. Date picker */}
             <TouchableOpacity style={styles.datePressable} onPress={openDatePicker}>
@@ -377,6 +377,16 @@ const EntryModal = React.memo(function EntryModal(props: EntryModalProps) {
                 </TouchableOpacity>
               ))}
             </View>
+            {/* Spacer to push numpad + category to bottom */}
+            <View style={{ flex: 1, minHeight: 8 }} />
+            {/* 5. Numpad */}
+            <View style={styles.numpadGrid}>
+              {['7', '8', '9', '4', '5', '6', '1', '2', '3', 'C', '0', '<'].map((k) => (
+                <TouchableOpacity key={k} style={styles.numpadKey} onPress={() => appendNumpad(k)}>
+                  <Text style={styles.numpadKeyText}>{k}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
             {/* 6. Category selector */}
             <View
               {...chooseCatPanResponder.panHandlers}
@@ -388,17 +398,16 @@ const EntryModal = React.memo(function EntryModal(props: EntryModalProps) {
                   <Text style={styles.chooseCategoryBtnText}>Choose Category</Text>
                 </TouchableOpacity>
               ) : (
-                <TouchableOpacity style={styles.categoryIndicatorBtn} onPress={openCatPicker}>
+                <TouchableOpacity style={[styles.chooseCategoryBtn, { backgroundColor: '#111F32', borderWidth: 1, borderColor: '#2A4060' }]} onPress={openCatPicker}>
                   {(() => {
                     const cat = entryCategories.find((c) => c.id === entryCategoryId);
                     return (
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <>
                         {cat?.icon
-                          ? <Icon name={cat.icon as any} size={16} color={cat?.color ?? '#EAF3FF'} />
-                          : <Icon name="label" size={16} color="#64748B" />}
-                        <Text style={styles.categoryIndicatorText}>{cat?.name ?? 'No category'}</Text>
-                        <Icon name="expand_more" size={14} color="#8FA8C9" />
-                      </View>
+                          ? <Icon name={cat.icon as any} size={28} color={cat?.color ?? '#EAF3FF'} />
+                          : <Icon name="label" size={28} color="#64748B" />}
+                        <Text style={[styles.chooseCategoryBtnText, { color: '#EDF5FF' }]}>{cat?.name ?? 'No category'}</Text>
+                      </>
                     );
                   })()}
                 </TouchableOpacity>

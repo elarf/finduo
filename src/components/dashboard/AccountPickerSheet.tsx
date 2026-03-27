@@ -10,12 +10,16 @@ type AccountPickerSheetProps = {
   acctPickerAnim: Animated.Value;
   height: number;
   accounts: AppAccount[];
-  acctPickerSheetTarget: 'entry' | 'invite' | null;
+  acctPickerSheetTarget: 'entry' | 'invite' | 'transfer-from' | 'transfer-to' | null;
   entryAccountId: string | null;
   setEntryAccountId: (id: string) => void;
   invitationAccountId: string | null;
   setInvitationAccountId: (id: string) => void;
   loadManagedInvites: (accountId: string) => void;
+  transferFromId: string | null;
+  setTransferFromId: (id: string) => void;
+  transferToId: string | null;
+  setTransferToId: (id: string) => void;
 };
 
 function AccountPickerSheet({
@@ -24,6 +28,8 @@ function AccountPickerSheet({
   entryAccountId, setEntryAccountId,
   invitationAccountId, setInvitationAccountId,
   loadManagedInvites,
+  transferFromId, setTransferFromId,
+  transferToId, setTransferToId,
 }: AccountPickerSheetProps) {
   return (
     <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
@@ -45,19 +51,26 @@ function AccountPickerSheet({
         ]}
       >
         <View style={styles.catPickerHeader}>
-          <Text style={styles.catPickerTitle}>Choose Account</Text>
+          <Text style={styles.catPickerTitle}>
+            {acctPickerSheetTarget === 'transfer-from' ? 'From Account' : acctPickerSheetTarget === 'transfer-to' ? 'To Account' : 'Choose Account'}
+          </Text>
           <TouchableOpacity onPress={onClose}>
             <Icon name="close" size={24} color="#8FA8C9" />
           </TouchableOpacity>
         </View>
         <ScrollView contentContainerStyle={styles.catPickerGrid} showsVerticalScrollIndicator={false}>
-          {accounts.map((a) => (
+          {accounts.map((a) => {
+            const isActive =
+              (acctPickerSheetTarget === 'entry' && entryAccountId === a.id) ||
+              (acctPickerSheetTarget === 'invite' && invitationAccountId === a.id) ||
+              (acctPickerSheetTarget === 'transfer-from' && transferFromId === a.id) ||
+              (acctPickerSheetTarget === 'transfer-to' && transferToId === a.id);
+            return (
             <TouchableOpacity
               key={a.id}
               style={[
                 styles.catPickerItem,
-                ((acctPickerSheetTarget === 'entry' && entryAccountId === a.id) ||
-                 (acctPickerSheetTarget === 'invite' && invitationAccountId === a.id)) && styles.catPickerItemActive,
+                isActive && styles.catPickerItemActive,
               ]}
               onPress={() => {
                 if (acctPickerSheetTarget === 'entry') {
@@ -65,6 +78,10 @@ function AccountPickerSheet({
                 } else if (acctPickerSheetTarget === 'invite') {
                   setInvitationAccountId(a.id);
                   void loadManagedInvites(a.id);
+                } else if (acctPickerSheetTarget === 'transfer-from') {
+                  setTransferFromId(a.id);
+                } else if (acctPickerSheetTarget === 'transfer-to') {
+                  setTransferToId(a.id);
                 }
                 onClose();
               }}
@@ -75,7 +92,8 @@ function AccountPickerSheet({
               </View>
               <Text style={styles.catPickerItemSub}>{a.currency}</Text>
             </TouchableOpacity>
-          ))}
+            );
+          })}
         </ScrollView>
       </Animated.View>
     </Modal>

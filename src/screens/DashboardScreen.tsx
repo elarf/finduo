@@ -169,6 +169,7 @@ export default function DashboardScreen() {
   const [iconSearchQuery, setIconSearchQuery] = useState('');
   const [sidebarTxCount, setSidebarTxCount] = useState(12);
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [datePickerTarget, setDatePickerTarget] = useState<'entry' | 'transfer'>('entry');
   const [entryHadInitialCategory, setEntryHadInitialCategory] = useState(false);
   const [scrollY, setScrollY] = useState(0);
   const [isCatPickerOpen, setIsCatPickerOpen] = useState(false);
@@ -178,7 +179,7 @@ export default function DashboardScreen() {
   const [dpMonth, setDpMonth] = useState(() => new Date().getMonth());
 
   const [showAcctPickerSheet, setShowAcctPickerSheet] = useState(false);
-  const [acctPickerSheetTarget, setAcctPickerSheetTarget] = useState<'entry' | 'invite' | null>(null);
+  const [acctPickerSheetTarget, setAcctPickerSheetTarget] = useState<'entry' | 'invite' | 'transfer-from' | 'transfer-to' | null>(null);
 
   const [showIntervalPicker, setShowIntervalPicker] = useState(false);
   const [showEntryAccountPicker, setShowEntryAccountPicker] = useState(false);
@@ -521,9 +522,10 @@ export default function DashboardScreen() {
     const lookupCats = showAccountOverviewPicker ? categories : selectedCategories;
     const rows = Object.entries(map)
       .map(([id, total]) => {
-        const name = lookupCats.find((c) => c.id === id)?.name ??
-          (id === 'uncategorized' ? 'Uncategorized' : 'Other');
-        return { id, name, total };
+        const cat = lookupCats.find((c) => c.id === id);
+        const name = cat?.name ?? (id === 'uncategorized' ? 'Uncategorized' : 'Other');
+        const color = cat?.color ?? null;
+        return { id, name, total, color };
       })
       .sort((a, b) => b.total - a.total)
       .slice(0, 7);
@@ -544,11 +546,15 @@ export default function DashboardScreen() {
       map[key] = (map[key] ?? 0) + (Number(tx.amount) || 0);
     }
     const rows = Object.entries(map)
-      .map(([id, total]) => ({
-        id,
-        name: categories.find((c) => c.id === id)?.name ?? (id === 'uncategorized' ? 'Uncategorized' : 'Other'),
-        total,
-      }))
+      .map(([id, total]) => {
+        const cat = categories.find((c) => c.id === id);
+        return {
+          id,
+          name: cat?.name ?? (id === 'uncategorized' ? 'Uncategorized' : 'Other'),
+          color: cat?.color ?? null,
+          total,
+        };
+      })
       .sort((a, b) => b.total - a.total)
       .slice(0, 7);
     const max = rows[0]?.total ?? 0;
@@ -683,12 +689,33 @@ export default function DashboardScreen() {
     });
   }, []);
 
+  const transferAppendNumpad = useCallback((char: string) => {
+    setTransferSourceAmount((prev) => {
+      if (char === 'C') return '';
+      if (char === '<') return prev.slice(0, -1);
+      if (char === '.') {
+        if (prev.includes('.')) return prev;
+        return prev ? `${prev}.` : '0.';
+      }
+      return `${prev}${char}`;
+    });
+  }, []);
+
   const openDatePicker = useCallback(() => {
     const parts = entryDate.split('-');
     setDpYear(Number(parts[0]) || new Date().getFullYear());
     setDpMonth((Number(parts[1]) || new Date().getMonth() + 1) - 1);
+    setDatePickerTarget('entry');
     setShowDatePicker(true);
   }, [entryDate]);
+
+  const openTransferDatePicker = useCallback(() => {
+    const parts = transferDate.split('-');
+    setDpYear(Number(parts[0]) || new Date().getFullYear());
+    setDpMonth((Number(parts[1]) || new Date().getMonth() + 1) - 1);
+    setDatePickerTarget('transfer');
+    setShowDatePicker(true);
+  }, [transferDate]);
 
   const openCatPicker = useCallback(() => {
     isCatPickerOpenRef.current = true;
@@ -704,7 +731,7 @@ export default function DashboardScreen() {
     });
   }, [catPickerAnim]);
 
-  const openAcctPickerSheet = useCallback((target: 'entry' | 'invite') => {
+  const openAcctPickerSheet = useCallback((target: 'entry' | 'invite' | 'transfer-from' | 'transfer-to') => {
     setAcctPickerSheetTarget(target);
     setShowAcctPickerSheet(true);
     Animated.spring(acctPickerAnim, { toValue: 1, useNativeDriver: true, speed: 22, bounciness: 3 }).start();
@@ -1801,7 +1828,7 @@ export default function DashboardScreen() {
                             <Text style={styles.spendAmount}>{formatCurrency(row.total)}</Text>
                           </View>
                           <View style={styles.spendBarTrack}>
-                            <View style={[styles.spendBarFill, { width: `${row.widthPercent}%` }, isActive && styles.spendBarFillActive]} />
+                            <View style={[styles.spendBarFill, { width: `${row.widthPercent}%` }, row.color ? { backgroundColor: row.color } : undefined, isActive && styles.spendBarFillActive]} />
                           </View>
                         </TouchableOpacity>
                       );
@@ -2069,7 +2096,7 @@ export default function DashboardScreen() {
                         <Text style={styles.spendAmount}>{formatCurrency(row.total)}</Text>
                       </View>
                       <View style={styles.spendBarTrack}>
-                        <View style={[styles.spendBarFill, { width: `${row.widthPercent}%` as any }]} />
+                        <View style={[styles.spendBarFill, { width: `${row.widthPercent}%` as any }, row.color ? { backgroundColor: row.color } : undefined]} />
                       </View>
                     </View>
                   ))
@@ -2615,23 +2642,24 @@ export default function DashboardScreen() {
       <TransferModal
         visible={showTransferModal}
         onClose={() => setShowTransferModal(false)}
+        desktopView={desktopView}
         accounts={accounts}
         transferFromId={transferFromId}
-        setTransferFromId={setTransferFromId}
         transferToId={transferToId}
-        setTransferToId={setTransferToId}
         transferSourceAmount={transferSourceAmount}
-        setTransferSourceAmount={setTransferSourceAmount}
         transferRate={transferRate}
         setTransferRate={setTransferRate}
         transferTargetAmount={transferTargetAmount}
         setTransferTargetAmount={setTransferTargetAmount}
         transferDate={transferDate}
-        setTransferDate={setTransferDate}
         transferNote={transferNote}
         setTransferNote={setTransferNote}
         onSave={() => void saveTransfer()}
         saving={saving}
+        appendNumpad={transferAppendNumpad}
+        openDatePicker={openTransferDatePicker}
+        openAcctPickerSheet={openAcctPickerSheet}
+        formatCurrency={formatCurrency}
       />
 
       <InvitationsModal
@@ -2683,8 +2711,8 @@ export default function DashboardScreen() {
       <DatePickerModal
         visible={showDatePicker}
         onClose={() => setShowDatePicker(false)}
-        entryDate={entryDate}
-        setEntryDate={setEntryDate}
+        entryDate={datePickerTarget === 'transfer' ? transferDate : entryDate}
+        setEntryDate={datePickerTarget === 'transfer' ? setTransferDate : setEntryDate}
         dpYear={dpYear}
         setDpYear={setDpYear}
         dpMonth={dpMonth}
@@ -2702,6 +2730,10 @@ export default function DashboardScreen() {
         invitationAccountId={invitationAccountId}
         setInvitationAccountId={setInvitationAccountId}
         loadManagedInvites={loadManagedInvites}
+        transferFromId={transferFromId}
+        setTransferFromId={setTransferFromId}
+        transferToId={transferToId}
+        setTransferToId={setTransferToId}
       />
 
       <IconPickerSheet

@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ActivityIndicator,
   Alert,
+  Image,
   Modal,
   NativeScrollEvent,
   NativeSyntheticEvent,
@@ -153,6 +154,7 @@ export default function DashboardScreen() {
   const [menuAccountsExpanded, setMenuAccountsExpanded] = useState(false);
   const [menuCategoriesExpanded, setMenuCategoriesExpanded] = useState(false);
   const [missingSchemaColumns, setMissingSchemaColumns] = useState<string[]>([]);
+  const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<string | null>(null);
 
   const [entryType, setEntryType] = useState<TransactionType>('expense');
   const [entryAccountId, setEntryAccountId] = useState<string | null>(null);
@@ -418,6 +420,18 @@ export default function DashboardScreen() {
       widthPercent: max > 0 ? Math.max(8, Math.round((r.total / max) * 100)) : 0,
     }));
   }, [filteredSelectedTxs, selectedCategories]);
+
+  const categoryFilteredTxs = useMemo(() => {
+    if (!selectedCategoryFilter) return null;
+    return filteredSelectedTxs.filter((tx) =>
+      selectedCategoryFilter === 'uncategorized' ? !tx.category_id : tx.category_id === selectedCategoryFilter,
+    );
+  }, [filteredSelectedTxs, selectedCategoryFilter]);
+
+  const categoryFilteredTxsVisible = useMemo(
+    () => categoryFilteredTxs?.slice(0, visibleTransactionsCount) ?? null,
+    [categoryFilteredTxs, visibleTransactionsCount],
+  );
 
   const checkRequiredSchemaColumns = useCallback(async () => {
     const missing: string[] = [];
@@ -701,7 +715,7 @@ export default function DashboardScreen() {
 
   useEffect(() => {
     setVisibleTransactionsCount(12);
-  }, [selectedAccountId, interval, customStart, customEnd, transactions.length]);
+  }, [selectedAccountId, interval, customStart, customEnd, transactions.length, selectedCategoryFilter]);
 
   const handleDashboardScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
     if (!hasMoreTransactions) return;
@@ -1500,9 +1514,16 @@ export default function DashboardScreen() {
             >
               <Text style={styles.menuButtonText}>Menu</Text>
             </TouchableOpacity>
-            <View style={styles.headerTextWrap}>
-              <Text style={styles.greeting}>Hi {user?.email?.split('@')[0] ?? 'there'}</Text>
-              <Text style={styles.subtitle}>Money overview</Text>
+            <View style={styles.headerCenter}>
+              <Image
+                source={require('../../assets/logo.png')}
+                style={styles.headerLogo}
+                resizeMode="contain"
+              />
+              <View>
+                <Text style={styles.greeting}>Hi {user?.email?.split('@')[0] ?? 'there'}</Text>
+                <Text style={styles.subtitle}>Money overview</Text>
+              </View>
             </View>
             {isDesktopBrowser && (
               <View style={styles.viewToggleRow}>
@@ -1540,84 +1561,105 @@ export default function DashboardScreen() {
               </View>
             )}
 
-            <TouchableOpacity
-              style={styles.cardStrong}
-              activeOpacity={0.9}
-              onPress={() => setShowAccountOverviewPicker((prev) => !prev)}
-            >
-              <Text style={styles.cardStrongLabel}>
-                {showAccountOverviewPicker ? 'Included Accounts Total' : 'Selected Account Balance'}
-              </Text>
-              <Text style={[styles.cardStrongValue, overviewSummary.net < 0 && styles.negative]}>
-                {formatCurrency(overviewSummary.net)}
-              </Text>
-              <Text style={styles.summaryText}>
-                Account: {showAccountOverviewPicker ? 'All Included Accounts' : (selectedAccount?.name ?? 'No account selected')}
-              </Text>
-              <Text style={styles.summaryText}>Interval: {interval.toUpperCase()}</Text>
-              <Text style={styles.summaryText}>Opening: {formatCurrency(overviewSummary.openingBalance)}</Text>
-              <View style={styles.summaryRow}>
-                <Text style={styles.summaryText}>Income {formatCurrency(overviewSummary.income)}</Text>
-                <Text style={styles.summaryText}>Expenses {formatCurrency(overviewSummary.expense)}</Text>
-              </View>
-              <Text style={styles.summaryText}>Total Included Balance: {formatCurrency(totalIncludedBalance)}</Text>
-              {includedAccountSummaries.length > 1 && (
-                <Text style={styles.summaryText}>
-                  Tap to {showAccountOverviewPicker ? 'hide accounts' : 'change account'}
-                </Text>
-              )}
-            </TouchableOpacity>
-
-            {includedAccountSummaries.length > 1 && showAccountOverviewPicker && (
-              <>
-                <View style={styles.sectionHeader}>
-                  <Text style={styles.sectionTitle}>Included Accounts Overview</Text>
-                </View>
-                <View style={styles.accountOverviewGrid}>
-                  {includedAccountSummaries.map((item) => (
-                    <TouchableOpacity
-                      key={item.account.id}
-                      style={[
-                        styles.accountOverviewCard,
-                        selectedAccountId === item.account.id && styles.accountOverviewCardActive,
-                      ]}
-                      onPress={() => {
-                        setSelectedAccountId(item.account.id);
-                        setShowAccountOverviewPicker(false);
-                      }}
-                    >
-                      <Text style={styles.accountOverviewName}>{item.account.name}</Text>
-                      <Text style={[styles.accountOverviewValue, item.balance < 0 && styles.negative]}>
-                        {formatCurrency(item.balance, item.account.currency)}
-                      </Text>
-                      <Text style={styles.accountOverviewMeta}>In {formatCurrency(item.income, item.account.currency)}</Text>
-                      <Text style={styles.accountOverviewMeta}>Out {formatCurrency(item.expense, item.account.currency)}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </>
-            )}
-
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Spending by Category</Text>
-            </View>
-            {categorySpendData.length === 0 ? (
-              <Text style={styles.emptyText}>No expense data in this interval.</Text>
-            ) : (
-              <View style={styles.listCard}>
-                {categorySpendData.map((row) => (
-                  <View key={row.id} style={styles.spendRow}>
-                    <View style={styles.spendLabelRow}>
-                      <Text style={styles.spendName}>{row.name}</Text>
-                      <Text style={styles.spendAmount}>{formatCurrency(row.total)}</Text>
-                    </View>
-                    <View style={styles.spendBarTrack}>
-                      <View style={[styles.spendBarFill, { width: `${row.widthPercent}%` }]} />
-                    </View>
+            <View style={desktopView ? styles.desktopTwoColRow : undefined}>
+              {/* Left (or solo on mobile): overview card + account picker */}
+              <View style={desktopView ? styles.desktopColLeft : undefined}>
+                <TouchableOpacity
+                  style={styles.cardStrong}
+                  activeOpacity={0.9}
+                  onPress={() => setShowAccountOverviewPicker((prev) => !prev)}
+                >
+                  <Text style={styles.cardStrongLabel}>
+                    {showAccountOverviewPicker ? 'Included Accounts Total' : 'Selected Account Balance'}
+                  </Text>
+                  <Text style={[styles.cardStrongValue, overviewSummary.net < 0 && styles.negative]}>
+                    {formatCurrency(overviewSummary.net)}
+                  </Text>
+                  <Text style={styles.summaryText}>
+                    Account: {showAccountOverviewPicker ? 'All Included Accounts' : (selectedAccount?.name ?? 'No account selected')}
+                  </Text>
+                  <Text style={styles.summaryText}>Interval: {interval.toUpperCase()}</Text>
+                  <Text style={styles.summaryText}>Opening: {formatCurrency(overviewSummary.openingBalance)}</Text>
+                  <View style={styles.summaryRow}>
+                    <Text style={styles.summaryText}>Income {formatCurrency(overviewSummary.income)}</Text>
+                    <Text style={styles.summaryText}>Expenses {formatCurrency(overviewSummary.expense)}</Text>
                   </View>
-                ))}
+                  <Text style={styles.summaryText}>Total Included Balance: {formatCurrency(totalIncludedBalance)}</Text>
+                  {includedAccountSummaries.length > 1 && (
+                    <Text style={styles.summaryText}>
+                      Tap to {showAccountOverviewPicker ? 'hide accounts' : 'change account'}
+                    </Text>
+                  )}
+                </TouchableOpacity>
+
+                {includedAccountSummaries.length > 1 && showAccountOverviewPicker && (
+                  <>
+                    <View style={styles.sectionHeader}>
+                      <Text style={styles.sectionTitle}>Included Accounts Overview</Text>
+                    </View>
+                    <View style={styles.accountOverviewGrid}>
+                      {includedAccountSummaries.map((item) => (
+                        <TouchableOpacity
+                          key={item.account.id}
+                          style={[
+                            styles.accountOverviewCard,
+                            selectedAccountId === item.account.id && styles.accountOverviewCardActive,
+                          ]}
+                          onPress={() => {
+                            setSelectedAccountId(item.account.id);
+                            setShowAccountOverviewPicker(false);
+                          }}
+                        >
+                          <Text style={styles.accountOverviewName}>{item.account.name}</Text>
+                          <Text style={[styles.accountOverviewValue, item.balance < 0 && styles.negative]}>
+                            {formatCurrency(item.balance, item.account.currency)}
+                          </Text>
+                          <Text style={styles.accountOverviewMeta}>In {formatCurrency(item.income, item.account.currency)}</Text>
+                          <Text style={styles.accountOverviewMeta}>Out {formatCurrency(item.expense, item.account.currency)}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </>
+                )}
               </View>
-            )}
+
+              {/* Right (or below on mobile): spending by category */}
+              <View style={desktopView ? styles.desktopColRight : undefined}>
+                <View style={styles.sectionHeader}>
+                  <Text style={styles.sectionTitle}>Spending by Category</Text>
+                  {selectedCategoryFilter && (
+                    <TouchableOpacity onPress={() => setSelectedCategoryFilter(null)}>
+                      <Text style={styles.linkAction}>✕ Clear</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+                {categorySpendData.length === 0 ? (
+                  <Text style={styles.emptyText}>No expense data in this interval.</Text>
+                ) : (
+                  <View style={styles.listCard}>
+                    {categorySpendData.map((row) => {
+                      const isActive = selectedCategoryFilter === row.id;
+                      return (
+                        <TouchableOpacity
+                          key={row.id}
+                          style={[styles.spendRow, isActive && styles.spendRowActive]}
+                          activeOpacity={0.7}
+                          onPress={() => setSelectedCategoryFilter(isActive ? null : row.id)}
+                        >
+                          <View style={styles.spendLabelRow}>
+                            <Text style={[styles.spendName, isActive && styles.spendNameActive]}>{row.name}</Text>
+                            <Text style={styles.spendAmount}>{formatCurrency(row.total)}</Text>
+                          </View>
+                          <View style={styles.spendBarTrack}>
+                            <View style={[styles.spendBarFill, { width: `${row.widthPercent}%` }, isActive && styles.spendBarFillActive]} />
+                          </View>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                )}
+              </View>
+            </View>
 
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>Categories</Text>
@@ -1651,14 +1693,30 @@ export default function DashboardScreen() {
             </View>
 
             <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Recent Transactions</Text>
-              <TouchableOpacity onPress={() => openEntryModal('expense', null)}>
-                <Text style={styles.linkAction}>+ Add</Text>
-              </TouchableOpacity>
+              {selectedCategoryFilter ? (
+                <View style={styles.filterLabelRow}>
+                  <Text style={styles.sectionTitle}>
+                    {categorySpendData.find((r) => r.id === selectedCategoryFilter)?.name ?? 'Category'}
+                  </Text>
+                  <Text style={styles.filterLabelSub}> transactions</Text>
+                </View>
+              ) : (
+                <Text style={styles.sectionTitle}>Recent Transactions</Text>
+              )}
+              <View style={styles.sectionHeaderActions}>
+                {selectedCategoryFilter && (
+                  <TouchableOpacity onPress={() => setSelectedCategoryFilter(null)}>
+                    <Text style={styles.linkAction}>✕ All</Text>
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity onPress={() => openEntryModal('expense', null)}>
+                  <Text style={styles.linkAction}>+ Add</Text>
+                </TouchableOpacity>
+              </View>
             </View>
 
             <View style={styles.listCard}>
-              {visibleSelectedTxs.map((tx) => (
+              {(selectedCategoryFilter ? categoryFilteredTxsVisible ?? [] : visibleSelectedTxs).map((tx) => (
                 <TouchableOpacity key={tx.id} style={styles.transactionRow} onPress={() => openEditTransaction(tx)}>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.transactionTitle}>{tx.note || 'Untitled transaction'}</Text>
@@ -1669,10 +1727,10 @@ export default function DashboardScreen() {
                   </Text>
                 </TouchableOpacity>
               ))}
-              {visibleSelectedTxs.length === 0 && (
+              {(selectedCategoryFilter ? (categoryFilteredTxsVisible?.length ?? 0) : visibleSelectedTxs.length) === 0 && (
                 <Text style={styles.emptyText}>No transactions in this interval.</Text>
               )}
-              {hasMoreTransactions && (
+              {hasMoreTransactions && !selectedCategoryFilter && (
                 <Text style={styles.transactionMeta}>Scroll down to load more transactions</Text>
               )}
             </View>
@@ -2489,7 +2547,7 @@ export default function DashboardScreen() {
 const styles = StyleSheet.create({
   appShell: {
     flex: 1,
-    backgroundColor: '#000000',
+    backgroundColor: '#060A14',
     alignItems: 'center',
   },
   surfaceFrame: {
@@ -2522,8 +2580,9 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   headerRow: {
-    paddingTop: 58,
+    paddingTop: Platform.OS === 'web' ? 14 : 48,
     paddingHorizontal: 20,
+    paddingBottom: 8,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
@@ -2541,8 +2600,16 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
   },
-  headerTextWrap: {
+  headerCenter: {
     flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+  },
+  headerLogo: {
+    width: 52,
+    height: 52,
   },
   viewToggleRow: {
     flexDirection: 'row',
@@ -3269,5 +3336,44 @@ const styles = StyleSheet.create({
   modalDangerText: {
     color: '#FFE3E9',
     fontWeight: '800',
+  },
+  // Desktop two-column layout
+  desktopTwoColRow: {
+    flexDirection: 'row',
+    gap: 18,
+    alignItems: 'flex-start',
+  },
+  desktopColLeft: {
+    flex: 1,
+  },
+  desktopColRight: {
+    flex: 1,
+  },
+  // Spend row category active highlight
+  spendRowActive: {
+    backgroundColor: '#15293D',
+    borderRadius: 8,
+    marginHorizontal: -4,
+    paddingHorizontal: 4,
+  },
+  spendNameActive: {
+    color: '#53E3A6',
+  },
+  spendBarFillActive: {
+    backgroundColor: '#53E3A6',
+  },
+  // Filtered transactions header
+  filterLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+  },
+  filterLabelSub: {
+    color: '#7391B0',
+    fontSize: 13,
+  },
+  sectionHeaderActions: {
+    flexDirection: 'row',
+    gap: 12,
+    alignItems: 'center',
   },
 });

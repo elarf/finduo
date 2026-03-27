@@ -8,6 +8,8 @@ export function useFriends(user: User | null) {
   const [friends, setFriends] = useState<ResolvedFriend[]>([]);
   const [pendingRequests, setPendingRequests] = useState<ResolvedRequest[]>([]);
   const [loading, setLoading] = useState(false);
+  /** Map of friendUserId → list of account IDs they're members of (among accounts current user owns). */
+  const [friendAccountMap, setFriendAccountMap] = useState<Record<string, string[]>>({});
 
   /** Upsert the current user's public profile so others can find them by email. */
   const ensureProfile = useCallback(async () => {
@@ -88,6 +90,24 @@ export function useFriends(user: User | null) {
 
       setFriends(resolvedFriends);
       setPendingRequests(resolvedRequests);
+
+      // Load which accounts each friend is a member of (only accounts the current user owns)
+      const acceptedFriendIds = resolvedFriends.map((f) => f.userId);
+      if (acceptedFriendIds.length > 0) {
+        const { data: memberRows } = await supabase
+          .from('account_members')
+          .select('account_id, user_id')
+          .in('user_id', acceptedFriendIds);
+
+        const map: Record<string, string[]> = {};
+        for (const m of memberRows ?? []) {
+          if (!map[m.user_id]) map[m.user_id] = [];
+          map[m.user_id].push(m.account_id);
+        }
+        setFriendAccountMap(map);
+      } else {
+        setFriendAccountMap({});
+      }
     } catch (err) {
       Alert.alert('Friends error', err instanceof Error ? err.message : 'Failed to load friends.');
     } finally {
@@ -243,10 +263,59 @@ export function useFriends(user: User | null) {
     [loadFriends, user],
   );
 
+  /** Add a friend to one of your accounts (non-expiring share). */
+  const addFriendToAccount = useCallback(
+    async (friendUserId: string, accountId: string): Promise<boolean> => {
+      try {
+        const { error } = await supabase.from('account_members').insert({
+          account_id: accountId,
+          user_id: friendUserId,
+          role: 'member',
+        });
+        if (error) throw error;
+        // Update local map
+        setFriendAccountMap((prev) => ({
+          ...prev,
+          [friendUserId]: [...(prev[friendUserId] ?? []), accountId],
+        }));
+        return true;
+      } catch (err) {
+        Alert.alert('Share failed', err instanceof Error ? err.message : 'Unknown error');
+        return false;
+      }
+    },
+    [],
+  );
+
+  /** Revoke a friend's access to an account. */
+  const removeFriendFromAccount = useCallback(
+    async (friendUserId: string, accountId: string): Promise<boolean> => {
+      try {
+        const { error } = await supabase
+          .from('account_members')
+          .delete()
+          .eq('account_id', accountId)
+          .eq('user_id', friendUserId);
+        if (error) throw error;
+        // Update local map
+        setFriendAccountMap((prev) => ({
+          ...prev,
+          [friendUserId]: (prev[friendUserId] ?? []).filter((id) => id !== accountId),
+        }));
+        return true;
+      } catch (err) {
+        Alert.alert('Revoke failed', err instanceof Error ? err.message : 'Unknown error');
+        return false;
+      }
+    },
+    [],
+  );
+
   return {
     friends,
     pendingRequests,
     loading,
+    friendAccountMap,
     loadFriends,
     sendRequest,
     acceptRequest,
@@ -254,5 +323,7 @@ export function useFriends(user: User | null) {
     cancelRequest,
     removeFriend,
     blockUser,
+    addFriendToAccount,
+    removeFriendFromAccount,
   };
 }

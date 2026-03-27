@@ -18,6 +18,7 @@ Financial tracking app for couples. Track income, expenses, and transfers across
 - Reorder accounts (persisted to Supabase per user)
 - Set a primary account (persisted to Supabase per user)
 - Desktop/mobile view toggle on web
+- Account icons shown in quick navigation menu
 
 ### Transactions
 - Add income and expense transactions with amount, date, category, note, and tags
@@ -26,25 +27,36 @@ Financial tracking app for couples. Track income, expenses, and transfers across
 - Transactions sorted by user-chosen date (database `created_at` is hidden)
 - Recent amount suggestions based on history
 - Infinite scroll with progressive loading (12 at a time)
+- Amount text colored green (income) or red (expense)
 
 ### Transfers
 - Dedicated transfer flow between accounts with currency conversion support
 - Exchange rate or destination amount input for cross-currency transfers
-- Transfer transactions use a global "Transfer" category and are excluded from income/expense totals
+- Transfer transactions use a "Transfer" category and are excluded from income/expense totals
 - Transfers still affect net account balance
 - Transfer transactions display with a `↔` indicator
 
 ### Categories
 - Per-account categories with type (income/expense), color, and icon
+- Income and Expense categories shown in separate dropdown sections in quick navigation
 - Icon picker with 37 Lucide icons mapped from Material Symbol names
 - Auto-suggest icon based on category name keywords
 - Category-based spending chart (horizontal bar chart with tap-to-filter)
 - Tap a category chip to quickly add a transaction pre-filled with that category
 
 ### Tags
-- Per-account tags with optional color
+- Per-account tags with optional color and icon
 - Attach tags to transactions, categories, and accounts
 - Inline tag creation in the transaction entry modal
+
+### Friends System
+- Add other users as friends by email
+- Mutual friend requests (send, accept, reject)
+- Block users to prevent future requests
+- Share accounts with friends directly — no token needed, no expiration
+- Revoke friend access to accounts at any time
+- Friend list shows profile pictures and shared account count
+- Expand a friend to manage which accounts they have access to
 
 ### Sharing & Invitations
 - Share accounts with other users via invite tokens
@@ -66,18 +78,36 @@ Financial tracking app for couples. Track income, expenses, and transfers across
 - Balance carry-over respects interval boundaries
 - Opening balance computed from pre-interval transactions when carry-over is enabled
 
+### Balance Card
+- Income colored green, expenses colored red
+- Opening balance and total included balance colored by sign (green if positive, red if negative)
+- Net balance with negative indicator
+
 ### Mobile UX
-- Full-screen slide-up transaction modal on mobile
+- Full-screen slide-up transaction modal with reordered layout: date → amount → note → tags → numpad → category → save/cancel
+- Income/expense toggle with colored active states (green/red)
+- Persistent bottom bar with large Cancel and Save buttons
 - Swipe-to-select category picker: press "Choose Category" and drag to a category without lifting finger (PanResponder-based)
 - Category picker also works as a normal tappable grid
 - Cannot save a transaction without choosing a category (enforced in UI)
 - Scroll-to-top floating action button appears when scrolled past 320px
+- Logo shown on loading screen
 
 ### Desktop UX
 - Two-column layout at viewport width >= 1024px
 - Framed mobile preview mode (430px max-width with borders)
 - Card-style modals with backdrop dismiss
 - Collapsible sections for spending chart and categories
+
+### Quick Navigation Menu
+- Account management with icons (large when not editing, hidden in edit mode)
+- Income and Expense category sections with icons and colors
+- Edit/delete buttons hidden behind edit mode toggle per section (accounts, categories, tags)
+- Friends modal access
+- Full app reload (web: page reload, native: dashboard reload)
+- Invitations access
+- Interval selection
+- Sign out
 
 ### Header
 - Logo click refreshes dashboard data (profile button is not blocked)
@@ -98,21 +128,24 @@ Financial tracking app for couples. Track income, expenses, and transfers across
 
 | Table | Purpose |
 |-------|---------|
-| `accounts` | Financial accounts (name, currency, created_by, tag_ids) |
+| `accounts` | Financial accounts (name, currency, icon, created_by, tag_ids) |
 | `account_members` | User-account relationships for sharing (user_id, account_id, role) |
 | `account_settings` | Per-account config (included_in_balance, carry_over_balance, initial_balance, initial_balance_date) |
 | `account_invites` | Sharing tokens (token, name, invited_by, expires_at, used_at) |
-| `categories` | Transaction categories (name, type, color, icon, tag_ids); `account_id=NULL` for global |
-| `tags` | Tags per account (name, color) |
+| `categories` | Transaction categories (name, type, color, icon, tag_ids); per-account or global |
+| `tags` | Tags per account (name, color, icon) |
 | `transactions` | Financial transactions (account_id, category_id, amount, note, type, date, tag_ids) |
 | `transaction_tags` | Many-to-many join between transactions and tags |
 | `user_preferences` | Per-user prefs (account_order, primary_account_id) |
+| `user_profiles` | Public user discovery (display_name, email, avatar_url) for friend system |
+| `friends` | Directional friend relationships (user_id → friend_user_id, status: pending/accepted/rejected/blocked) |
 
 ### Key Design Decisions
-- Transfer categories are global (`account_id = NULL`, `name = 'Transfer'`) with separate entries for type `income` and `expense`
-- The app detects transfers by matching `category.name === 'Transfer'`
+- Transfer categories are detected by `category.name === 'Transfer'` — created per-account if no global one exists
 - Category icons are stored as Material Symbol names in the database; `Icon.tsx` maps them to Lucide components at render time
 - Row Level Security (RLS) is enabled; users can only access their own data and shared accounts
+- Friends use directional rows with mutual acceptance; blocked users cannot see the relationship
+- Account sharing via friends creates `account_members` rows — same as invite tokens but non-expiring and revocable
 
 ## Project Structure
 
@@ -132,19 +165,34 @@ finduo/
   src/
     components/
       Icon.tsx                     Unified Lucide icon component (Material Symbol name -> Lucide)
+      dashboard/
+        AccountModal.tsx           Create/edit account modal
+        AccountPickerSheet.tsx     Full-screen account picker (mobile)
+        CategoryModal.tsx          Create/edit category modal
+        DatePickerModal.tsx        Custom calendar date picker
+        EntryModal.tsx             Transaction entry modal (desktop card + mobile fullscreen)
+        FriendsModal.tsx           Friends management (list, requests, add, account sharing)
+        IconPickerSheet.tsx        Lucide icon grid picker
+        InvitationsModal.tsx       Token-based invite management
+        TagModal.tsx               Create/edit tag modal
+        TransferModal.tsx          Cross-account transfer modal
     context/
       AuthContext.tsx               Auth state, Google OAuth (web + native), deep link handling
+    hooks/
+      useDashboardData.ts          Core data loading: accounts, categories, tags, transactions, settings
+      useFriends.ts                Friends system: requests, acceptance, blocking, account sharing
     lib/
       supabase.ts                  Supabase client init (PKCE, AsyncStorage on native)
-      loadMaterialSymbols.ts       No-op on native
-      loadMaterialSymbols.web.ts   Legacy web font loader (currently unused)
     navigation/
       index.tsx                    Root navigator: Login vs Dashboard based on session
     screens/
       LoginScreen.tsx              Google sign-in UI
-      DashboardScreen.tsx          Main screen (~4600 lines): all CRUD, modals, charts, gestures
+      DashboardScreen.tsx          Main screen: all CRUD, modals, charts, gestures
+      DashboardScreen.styles.ts    Shared StyleSheet for dashboard components
     types/
       auth.ts                      AuthContextValue interface
+      dashboard.ts                 App data types, helpers (AppAccount, AppCategory, etc.)
+      friends.ts                   Friend system types (ResolvedFriend, ResolvedRequest, etc.)
   supabase/
     migrations/                    SQL migration files
 ```
@@ -227,8 +275,7 @@ git status --short
 ## Areas for Improvement
 
 ### Architecture
-- [ ] Break `DashboardScreen.tsx` (~4600 lines) into smaller components/hooks
-- [ ] Extract business logic into custom hooks (useTransactions, useAccounts, useCategories, etc.)
+- [ ] Extract more business logic into custom hooks (useTransactions, useAccounts, useCategories)
 - [ ] Add a state management layer (Zustand, Jotai) to replace deeply nested useState
 - [ ] Create dedicated screens for account management, category management, settings
 
@@ -244,6 +291,7 @@ git status --short
 - [ ] Bulk transaction operations (multi-select, delete, re-categorize)
 - [ ] Receipt photo attachment on transactions
 - [ ] Account balance history / net worth tracking over time
+- [ ] Shared pools and lending between friends
 
 ### Technical
 - [ ] Add unit tests and integration tests

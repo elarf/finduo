@@ -78,6 +78,7 @@ export default function DashboardScreen() {
     friends,
     pendingRequests,
     loading: friendsLoading,
+    friendAccountMap,
     loadFriends,
     sendRequest: friendSendRequest,
     acceptRequest: friendAcceptRequest,
@@ -85,6 +86,8 @@ export default function DashboardScreen() {
     cancelRequest: friendCancelRequest,
     removeFriend,
     blockUser,
+    addFriendToAccount,
+    removeFriendFromAccount,
   } = useFriends(user);
 
   const [interval, setInterval] = useState<IntervalKey>('month');
@@ -2642,6 +2645,11 @@ export default function DashboardScreen() {
         cancelRequest={friendCancelRequest}
         removeFriend={removeFriend}
         blockUser={blockUser}
+        ownedAccounts={accounts.filter((a) => a.created_by === user?.id)}
+        friendAccountMap={friendAccountMap}
+        addFriendToAccount={addFriendToAccount}
+        removeFriendFromAccount={removeFriendFromAccount}
+        reloadDashboard={reloadDashboard}
       />
 
       {/* ─── Date Picker Modal ─── */}

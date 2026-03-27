@@ -2,15 +2,18 @@ import React, { useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Image,
   Modal,
   Pressable,
   ScrollView,
+  StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
 import { styles } from '../../screens/DashboardScreen.styles';
+import type { AppAccount } from '../../types/dashboard';
 import type { ResolvedFriend, ResolvedRequest } from '../../types/friends';
 
 type Tab = 'friends' | 'requests' | 'add';
@@ -28,6 +31,12 @@ type FriendsModalProps = {
   cancelRequest: (rowId: string) => Promise<void>;
   removeFriend: (rowId: string) => Promise<void>;
   blockUser: (rowId: string) => Promise<void>;
+  // Account sharing
+  ownedAccounts: AppAccount[];
+  friendAccountMap: Record<string, string[]>;
+  addFriendToAccount: (friendUserId: string, accountId: string) => Promise<boolean>;
+  removeFriendFromAccount: (friendUserId: string, accountId: string) => Promise<boolean>;
+  reloadDashboard: () => Promise<void>;
 };
 
 const FriendsModal: React.FC<FriendsModalProps> = ({
@@ -43,17 +52,23 @@ const FriendsModal: React.FC<FriendsModalProps> = ({
   cancelRequest,
   removeFriend,
   blockUser,
+  ownedAccounts,
+  friendAccountMap,
+  addFriendToAccount,
+  removeFriendFromAccount,
+  reloadDashboard,
 }) => {
   const [tab, setTab] = useState<Tab>('friends');
   const [addEmail, setAddEmail] = useState('');
   const [sending, setSending] = useState(false);
   const [friendsEditMode, setFriendsEditMode] = useState(false);
+  const [expandedFriendId, setExpandedFriendId] = useState<string | null>(null);
 
-  // Load data when modal opens
   const handleOpen = () => {
     setTab('friends');
     setAddEmail('');
     setFriendsEditMode(false);
+    setExpandedFriendId(null);
     onOpen();
   };
 
@@ -68,27 +83,42 @@ const FriendsModal: React.FC<FriendsModalProps> = ({
     }
   };
 
+  const handleToggleAccount = async (friendUserId: string, accountId: string, hasAccess: boolean) => {
+    if (hasAccess) {
+      Alert.alert('Revoke access', 'Remove this friend from the account?', [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Revoke',
+          style: 'destructive',
+          onPress: async () => {
+            await removeFriendFromAccount(friendUserId, accountId);
+            void reloadDashboard();
+          },
+        },
+      ]);
+    } else {
+      const ok = await addFriendToAccount(friendUserId, accountId);
+      if (ok) void reloadDashboard();
+    }
+  };
+
   const incoming = pendingRequests.filter((r) => r.direction === 'received');
   const outgoing = pendingRequests.filter((r) => r.direction === 'sent');
 
-  const displayName = (r: ResolvedFriend | ResolvedRequest) => {
-    const profile = 'profile' in r ? r.profile : null;
-    return profile?.display_name ?? profile?.email ?? 'Unknown user';
-  };
+  const getName = (r: ResolvedFriend | ResolvedRequest) =>
+    r.profile?.display_name ?? r.profile?.email ?? 'Unknown user';
 
-  const displaySub = (r: ResolvedFriend | ResolvedRequest) => {
-    const profile = 'profile' in r ? r.profile : null;
-    return profile?.email ?? null;
-  };
+  const getEmail = (r: ResolvedFriend | ResolvedRequest) =>
+    r.profile?.email ?? null;
+
+  const getAvatar = (r: ResolvedFriend | ResolvedRequest) =>
+    r.profile?.avatar_url ?? null;
+
+  const avatarFallback = (r: ResolvedFriend | ResolvedRequest) =>
+    (getName(r)[0] ?? '?').toUpperCase();
 
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="none"
-      onRequestClose={onClose}
-      onShow={handleOpen}
-    >
+    <Modal visible={visible} transparent animationType="none" onRequestClose={onClose} onShow={handleOpen}>
       <Pressable style={styles.modalBackdrop} onPress={onClose}>
         <Pressable style={styles.modalCard} onPress={(e) => e.stopPropagation()}>
           <Text style={styles.modalTitle}>Friends</Text>
@@ -133,43 +163,97 @@ const FriendsModal: React.FC<FriendsModalProps> = ({
                           <Text style={styles.manageIconText}>✎</Text>
                         </TouchableOpacity>
                       </View>
-                      <ScrollView style={{ maxHeight: 260 }} showsVerticalScrollIndicator={false}>
-                        {friends.map((f) => (
-                          <View key={f.rowId} style={styles.manageRow}>
-                            <View style={styles.managePrimary}>
-                              <Text style={styles.manageTitle}>{displayName(f)}</Text>
-                              {displaySub(f) ? (
-                                <Text style={styles.manageMeta}>{displaySub(f)}</Text>
-                              ) : null}
+                      <ScrollView style={{ maxHeight: 340 }} showsVerticalScrollIndicator={false}>
+                        {friends.map((f) => {
+                          const avatar = getAvatar(f);
+                          const isExpanded = expandedFriendId === f.userId;
+                          const sharedAccountIds = friendAccountMap[f.userId] ?? [];
+
+                          return (
+                            <View key={f.rowId}>
+                              <TouchableOpacity
+                                style={local.friendCard}
+                                activeOpacity={0.7}
+                                onPress={() => setExpandedFriendId(isExpanded ? null : f.userId)}
+                              >
+                                {/* Avatar */}
+                                {avatar ? (
+                                  <Image source={{ uri: avatar }} style={local.avatar} />
+                                ) : (
+                                  <View style={local.avatarFallback}>
+                                    <Text style={local.avatarFallbackText}>{avatarFallback(f)}</Text>
+                                  </View>
+                                )}
+                                {/* Name + email aligned right */}
+                                <View style={local.friendInfo}>
+                                  <Text style={local.friendName}>{getName(f)}</Text>
+                                  {getEmail(f) ? (
+                                    <Text style={local.friendEmail}>{getEmail(f)}</Text>
+                                  ) : null}
+                                  {sharedAccountIds.length > 0 && (
+                                    <Text style={local.sharedBadge}>
+                                      {sharedAccountIds.length} account{sharedAccountIds.length > 1 ? 's' : ''} shared
+                                    </Text>
+                                  )}
+                                </View>
+                                {/* Edit mode actions */}
+                                {friendsEditMode && (
+                                  <View style={{ flexDirection: 'row', gap: 4, marginLeft: 6 }}>
+                                    <TouchableOpacity
+                                      style={styles.manageIconButton}
+                                      onPress={() =>
+                                        Alert.alert('Remove friend', `Remove ${getName(f)} from friends?`, [
+                                          { text: 'Cancel', style: 'cancel' },
+                                          { text: 'Remove', style: 'destructive', onPress: () => void removeFriend(f.rowId) },
+                                        ])
+                                      }
+                                    >
+                                      <Text style={styles.manageIconText}>✕</Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity
+                                      style={styles.manageIconButtonDanger}
+                                      onPress={() =>
+                                        Alert.alert('Block user', `Block ${getName(f)}? They won't be able to find you.`, [
+                                          { text: 'Cancel', style: 'cancel' },
+                                          { text: 'Block', style: 'destructive', onPress: () => void blockUser(f.rowId) },
+                                        ])
+                                      }
+                                    >
+                                      <Text style={[styles.manageIconText, { fontSize: 10 }]}>BLK</Text>
+                                    </TouchableOpacity>
+                                  </View>
+                                )}
+                                {/* Expand chevron */}
+                                {!friendsEditMode && (
+                                  <Text style={{ color: '#8FA8C9', fontSize: 14, marginLeft: 6 }}>
+                                    {isExpanded ? '▾' : '▸'}
+                                  </Text>
+                                )}
+                              </TouchableOpacity>
+
+                              {/* Expanded: account sharing panel */}
+                              {isExpanded && !friendsEditMode && ownedAccounts.length > 0 && (
+                                <View style={local.accountPanel}>
+                                  <Text style={local.accountPanelTitle}>Share accounts with {getName(f)}</Text>
+                                  {ownedAccounts.map((acct) => {
+                                    const hasAccess = sharedAccountIds.includes(acct.id);
+                                    return (
+                                      <TouchableOpacity
+                                        key={acct.id}
+                                        style={[local.accountRow, hasAccess && local.accountRowActive]}
+                                        onPress={() => void handleToggleAccount(f.userId, acct.id, hasAccess)}
+                                      >
+                                        <Text style={local.accountCheck}>{hasAccess ? '☑' : '☐'}</Text>
+                                        <Text style={local.accountName}>{acct.name}</Text>
+                                        <Text style={local.accountCurrency}>{acct.currency}</Text>
+                                      </TouchableOpacity>
+                                    );
+                                  })}
+                                </View>
+                              )}
                             </View>
-                            {friendsEditMode && (
-                              <>
-                                <TouchableOpacity
-                                  style={styles.manageIconButton}
-                                  onPress={() =>
-                                    Alert.alert('Remove friend', `Remove ${displayName(f)} from friends?`, [
-                                      { text: 'Cancel', style: 'cancel' },
-                                      { text: 'Remove', style: 'destructive', onPress: () => void removeFriend(f.rowId) },
-                                    ])
-                                  }
-                                >
-                                  <Text style={styles.manageIconText}>✕</Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity
-                                  style={styles.manageIconButtonDanger}
-                                  onPress={() =>
-                                    Alert.alert('Block user', `Block ${displayName(f)}? They won't be able to find you.`, [
-                                      { text: 'Cancel', style: 'cancel' },
-                                      { text: 'Block', style: 'destructive', onPress: () => void blockUser(f.rowId) },
-                                    ])
-                                  }
-                                >
-                                  <Text style={[styles.manageIconText, { fontSize: 10 }]}>BLK</Text>
-                                </TouchableOpacity>
-                              </>
-                            )}
-                          </View>
-                        ))}
+                          );
+                        })}
                       </ScrollView>
                     </>
                   )}
@@ -186,52 +270,72 @@ const FriendsModal: React.FC<FriendsModalProps> = ({
                   {incoming.length > 0 && (
                     <>
                       <Text style={[styles.modalLabel, { color: '#4ade80' }]}>Incoming</Text>
-                      {incoming.map((r) => (
-                        <View key={r.rowId} style={styles.manageRow}>
-                          <View style={styles.managePrimary}>
-                            <Text style={styles.manageTitle}>{displayName(r)}</Text>
-                            {displaySub(r) ? <Text style={styles.manageMeta}>{displaySub(r)}</Text> : null}
+                      {incoming.map((r) => {
+                        const avatar = getAvatar(r);
+                        return (
+                          <View key={r.rowId} style={local.friendCard}>
+                            {avatar ? (
+                              <Image source={{ uri: avatar }} style={local.avatarSmall} />
+                            ) : (
+                              <View style={[local.avatarFallback, local.avatarSmall]}>
+                                <Text style={local.avatarFallbackText}>{avatarFallback(r)}</Text>
+                              </View>
+                            )}
+                            <View style={local.friendInfo}>
+                              <Text style={local.friendName}>{getName(r)}</Text>
+                              {getEmail(r) ? <Text style={local.friendEmail}>{getEmail(r)}</Text> : null}
+                            </View>
+                            <TouchableOpacity
+                              style={[styles.manageIconButton, { borderColor: '#4ade80' }]}
+                              onPress={() => void acceptRequest(r.rowId)}
+                            >
+                              <Text style={[styles.manageIconText, { color: '#4ade80' }]}>✓</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              style={styles.manageIconButtonDanger}
+                              onPress={() => void rejectRequest(r.rowId)}
+                            >
+                              <Text style={styles.manageIconText}>✕</Text>
+                            </TouchableOpacity>
                           </View>
-                          <TouchableOpacity
-                            style={[styles.manageIconButton, { borderColor: '#4ade80' }]}
-                            onPress={() => void acceptRequest(r.rowId)}
-                          >
-                            <Text style={[styles.manageIconText, { color: '#4ade80' }]}>✓</Text>
-                          </TouchableOpacity>
-                          <TouchableOpacity
-                            style={styles.manageIconButtonDanger}
-                            onPress={() => void rejectRequest(r.rowId)}
-                          >
-                            <Text style={styles.manageIconText}>✕</Text>
-                          </TouchableOpacity>
-                        </View>
-                      ))}
+                        );
+                      })}
                     </>
                   )}
 
                   {outgoing.length > 0 && (
                     <>
                       <Text style={[styles.modalLabel, { marginTop: 8 }]}>Sent</Text>
-                      {outgoing.map((r) => (
-                        <View key={r.rowId} style={styles.manageRow}>
-                          <View style={styles.managePrimary}>
-                            <Text style={styles.manageTitle}>{displayName(r)}</Text>
-                            {displaySub(r) ? <Text style={styles.manageMeta}>{displaySub(r)}</Text> : null}
-                            <Text style={[styles.manageMeta, { color: '#8FA8C9' }]}>Pending</Text>
+                      {outgoing.map((r) => {
+                        const avatar = getAvatar(r);
+                        return (
+                          <View key={r.rowId} style={local.friendCard}>
+                            {avatar ? (
+                              <Image source={{ uri: avatar }} style={local.avatarSmall} />
+                            ) : (
+                              <View style={[local.avatarFallback, local.avatarSmall]}>
+                                <Text style={local.avatarFallbackText}>{avatarFallback(r)}</Text>
+                              </View>
+                            )}
+                            <View style={local.friendInfo}>
+                              <Text style={local.friendName}>{getName(r)}</Text>
+                              {getEmail(r) ? <Text style={local.friendEmail}>{getEmail(r)}</Text> : null}
+                              <Text style={{ color: '#8FA8C9', fontSize: 11 }}>Pending</Text>
+                            </View>
+                            <TouchableOpacity
+                              style={styles.manageIconButtonDanger}
+                              onPress={() =>
+                                Alert.alert('Cancel request', `Cancel request to ${getName(r)}?`, [
+                                  { text: 'Keep', style: 'cancel' },
+                                  { text: 'Cancel request', style: 'destructive', onPress: () => void cancelRequest(r.rowId) },
+                                ])
+                              }
+                            >
+                              <Text style={styles.manageIconText}>✕</Text>
+                            </TouchableOpacity>
                           </View>
-                          <TouchableOpacity
-                            style={styles.manageIconButtonDanger}
-                            onPress={() =>
-                              Alert.alert('Cancel request', `Cancel request to ${displayName(r)}?`, [
-                                { text: 'Keep', style: 'cancel' },
-                                { text: 'Cancel request', style: 'destructive', onPress: () => void cancelRequest(r.rowId) },
-                              ])
-                            }
-                          >
-                            <Text style={styles.manageIconText}>✕</Text>
-                          </TouchableOpacity>
-                        </View>
-                      ))}
+                        );
+                      })}
                     </>
                   )}
                 </ScrollView>
@@ -280,5 +384,102 @@ const FriendsModal: React.FC<FriendsModalProps> = ({
     </Modal>
   );
 };
+
+const local = StyleSheet.create({
+  friendCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: '#142235',
+    borderColor: '#1E3552',
+    borderWidth: 1,
+    borderRadius: 4,
+    padding: 10,
+    marginBottom: 2,
+  },
+  avatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+  },
+  avatarSmall: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+  },
+  avatarFallback: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#1E3552',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarFallbackText: {
+    color: '#8FA8C9',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  friendInfo: {
+    flex: 1,
+    alignItems: 'flex-end',
+  },
+  friendName: {
+    color: '#EAF3FF',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  friendEmail: {
+    color: '#8FA8C9',
+    fontSize: 12,
+  },
+  sharedBadge: {
+    color: '#53E3A6',
+    fontSize: 11,
+    marginTop: 2,
+  },
+  accountPanel: {
+    backgroundColor: '#0D1B2A',
+    borderColor: '#1E3552',
+    borderWidth: 1,
+    borderTopWidth: 0,
+    borderBottomLeftRadius: 4,
+    borderBottomRightRadius: 4,
+    padding: 10,
+    marginBottom: 4,
+  },
+  accountPanelTitle: {
+    color: '#8FA8C9',
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+    marginBottom: 6,
+  },
+  accountRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 4,
+    borderRadius: 3,
+  },
+  accountRowActive: {
+    backgroundColor: '#142235',
+  },
+  accountCheck: {
+    color: '#53E3A6',
+    fontSize: 16,
+  },
+  accountName: {
+    color: '#EAF3FF',
+    fontSize: 13,
+    flex: 1,
+  },
+  accountCurrency: {
+    color: '#64748B',
+    fontSize: 11,
+  },
+});
 
 export default React.memo(FriendsModal);

@@ -153,6 +153,7 @@ export default function DashboardScreen() {
   const [visibleTransactionsCount, setVisibleTransactionsCount] = useState(12);
   const [menuAccountsExpanded, setMenuAccountsExpanded] = useState(false);
   const [menuCategoriesExpanded, setMenuCategoriesExpanded] = useState(false);
+  const [menuTagsExpanded, setMenuTagsExpanded] = useState(false);
   const [missingSchemaColumns, setMissingSchemaColumns] = useState<string[]>([]);
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<string | null>(null);
 
@@ -164,6 +165,7 @@ export default function DashboardScreen() {
   const [entryNote, setEntryNote] = useState('');
   const [entryTagIds, setEntryTagIds] = useState<string[]>([]);
   const [newTagName, setNewTagName] = useState('');
+  const [noteFieldFocused, setNoteFieldFocused] = useState(false);
 
   const [categoryName, setCategoryName] = useState('');
   const [categoryType, setCategoryType] = useState<TransactionType>('expense');
@@ -220,10 +222,7 @@ export default function DashboardScreen() {
   );
 
   const selectedCurrency = selectedAccount?.currency ?? 'USD';
-  const selectedTags = useMemo(
-    () => tags.filter((tag) => tag.account_id === selectedAccountId),
-    [selectedAccountId, tags],
-  );
+  const selectedTags = useMemo(() => tags, [tags]);
 
   const formatCurrency = useCallback((value: number, currencyOverride?: string) => {
     const code = currencyOverride ?? selectedCurrency;
@@ -246,10 +245,7 @@ export default function DashboardScreen() {
     [categories, entryAccountId, entryType],
   );
 
-  const entryTags = useMemo(
-    () => tags.filter((t) => t.account_id === entryAccountId),
-    [tags, entryAccountId],
-  );
+  const entryTags = useMemo(() => tags, [tags]);
 
   const selectedTxs = useMemo(
     () => transactions.filter((t) => t.account_id === selectedAccountId),
@@ -270,6 +266,26 @@ export default function DashboardScreen() {
     }
     return Array.from(unique);
   }, [entryAccountId, entryCategoryId, entryType, transactions]);
+
+  const noteSuggestions = useMemo(() => {
+    if (!entryCategoryId && !noteFieldFocused) return [];
+    const prefix = entryNote.trim().toLowerCase();
+    const seen = new Set<string>();
+    const results: string[] = [];
+    for (const tx of transactions) {
+      if (tx.account_id !== entryAccountId) continue;
+      if (tx.category_id !== entryCategoryId) continue;
+      if (tx.type !== entryType) continue;
+      const note = tx.note?.trim();
+      if (!note) continue;
+      if (seen.has(note)) continue;
+      if (prefix.length > 0 && !note.toLowerCase().startsWith(prefix)) continue;
+      seen.add(note);
+      results.push(note);
+      if (results.length >= 5) break;
+    }
+    return results;
+  }, [transactions, entryAccountId, entryCategoryId, entryType, entryNote, noteFieldFocused]);
 
   const intervalBounds = useMemo(() => {
     const now = new Date();
@@ -432,6 +448,21 @@ export default function DashboardScreen() {
     () => categoryFilteredTxs?.slice(0, visibleTransactionsCount) ?? null,
     [categoryFilteredTxs, visibleTransactionsCount],
   );
+
+  const sortedSelectedCategories = useMemo(() => {
+    const countById: Record<string, number> = {};
+    for (const tx of selectedTxs) {
+      if (tx.category_id) {
+        countById[tx.category_id] = (countById[tx.category_id] ?? 0) + 1;
+      }
+    }
+    const byUsage = (a: AppCategory, b: AppCategory) =>
+      (countById[b.id] ?? 0) - (countById[a.id] ?? 0);
+    return [
+      ...selectedCategories.filter((c) => c.type === 'expense').sort(byUsage),
+      ...selectedCategories.filter((c) => c.type === 'income').sort(byUsage),
+    ];
+  }, [selectedCategories, selectedTxs]);
 
   const checkRequiredSchemaColumns = useCallback(async () => {
     const missing: string[] = [];
@@ -1251,8 +1282,32 @@ export default function DashboardScreen() {
       const sourceNote = transferNote.trim() || `Transfer to ${toAccount.name}`;
       const targetNote = transferNote.trim() || `Transfer from ${fromAccount.name}`;
 
+      // Find-or-create global "Transfer" categories so transfers don't appear as uncategorized
+      const findOrCreateCat = async (type: 'expense' | 'income') => {
+        const existing = await supabase
+          .from('categories')
+          .select('id')
+          .is('account_id', null)
+          .eq('name', 'Transfer')
+          .eq('type', type)
+          .maybeSingle();
+        if (existing.data?.id) return existing.data.id as string;
+        const created = await supabase
+          .from('categories')
+          .insert({ account_id: null, name: 'Transfer', type })
+          .select('id')
+          .single();
+        return (created.data?.id ?? null) as string | null;
+      };
+
+      const [transferExpenseCatId, transferIncomeCatId] = await Promise.all([
+        findOrCreateCat('expense'),
+        findOrCreateCat('income'),
+      ]);
+
       const { error: sourceError } = await supabase.from('transactions').insert({
         account_id: transferFromId,
+        category_id: transferExpenseCatId,
         amount: sourceAmount,
         type: 'expense',
         note: sourceNote,
@@ -1263,6 +1318,7 @@ export default function DashboardScreen() {
 
       const { error: targetError } = await supabase.from('transactions').insert({
         account_id: transferToId,
+        category_id: transferIncomeCatId,
         amount: targetAmount,
         type: 'income',
         note: targetNote,
@@ -1505,14 +1561,15 @@ export default function DashboardScreen() {
         <View style={styles.container}>
           <View style={styles.headerRow}>
             <TouchableOpacity
-              style={styles.menuButton}
+              style={styles.greetingCard}
               onPress={() => {
                 setMenuAccountsExpanded(false);
                 setMenuCategoriesExpanded(false);
+                setMenuTagsExpanded(false);
                 setMenuOpen(true);
               }}
             >
-              <Text style={styles.menuButtonText}>Menu</Text>
+              <Text style={styles.greeting}>Hi {user?.email?.split('@')[0] ?? 'there'}</Text>
             </TouchableOpacity>
             <View style={styles.headerCenter}>
               <Image
@@ -1520,10 +1577,6 @@ export default function DashboardScreen() {
                 style={styles.headerLogo}
                 resizeMode="contain"
               />
-              <View>
-                <Text style={styles.greeting}>Hi {user?.email?.split('@')[0] ?? 'there'}</Text>
-                <Text style={styles.subtitle}>Money overview</Text>
-              </View>
             </View>
             {isDesktopBrowser && (
               <View style={styles.viewToggleRow}>
@@ -1625,39 +1678,41 @@ export default function DashboardScreen() {
 
               {/* Right (or below on mobile): spending by category */}
               <View style={desktopView ? styles.desktopColRight : undefined}>
-                <View style={styles.sectionHeader}>
-                  <Text style={styles.sectionTitle}>Spending by Category</Text>
-                  {selectedCategoryFilter && (
-                    <TouchableOpacity onPress={() => setSelectedCategoryFilter(null)}>
-                      <Text style={styles.linkAction}>✕ Clear</Text>
-                    </TouchableOpacity>
+                <View style={[styles.cardStrong, { marginBottom: 18 }]}>
+                  <View style={[styles.sectionHeader, { marginBottom: 12 }]}>
+                    <Text style={styles.cardStrongLabel}>SPENDING BY CATEGORY</Text>
+                    {selectedCategoryFilter && (
+                      <TouchableOpacity onPress={() => setSelectedCategoryFilter(null)}>
+                        <Text style={styles.linkAction}>✕ Clear</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                  {categorySpendData.length === 0 ? (
+                    <Text style={styles.emptyText}>No expense data in this interval.</Text>
+                  ) : (
+                    <>
+                      {categorySpendData.map((row) => {
+                        const isActive = selectedCategoryFilter === row.id;
+                        return (
+                          <TouchableOpacity
+                            key={row.id}
+                            style={[styles.spendRow, isActive && styles.spendRowActive]}
+                            activeOpacity={0.7}
+                            onPress={() => setSelectedCategoryFilter(isActive ? null : row.id)}
+                          >
+                            <View style={styles.spendLabelRow}>
+                              <Text style={[styles.spendName, isActive && styles.spendNameActive]}>{row.name}</Text>
+                              <Text style={styles.spendAmount}>{formatCurrency(row.total)}</Text>
+                            </View>
+                            <View style={styles.spendBarTrack}>
+                              <View style={[styles.spendBarFill, { width: `${row.widthPercent}%` }, isActive && styles.spendBarFillActive]} />
+                            </View>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </>
                   )}
                 </View>
-                {categorySpendData.length === 0 ? (
-                  <Text style={styles.emptyText}>No expense data in this interval.</Text>
-                ) : (
-                  <View style={styles.listCard}>
-                    {categorySpendData.map((row) => {
-                      const isActive = selectedCategoryFilter === row.id;
-                      return (
-                        <TouchableOpacity
-                          key={row.id}
-                          style={[styles.spendRow, isActive && styles.spendRowActive]}
-                          activeOpacity={0.7}
-                          onPress={() => setSelectedCategoryFilter(isActive ? null : row.id)}
-                        >
-                          <View style={styles.spendLabelRow}>
-                            <Text style={[styles.spendName, isActive && styles.spendNameActive]}>{row.name}</Text>
-                            <Text style={styles.spendAmount}>{formatCurrency(row.total)}</Text>
-                          </View>
-                          <View style={styles.spendBarTrack}>
-                            <View style={[styles.spendBarFill, { width: `${row.widthPercent}%` }, isActive && styles.spendBarFillActive]} />
-                          </View>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
-                )}
               </View>
             </View>
 
@@ -1674,7 +1729,7 @@ export default function DashboardScreen() {
             </View>
 
             <View style={styles.chipsWrap}>
-              {selectedCategories.map((c) => (
+              {sortedSelectedCategories.map((c) => (
                 <TouchableOpacity
                   key={c.id}
                   style={styles.categoryChip}
@@ -1923,7 +1978,9 @@ export default function DashboardScreen() {
               ))}
 
               <View style={styles.menuSectionHeader}>
-                <Text style={styles.menuSectionTitle}>Tags</Text>
+                <TouchableOpacity onPress={() => setMenuTagsExpanded((prev) => !prev)}>
+                  <Text style={styles.menuSectionTitle}>Tags {menuTagsExpanded ? '▾' : '▸'}</Text>
+                </TouchableOpacity>
                 <TouchableOpacity style={styles.menuIconAction} onPress={() => {
                   setMenuOpen(false);
                   openCreateTag();
@@ -1931,11 +1988,11 @@ export default function DashboardScreen() {
                   <Text style={styles.menuIconActionText}>＋</Text>
                 </TouchableOpacity>
               </View>
-              {selectedTags.map((tag) => (
+              {menuTagsExpanded && selectedTags.map((tag) => (
                 <View key={tag.id} style={styles.manageRow}>
                   <View style={styles.managePrimary}>
                     <Text style={styles.manageTitle}>#{tag.name}</Text>
-                    <Text style={styles.manageMeta}>{selectedAccount?.name ?? 'Account'}</Text>
+                    <Text style={styles.manageMeta}>{accounts.find((a) => a.id === tag.account_id)?.name ?? 'Global'}</Text>
                   </View>
                   <TouchableOpacity style={styles.manageIconButton} onPress={() => {
                     setMenuOpen(false);
@@ -2054,6 +2111,7 @@ export default function DashboardScreen() {
               style={styles.entryAmountInput}
               returnKeyType="next"
               onSubmitEditing={() => dateInputRef.current?.focus()}
+              showSoftInputOnFocus={Platform.OS !== 'android'}
             />
             <Text style={styles.entryCurrencyText}>{entryAccount?.currency ?? selectedCurrency}</Text>
 
@@ -2084,7 +2142,18 @@ export default function DashboardScreen() {
               style={styles.input}
               returnKeyType="done"
               onSubmitEditing={() => void saveEntry()}
+              onFocus={() => setNoteFieldFocused(true)}
+              onBlur={() => setTimeout(() => setNoteFieldFocused(false), 150)}
             />
+            {noteFieldFocused && noteSuggestions.length > 0 && (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[styles.modalChipsRow, { marginBottom: 6 }]}>
+                {noteSuggestions.map((s) => (
+                  <TouchableOpacity key={s} style={styles.modalChip} onPress={() => setEntryNote(s)}>
+                    <Text style={styles.modalChipText}>{s}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            )}
 
             <Text style={styles.modalLabel}>Tags</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.modalChipsRow}>
@@ -2600,12 +2669,18 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
   },
+  greetingCard: {
+    backgroundColor: '#0E1A2B',
+    borderColor: '#1F3A59',
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+  },
   headerCenter: {
     flex: 1,
-    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 10,
   },
   headerLogo: {
     width: 52,

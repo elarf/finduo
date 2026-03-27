@@ -28,8 +28,10 @@ const headTags = [
   '<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">',
   '<meta name="apple-mobile-web-app-title" content="Finduo">',
   '<link rel="apple-touch-icon" href="/icon.png">',
-  // Ensure background color is dark to avoid flash of white
-  '<style>html,body{background-color:#060a14;}</style>',
+  // Material Symbols Outlined variable font (all axes)
+  '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200">',
+  // Ensure correct variation settings and class definition
+  '<style>.material-symbols-outlined{font-family:"Material Symbols Outlined";font-weight:normal;font-style:normal;line-height:1;letter-spacing:normal;text-transform:none;display:inline-block;white-space:nowrap;word-wrap:normal;direction:ltr;-webkit-font-smoothing:antialiased;font-variation-settings:"FILL" 0,"wght" 400,"GRAD" 0,"opsz" 24;}html,body{background-color:#060a14;}</style>',
 ].join('\n  ');
 
 html = html.replace('</head>', `  ${headTags}\n</head>`);
@@ -49,4 +51,4 @@ const swScript = `
 html = html.replace('</body>', `${swScript}\n</body>`);
 
 fs.writeFileSync(distHtml, html);
-console.log('PWA: patched dist/index.html with manifest link, Apple meta tags, and service worker.');
+console.log('PWA: patched dist/index.html with manifest link, Apple meta tags, Material Symbols font, and service worker.');

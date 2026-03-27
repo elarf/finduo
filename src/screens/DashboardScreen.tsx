@@ -19,7 +19,7 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
-import { MaterialIcons } from '@expo/vector-icons';
+import Icon from '../components/Icon';
 
 type TransactionType = 'income' | 'expense';
 type IntervalKey = 'day' | 'week' | 'month' | 'year' | 'all' | 'custom';
@@ -1684,7 +1684,7 @@ export default function DashboardScreen() {
                 onPress={() => setViewModeOverride(desktopView ? 'mobile' : 'desktop')}
                 accessibilityLabel={desktopView ? 'Switch to mobile view' : 'Switch to desktop view'}
               >
-                <MaterialIcons
+                <Icon
                   name={desktopView ? 'smartphone' : 'laptop'}
                   size={18}
                   color="#8FA8C9"
@@ -1935,7 +1935,7 @@ export default function DashboardScreen() {
                 setShowCategoryIconPicker(false);
                 setShowCategoryModal(true);
               }}>
-                <MaterialIcons name={"add_circle_outline" as any} size={22} color="#6ED8A5" />
+                <Icon name={"add_circle" as any} size={22} color="#6ED8A5" />
               </TouchableOpacity>
             </View>
 
@@ -1959,7 +1959,7 @@ export default function DashboardScreen() {
                 >
                   <View style={styles.categoryChipInner}>
                     {c.icon ? (
-                      <MaterialIcons
+                      <Icon
                         name={c.icon as any}
                         size={14}
                         color={c.color ?? (c.type === 'income' ? '#6ED8A5' : '#FCA5A5')}
@@ -1992,7 +1992,7 @@ export default function DashboardScreen() {
                   </TouchableOpacity>
                 )}
                 <TouchableOpacity onPress={() => openEntryModal('expense', filterIsExpense ? selectedCategoryFilter : null)}>
-                  <MaterialIcons name={"add_circle_outline" as any} size={22} color="#6ED8A5" />
+                  <Icon name={"add_circle" as any} size={22} color="#6ED8A5" />
                 </TouchableOpacity>
               </View>
             </View>
@@ -2031,21 +2031,21 @@ export default function DashboardScreen() {
               onPress={() => !filterIsExpense && openEntryModal('income', null)}
               accessibilityLabel="Add income"
             >
-              <MaterialIcons name="add" size={28} color="#EAF2FF" />
+              <Icon name="add" size={28} color="#EAF2FF" />
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.bottomBarTransfer, filterIsExpense && styles.bottomBarDisabled]}
               onPress={() => !filterIsExpense && openTransfer()}
               accessibilityLabel="Transfer between accounts"
             >
-              <MaterialIcons name={"swap_horiz" as any} size={28} color="#EAF2FF" />
+              <Icon name={"swap_horiz" as any} size={28} color="#EAF2FF" />
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.bottomBarExpense}
               onPress={() => openEntryModal('expense', filterIsExpense ? selectedCategoryFilter : null)}
               accessibilityLabel="Add expense"
             >
-              <MaterialIcons name="remove" size={28} color="#EAF2FF" />
+              <Icon name="remove" size={28} color="#EAF2FF" />
             </TouchableOpacity>
           </View>
         </View>
@@ -2441,7 +2441,7 @@ export default function DashboardScreen() {
                     style={[styles.modalChip, entryCategoryId === cat.id && styles.modalChipActive, cat.color ? { borderColor: cat.color } : undefined]}
                     onPress={() => setEntryCategoryId(cat.id)}
                   >
-                    {cat.icon ? <MaterialIcons name={cat.icon as any} size={12} color={cat.color ?? '#EAF3FF'} style={{ marginRight: 3 }} /> : null}
+                    {cat.icon ? <Icon name={cat.icon as any} size={12} color={cat.color ?? '#EAF3FF'} style={{ marginRight: 3 }} /> : null}
                     <Text style={styles.modalChipText}>{cat.name}</Text>
                   </TouchableOpacity>
                 ))}
@@ -2456,16 +2456,16 @@ export default function DashboardScreen() {
                     const cat = entryCategories.find((c) => c.id === entryCategoryId);
                     return (
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                        {cat?.icon ? <MaterialIcons name={cat.icon as any} size={16} color={cat?.color ?? '#EAF3FF'} /> : null}
+                        {cat?.icon ? <Icon name={cat.icon as any} size={16} color={cat?.color ?? '#EAF3FF'} /> : null}
                         <Text style={styles.mobileCategoryPillText}>{cat?.name ?? 'Category'}</Text>
-                        <MaterialIcons name={(showMobileCategoryPicker ? 'expand_less' : 'expand_more') as any} size={18} color="#8FA8C9" />
+                        <Icon name={(showMobileCategoryPicker ? 'expand_less' : 'expand_more') as any} size={18} color="#8FA8C9" />
                       </View>
                     );
                   })() : (
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                      <MaterialIcons name={"label" as any} size={16} color="#64748B" />
+                      <Icon name={"label" as any} size={16} color="#64748B" />
                       <Text style={[styles.mobileCategoryPillText, { color: '#64748B' }]}>No category</Text>
-                      <MaterialIcons name={(showMobileCategoryPicker ? 'expand_less' : 'expand_more') as any} size={18} color="#64748B" />
+                      <Icon name={(showMobileCategoryPicker ? 'expand_less' : 'expand_more') as any} size={18} color="#64748B" />
                     </View>
                   )}
                 </TouchableOpacity>
@@ -2475,7 +2475,7 @@ export default function DashboardScreen() {
                       style={[styles.mobileCategoryPickerItem, !entryCategoryId && styles.mobileCategoryPickerItemActive]}
                       onPress={() => { setEntryCategoryId(null); setShowMobileCategoryPicker(false); }}
                     >
-                      <MaterialIcons name="block" size={20} color="#64748B" />
+                      <Icon name="block" size={20} color="#64748B" />
                       <Text style={styles.mobileCategoryPickerText}>None</Text>
                     </TouchableOpacity>
                     {entryCategories.map((cat) => (
@@ -2484,7 +2484,7 @@ export default function DashboardScreen() {
                         style={[styles.mobileCategoryPickerItem, entryCategoryId === cat.id && styles.mobileCategoryPickerItemActive, cat.color ? { borderColor: cat.color } : undefined]}
                         onPress={() => { setEntryCategoryId(cat.id); setShowMobileCategoryPicker(false); }}
                       >
-                        <MaterialIcons name={(cat.icon ?? 'label') as any} size={20} color={cat.color ?? (cat.type === 'income' ? '#6ED8A5' : '#FCA5A5')} />
+                        <Icon name={(cat.icon ?? 'label') as any} size={20} color={cat.color ?? (cat.type === 'income' ? '#6ED8A5' : '#FCA5A5')} />
                         <Text style={styles.mobileCategoryPickerText}>{cat.name}</Text>
                       </TouchableOpacity>
                     ))}
@@ -2539,11 +2539,11 @@ export default function DashboardScreen() {
                 onPress={() => setShowCategoryIconPicker((p) => !p)}
               >
                 {categoryIcon ? (
-                  <MaterialIcons name={categoryIcon as any} size={24} color={categoryColor ?? '#EAF3FF'} />
+                  <Icon name={categoryIcon as any} size={24} color={categoryColor ?? '#EAF3FF'} />
                 ) : (
-                  <MaterialIcons name={"label" as any} size={24} color="#64748B" />
+                  <Icon name={"label" as any} size={24} color="#64748B" />
                 )}
-                <MaterialIcons name={(showCategoryIconPicker ? 'expand_less' : 'expand_more') as any} size={16} color="#64748B" style={{ marginLeft: 4 }} />
+                <Icon name={(showCategoryIconPicker ? 'expand_less' : 'expand_more') as any} size={16} color="#64748B" style={{ marginLeft: 4 }} />
               </TouchableOpacity>
               {categoryIcon && (
                 <TouchableOpacity onPress={() => setCategoryIcon(null)}>
@@ -2564,7 +2564,7 @@ export default function DashboardScreen() {
                     style={[styles.iconGridItem, categoryIcon === ic && styles.iconGridItemActive]}
                     onPress={() => { setCategoryIcon(ic); setShowCategoryIconPicker(false); }}
                   >
-                    <MaterialIcons name={ic as any} size={22} color={categoryColor ?? (categoryIcon === ic ? '#53E3A6' : '#8FA8C9')} />
+                    <Icon name={ic as any} size={22} color={categoryColor ?? (categoryIcon === ic ? '#53E3A6' : '#8FA8C9')} />
                   </TouchableOpacity>
                 ))}
               </ScrollView>

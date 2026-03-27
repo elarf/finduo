@@ -258,7 +258,6 @@ export default function DashboardScreen() {
   const [tagColor, setTagColor] = useState<string | null>(null);
   const [accountTagIds, setAccountTagIds] = useState<string[]>([]);
   const [showCategoryIconPicker, setShowCategoryIconPicker] = useState(false);
-  const [showMobileCategoryPicker, setShowMobileCategoryPicker] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [entryHadInitialCategory, setEntryHadInitialCategory] = useState(false);
   const [scrollY, setScrollY] = useState(0);
@@ -1047,7 +1046,6 @@ export default function DashboardScreen() {
     setNewTagName('');
     setEntryAccountId(selectedAccountId);
     setShowEntryAccountPicker(false);
-    setShowMobileCategoryPicker(false);
     isCatPickerOpenRef.current = false;
     setIsCatPickerOpen(false);
     catPickerAnim.setValue(0);
@@ -1065,7 +1063,6 @@ export default function DashboardScreen() {
     setEntryTagIds(tx.tag_ids);
     setEntryAccountId(tx.account_id);
     setShowEntryAccountPicker(false);
-    setShowMobileCategoryPicker(false);
     isCatPickerOpenRef.current = false;
     setIsCatPickerOpen(false);
     catPickerAnim.setValue(0);

@@ -1,13 +1,14 @@
 /**
  * LoginScreen.
  *
- * Shown when the user is not authenticated.
- * Presents a minimal branded layout with a "Sign in with Google" button.
+ * Full-screen logo.png as background, dark overlay at the bottom,
+ * "Sign in with Google" button centred at the foot of the image.
  */
 import React, { useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  ImageBackground,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -31,62 +32,63 @@ export default function LoginScreen() {
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.logo}>finduo</Text>
-      <Text style={styles.tagline}>Finance tracking for two</Text>
-
-      <TouchableOpacity
-        style={styles.googleButton}
-        onPress={handleGoogleSignIn}
-        disabled={loading}
-        accessibilityLabel="Sign in with Google"
-      >
-        {loading ? (
-          <ActivityIndicator color="#fff" />
-        ) : (
-          <Text style={styles.googleButtonText}>Sign in with Google</Text>
-        )}
-      </TouchableOpacity>
-    </View>
+    <ImageBackground
+      source={require('../../assets/logo.png')}
+      style={styles.background}
+      resizeMode="cover"
+    >
+      {/* Dark gradient-style footer so button stays readable */}
+      <View style={styles.footer}>
+        <TouchableOpacity
+          style={styles.googleButton}
+          onPress={handleGoogleSignIn}
+          disabled={loading}
+          accessibilityLabel="Sign in with Google"
+        >
+          {loading ? (
+            <ActivityIndicator color="#060A14" />
+          ) : (
+            <Text style={styles.googleButtonText}>Sign in with Google</Text>
+          )}
+        </TouchableOpacity>
+      </View>
+    </ImageBackground>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  background: {
     flex: 1,
-    backgroundColor: '#F7F9FB',
+    backgroundColor: '#060A14',
+  },
+  footer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingBottom: 56,
+    paddingTop: 80,
+    paddingHorizontal: 32,
+    // dark fade so the button is always readable regardless of logo colours
+    backgroundColor: 'rgba(6, 10, 20, 0.72)',
     alignItems: 'center',
-    justifyContent: 'center',
-    padding: 32,
-  },
-  logo: {
-    fontSize: 48,
-    fontWeight: '700',
-    color: '#1A73E8',
-    letterSpacing: -1,
-    marginBottom: 8,
-  },
-  tagline: {
-    fontSize: 16,
-    color: '#6B7280',
-    marginBottom: 56,
   },
   googleButton: {
-    backgroundColor: '#1A73E8',
+    backgroundColor: '#53E3A6',
     borderRadius: 12,
-    paddingVertical: 14,
+    paddingVertical: 16,
     paddingHorizontal: 32,
     width: '100%',
     alignItems: 'center',
-    shadowColor: '#1A73E8',
+    shadowColor: '#53E3A6',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowOpacity: 0.35,
+    shadowRadius: 12,
+    elevation: 6,
   },
   googleButtonText: {
-    color: '#fff',
+    color: '#060A14',
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '700',
   },
 });

@@ -14,6 +14,7 @@ import React, {
   useEffect,
   useState,
 } from 'react';
+import { Platform } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 import * as AuthSession from 'expo-auth-session';
 import * as QueryParams from 'expo-auth-session/build/QueryParams';
@@ -113,11 +114,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [handleDeepLink]);
 
   /**
-   * Initiates Google OAuth via Supabase using expo-auth-session.
-    * The redirect URL is generated per runtime (Expo Go vs native scheme)
-    * so the callback can return to this app in development and production.
+   * Initiates Google OAuth via Supabase.
+   *
+   * Web: redirects the browser directly to Google using window.location.origin
+   * as the callback URL — no popup, no localhost redirect.
+   *
+   * Native: opens an in-app browser via expo-web-browser with the app's deep-link
+   * scheme as the redirect URI and processes the callback manually.
    */
   const signInWithGoogle = useCallback(async () => {
+    if (Platform.OS === 'web') {
+      // Use the current page origin so the OAuth callback returns to the same host.
+      const redirectTo =
+        typeof window !== 'undefined' ? window.location.origin : undefined;
+
+      await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: { redirectTo },
+      });
+      // The browser navigates away; nothing to do after this line.
+      return;
+    }
+
+    // Native flow — deep-link back into the app.
     const redirectTo = AuthSession.makeRedirectUri({
       scheme: 'finduo',
       path: 'auth/callback',

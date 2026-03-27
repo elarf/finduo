@@ -24,14 +24,12 @@ let html = fs.readFileSync(distHtml, 'utf8');
 // --- HEAD TAGS ---
 const headTags = [
   '<link rel="manifest" href="/manifest.json">',
+  '<meta name="theme-color" content="#53E3A6">',
   '<meta name="apple-mobile-web-app-capable" content="yes">',
   '<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">',
   '<meta name="apple-mobile-web-app-title" content="Finduo">',
   '<link rel="apple-touch-icon" href="/icon.png">',
-  // Material Symbols Outlined variable font (all axes)
-  '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200">',
-  // Ensure correct variation settings and class definition
-  '<style>.material-symbols-outlined{font-family:"Material Symbols Outlined" !important;font-weight:normal;font-style:normal;line-height:1;letter-spacing:normal;text-transform:none;display:inline-block;white-space:nowrap;word-wrap:normal;direction:ltr;-webkit-font-smoothing:antialiased;font-variation-settings:"FILL" 0,"wght" 400,"GRAD" 0,"opsz" 24;}html,body{background-color:#060a14;}</style>',
+  '<style>html,body{background-color:#060a14;}</style>',
 ].join('\n  ');
 
 html = html.replace('</head>', `  ${headTags}\n</head>`);
@@ -51,4 +49,4 @@ const swScript = `
 html = html.replace('</body>', `${swScript}\n</body>`);
 
 fs.writeFileSync(distHtml, html);
-console.log('PWA: patched dist/index.html with manifest link, Apple meta tags, Material Symbols font, and service worker.');
+console.log('PWA: patched dist/index.html with manifest link, Apple meta tags, theme-color, and service worker.');

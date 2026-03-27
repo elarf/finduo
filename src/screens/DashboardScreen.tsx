@@ -531,6 +531,20 @@ export default function DashboardScreen() {
     [accountSettings, accounts],
   );
 
+  // All included-account transactions filtered by current interval (for overview mode)
+  const filteredIncludedTxs = useMemo(
+    () =>
+      transactions
+        .filter((t) => includedAccountIds.includes(t.account_id) && inInterval(t.date))
+        .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0)),
+    [transactions, includedAccountIds, inInterval],
+  );
+
+  const accountsById = useMemo(
+    () => Object.fromEntries(accounts.map((a) => [a.id, a])),
+    [accounts],
+  );
+
   const includedAccountSummaries = useMemo(() => {
     return accounts
       .filter((account) => includedAccountIds.includes(account.id))
@@ -571,17 +585,19 @@ export default function DashboardScreen() {
   const overviewSummary = showAccountOverviewPicker ? totalIncludedSummary : selectedSummary;
 
   const categorySpendData = useMemo(() => {
+    const sourceTxs = showAccountOverviewPicker ? filteredIncludedTxs : filteredSelectedTxs;
     const map: Record<string, number> = {};
-    for (const tx of filteredSelectedTxs) {
+    for (const tx of sourceTxs) {
       if (tx.type !== 'expense') continue;
       if (tx.category_id && transferCategoryIds.includes(tx.category_id)) continue;
       const key = tx.category_id ?? 'uncategorized';
       map[key] = (map[key] ?? 0) + (Number(tx.amount) || 0);
     }
 
+    const lookupCats = showAccountOverviewPicker ? categories : selectedCategories;
     const rows = Object.entries(map)
       .map(([id, total]) => {
-        const name = selectedCategories.find((c) => c.id === id)?.name ??
+        const name = lookupCats.find((c) => c.id === id)?.name ??
           (id === 'uncategorized' ? 'Uncategorized' : 'Other');
         return { id, name, total };
       })
@@ -593,7 +609,7 @@ export default function DashboardScreen() {
       ...r,
       widthPercent: max > 0 ? Math.max(8, Math.round((r.total / max) * 100)) : 0,
     }));
-  }, [filteredSelectedTxs, selectedCategories]);
+  }, [showAccountOverviewPicker, filteredIncludedTxs, filteredSelectedTxs, categories, selectedCategories, transferCategoryIds]);
 
   const categoryFilteredTxs = useMemo(() => {
     if (!selectedCategoryFilter) return null;
@@ -650,12 +666,21 @@ export default function DashboardScreen() {
     setMissingSchemaColumns(missing);
   }, []);
 
-  /** Persist account order + primary selection to device storage. */
+  /** Persist account order + primary selection to database (+ local cache). */
   const saveAccountPrefs = useCallback((orderedAccounts: AppAccount[], primaryId: string | null) => {
     if (!user) return;
+    const order = orderedAccounts.map((a) => a.id);
+    // Save to Supabase
+    void supabase.from('user_preferences').upsert({
+      user_id: user.id,
+      account_order: order,
+      primary_account_id: primaryId,
+      updated_at: new Date().toISOString(),
+    });
+    // Local cache for fast initial load
     void AsyncStorage.setItem(
       `finduo_account_prefs_${user.id}`,
-      JSON.stringify({ order: orderedAccounts.map((a) => a.id), primaryId }),
+      JSON.stringify({ order, primaryId }),
     );
   }, [user]);
 
@@ -716,24 +741,44 @@ export default function DashboardScreen() {
         (acc, idx, arr) => arr.findIndex((a) => a.id === acc.id) === idx,
       ) as AppAccount[];
 
-      // Apply stored order + primary preference
+      // Apply stored order + primary preference (Supabase first, AsyncStorage fallback)
       let orderedAccounts = allAccounts;
       let storedPrimaryId: string | null = null;
       try {
-        const raw = await AsyncStorage.getItem(`finduo_account_prefs_${user.id}`);
-        if (raw) {
-          const prefs = JSON.parse(raw) as { order?: string[]; primaryId?: string };
-          if (prefs.order?.length) {
-            const validIds = prefs.order.filter((id) => allAccounts.some((a) => a.id === id));
-            const unordered = allAccounts.filter((a) => !validIds.includes(a.id));
-            orderedAccounts = [
-              ...validIds.map((id) => allAccounts.find((a) => a.id === id)!),
-              ...unordered,
-            ];
+        let order: string[] | undefined;
+        let primaryId: string | undefined;
+
+        // Try Supabase first
+        const { data: dbPrefs } = await supabase
+          .from('user_preferences')
+          .select('account_order, primary_account_id')
+          .eq('user_id', user.id)
+          .single();
+        if (dbPrefs) {
+          order = dbPrefs.account_order as string[] | undefined;
+          primaryId = dbPrefs.primary_account_id as string | undefined;
+        }
+
+        // Fall back to AsyncStorage if nothing in DB
+        if (!order?.length && !primaryId) {
+          const raw = await AsyncStorage.getItem(`finduo_account_prefs_${user.id}`);
+          if (raw) {
+            const local = JSON.parse(raw) as { order?: string[]; primaryId?: string };
+            order = local.order;
+            primaryId = local.primaryId;
           }
-          if (prefs.primaryId && allAccounts.some((a) => a.id === prefs.primaryId)) {
-            storedPrimaryId = prefs.primaryId;
-          }
+        }
+
+        if (order?.length) {
+          const validIds = order.filter((id) => allAccounts.some((a) => a.id === id));
+          const unordered = allAccounts.filter((a) => !validIds.includes(a.id));
+          orderedAccounts = [
+            ...validIds.map((id) => allAccounts.find((a) => a.id === id)!),
+            ...unordered,
+          ];
+        }
+        if (primaryId && allAccounts.some((a) => a.id === primaryId)) {
+          storedPrimaryId = primaryId;
         }
       } catch {
         // ignore storage errors — fall back to default ordering
@@ -1870,7 +1915,10 @@ export default function DashboardScreen() {
                 <View style={styles.cardStrong}>
                   <TouchableOpacity
                     activeOpacity={0.9}
-                    onPress={() => setShowAccountOverviewPicker((prev) => !prev)}
+                    onPress={() => {
+                      setShowAccountOverviewPicker((prev) => !prev);
+                      setSelectedCategoryFilter(null);
+                    }}
                   >
                     <View style={styles.cardCollapseHeader}>
                       <Text style={styles.cardStrongLabel}>
@@ -2069,6 +2117,8 @@ export default function DashboardScreen() {
               );
             })()}
 
+            {!showAccountOverviewPicker && (
+            <>
             <View style={styles.sectionHeader}>
               <View style={styles.sectionHeaderLeft}>
                 <Text style={styles.sectionTitle}>Categories</Text>
@@ -2126,6 +2176,8 @@ export default function DashboardScreen() {
               ))}
             </View>
             )}
+            </>
+            )}
 
             <View style={styles.sectionHeader}>
               {selectedCategoryFilter ? (
@@ -2136,7 +2188,9 @@ export default function DashboardScreen() {
                   <Text style={styles.filterLabelSub}> transactions</Text>
                 </View>
               ) : (
-                <Text style={styles.sectionTitle}>Recent Transactions</Text>
+                <Text style={styles.sectionTitle}>
+                  {showAccountOverviewPicker ? 'Included Transactions' : 'Recent Transactions'}
+                </Text>
               )}
               <View style={styles.sectionHeaderActions}>
                 {selectedCategoryFilter && (
@@ -2144,34 +2198,52 @@ export default function DashboardScreen() {
                     <Text style={styles.linkAction}>✕ All</Text>
                   </TouchableOpacity>
                 )}
-                <TouchableOpacity onPress={() => openEntryModal('expense', filterIsExpense ? selectedCategoryFilter : null)}>
-                  <Icon name={"add_circle" as any} size={22} color="#6ED8A5" />
-                </TouchableOpacity>
+                {!showAccountOverviewPicker && (
+                  <TouchableOpacity onPress={() => openEntryModal('expense', filterIsExpense ? selectedCategoryFilter : null)}>
+                    <Icon name={"add_circle" as any} size={22} color="#6ED8A5" />
+                  </TouchableOpacity>
+                )}
               </View>
             </View>
 
             <View style={styles.listCard}>
-              {(selectedCategoryFilter ? categoryFilteredTxsVisible ?? [] : visibleSelectedTxs).map((tx) => {
-                const isTransfer = tx.category_id != null && transferCategoryIds.includes(tx.category_id);
-                return (
-                  <TouchableOpacity key={tx.id} style={styles.transactionRow} onPress={() => openEditTransaction(tx)}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.transactionTitle}>{tx.note || 'Untitled transaction'}</Text>
-                      <Text style={styles.transactionMeta}>{tx.date}</Text>
-                    </View>
-                    <Text style={[
-                      styles.transactionAmount,
-                      isTransfer ? styles.transferAmount : (tx.type === 'income' ? styles.positive : styles.negative),
-                    ]}>
-                      {isTransfer ? '↔' : (tx.type === 'income' ? '+' : '-')}{formatCurrency(Number(tx.amount) || 0)}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-              {(selectedCategoryFilter ? (categoryFilteredTxsVisible?.length ?? 0) : visibleSelectedTxs.length) === 0 && (
-                <Text style={styles.emptyText}>No transactions in this interval.</Text>
+              {(() => {
+                const txSource = showAccountOverviewPicker
+                  ? filteredIncludedTxs.slice(0, visibleTransactionsCount)
+                  : (selectedCategoryFilter ? categoryFilteredTxsVisible ?? [] : visibleSelectedTxs);
+                return txSource.map((tx) => {
+                  const isTransfer = tx.category_id != null && transferCategoryIds.includes(tx.category_id);
+                  const acct = showAccountOverviewPicker ? accountsById[tx.account_id] : null;
+                  return (
+                    <TouchableOpacity key={tx.id} style={styles.transactionRow} onPress={() => openEditTransaction(tx)}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.transactionTitle}>{tx.note || 'Untitled transaction'}</Text>
+                        <Text style={styles.transactionMeta}>
+                          {tx.date}{acct ? ` · ${acct.name}` : ''}
+                        </Text>
+                      </View>
+                      <Text style={[
+                        styles.transactionAmount,
+                        isTransfer ? styles.transferAmount : (tx.type === 'income' ? styles.positive : styles.negative),
+                      ]}>
+                        {isTransfer ? '↔' : (tx.type === 'income' ? '+' : '-')}{formatCurrency(Number(tx.amount) || 0)}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                });
+              })()}
+              {(() => {
+                const txLen = showAccountOverviewPicker
+                  ? filteredIncludedTxs.slice(0, visibleTransactionsCount).length
+                  : (selectedCategoryFilter ? (categoryFilteredTxsVisible?.length ?? 0) : visibleSelectedTxs.length);
+                return txLen === 0 ? (
+                  <Text style={styles.emptyText}>No transactions in this interval.</Text>
+                ) : null;
+              })()}
+              {!showAccountOverviewPicker && hasMoreTransactions && !selectedCategoryFilter && (
+                <Text style={styles.transactionMeta}>Scroll down to load more transactions</Text>
               )}
-              {hasMoreTransactions && !selectedCategoryFilter && (
+              {showAccountOverviewPicker && visibleTransactionsCount < filteredIncludedTxs.length && (
                 <Text style={styles.transactionMeta}>Scroll down to load more transactions</Text>
               )}
             </View>
@@ -2194,6 +2266,7 @@ export default function DashboardScreen() {
             </TouchableOpacity>
           )}
 
+          {!showAccountOverviewPicker && (
           <View style={styles.bottomBar}>
             <TouchableOpacity
               style={[styles.bottomBarIncome, filterIsExpense && styles.bottomBarDisabled]}
@@ -2217,6 +2290,7 @@ export default function DashboardScreen() {
               <Icon name="remove" size={28} color="#EAF2FF" />
             </TouchableOpacity>
           </View>
+          )}
         </View>
       </View>
 
@@ -3505,6 +3579,7 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     paddingVertical: 8,
     paddingHorizontal: 10,
+    zIndex: 2,
   },
   greeting: {
     color: '#F2F6FF',
@@ -4273,6 +4348,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     borderWidth: 2,
     borderColor: '#1F3A59',
+    zIndex: 2,
   },
   avatarImg: {
     width: '100%',

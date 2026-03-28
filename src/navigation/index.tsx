@@ -12,10 +12,16 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useAuth } from '../context/AuthContext';
 import LoginScreen from '../screens/LoginScreen';
 import DashboardScreen from '../screens/DashboardScreen';
+import PoolScreen from '../screens/PoolScreen';
+import LendingScreen from '../screens/LendingScreen';
+import SettlementsScreen from '../screens/SettlementsScreen';
 
 export type RootStackParamList = {
   Login: undefined;
   Dashboard: undefined;
+  Pools: undefined;
+  Lending: undefined;
+  Settlements: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -35,7 +41,12 @@ export default function RootNavigator() {
     <NavigationContainer>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         {session ? (
-          <Stack.Screen name="Dashboard" component={DashboardScreen} />
+          <>
+            <Stack.Screen name="Dashboard" component={DashboardScreen} />
+            <Stack.Screen name="Pools" component={PoolScreen} />
+            <Stack.Screen name="Lending" component={LendingScreen} />
+            <Stack.Screen name="Settlements" component={SettlementsScreen} />
+          </>
         ) : (
           <Stack.Screen name="Login" component={LoginScreen} />
         )}

@@ -891,7 +891,8 @@ export const styles = StyleSheet.create({
     borderLeftColor: '#1A2E45',
   },
   desktopSidebarContent: {
-    padding: 12,
+    paddingHorizontal: 12,
+    paddingTop: 4,
     paddingBottom: 80,
   },
   // Spend row category active highlight

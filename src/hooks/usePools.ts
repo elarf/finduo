@@ -1,0 +1,112 @@
+import { useCallback, useState } from 'react';
+import { Alert } from 'react-native';
+import { supabase } from '../lib/supabase';
+import type { User } from '@supabase/supabase-js';
+import type { Pool, PoolType, PoolMember } from '../types/pools';
+
+export function usePools(user: User | null) {
+  const [pools, setPools] = useState<Pool[]>([]);
+  const [members, setMembers] = useState<Record<string, PoolMember[]>>({});
+  const [loading, setLoading] = useState(false);
+
+  const getUserPools = useCallback(async () => {
+    if (!user) return;
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('pools')
+        .select('*')
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      setPools((data ?? []) as Pool[]);
+    } catch (err) {
+      Alert.alert('Error', err instanceof Error ? err.message : 'Failed to load pools');
+    } finally {
+      setLoading(false);
+    }
+  }, [user]);
+
+  const createPool = useCallback(async (
+    name: string,
+    type: PoolType,
+    startDate?: string,
+    endDate?: string,
+  ) => {
+    if (!user) return null;
+    try {
+      const { data: pool, error: poolError } = await supabase
+        .from('pools')
+        .insert({
+          name,
+          type,
+          created_by: user.id,
+          start_date: startDate ?? null,
+          end_date: endDate ?? null,
+        })
+        .select('*')
+        .single();
+      if (poolError) throw poolError;
+
+      // Auto-add creator as member
+      const { error: memberError } = await supabase
+        .from('pool_members')
+        .insert({ pool_id: pool.id, user_id: user.id });
+      if (memberError) throw memberError;
+
+      await getUserPools();
+      return pool as Pool;
+    } catch (err) {
+      Alert.alert('Error', err instanceof Error ? err.message : 'Failed to create pool');
+      return null;
+    }
+  }, [getUserPools, user]);
+
+  const addPoolMember = useCallback(async (poolId: string, userId: string) => {
+    try {
+      const { error } = await supabase
+        .from('pool_members')
+        .insert({ pool_id: poolId, user_id: userId });
+      if (error) throw error;
+      await loadPoolMembers(poolId);
+    } catch (err) {
+      Alert.alert('Error', err instanceof Error ? err.message : 'Failed to add member');
+    }
+  }, []);
+
+  const loadPoolMembers = useCallback(async (poolId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('pool_members')
+        .select('*')
+        .eq('pool_id', poolId);
+      if (error) throw error;
+      setMembers((prev) => ({ ...prev, [poolId]: (data ?? []) as PoolMember[] }));
+    } catch (err) {
+      // non-fatal
+    }
+  }, []);
+
+  const closePool = useCallback(async (poolId: string) => {
+    try {
+      const { error } = await supabase
+        .from('pools')
+        .update({ status: 'closed' })
+        .eq('id', poolId);
+      if (error) throw error;
+      await getUserPools();
+    } catch (err) {
+      Alert.alert('Error', err instanceof Error ? err.message : 'Failed to close pool');
+    }
+  }, [getUserPools]);
+
+  return {
+    pools,
+    members,
+    loading,
+    getUserPools,
+    createPool,
+    addPoolMember,
+    loadPoolMembers,
+    closePool,
+  };
+}

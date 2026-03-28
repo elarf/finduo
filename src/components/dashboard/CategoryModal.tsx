@@ -21,8 +21,11 @@ type CategoryModalProps = {
   tags: AppTag[];
   onSave: () => void;
   onDelete: (categoryId: string) => void;
+  onToggleHidden: (categoryId: string) => void;
   openIconPickerSheet: (target: 'category') => void;
   saving: boolean;
+  isOwnedByUser: boolean;
+  isHidden: boolean;
 };
 
 function CategoryModal({
@@ -32,24 +35,33 @@ function CategoryModal({
   categoryColor, setCategoryColor,
   categoryIcon, setCategoryIcon,
   categoryTagIds, setCategoryTagIds,
-  tags, onSave, onDelete, openIconPickerSheet, saving,
+  tags, onSave, onDelete, onToggleHidden, openIconPickerSheet, saving,
+  isOwnedByUser, isHidden,
 }: CategoryModalProps) {
+  const readOnly = editingCategoryId !== null && !isOwnedByUser;
   return (
     <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
       <Pressable style={styles.modalBackdrop} onPress={onClose}>
         <Pressable style={styles.modalCard} onPress={(event) => event.stopPropagation()}>
-          <Text style={styles.modalTitle}>{editingCategoryId ? 'Edit category' : 'Create category'}</Text>
+          <Text style={styles.modalTitle}>
+            {readOnly ? 'Category' : editingCategoryId ? 'Edit category' : 'Create category'}
+          </Text>
+          {readOnly && (
+            <Text style={{ color: '#64748B', fontSize: 12, marginBottom: 8 }}>Shared by another user</Text>
+          )}
           <TextInput
             placeholder="Category name"
             placeholderTextColor="#64748B"
             value={categoryName}
             onChangeText={setCategoryName}
-            style={styles.input}
+            style={[styles.input, readOnly && { opacity: 0.5 }]}
+            editable={!readOnly}
           />
-          <View style={styles.entryTypeRow}>
+          <View style={[styles.entryTypeRow, readOnly && { opacity: 0.5, pointerEvents: 'none' as const }]}>
             <TouchableOpacity
               style={[styles.toggleButton, categoryType === 'income' && styles.toggleButtonActive]}
               onPress={() => setCategoryType('income')}
+              disabled={readOnly}
             >
               <Text style={styles.toggleButtonText}>Income</Text>
             </TouchableOpacity>
@@ -128,8 +140,9 @@ function CategoryModal({
           <View style={styles.modalActions}>
             {editingCategoryId && (
               <TouchableOpacity
-                style={styles.modalDanger}
+                style={[styles.modalDanger, !isOwnedByUser && { opacity: 0.5 }]}
                 onPress={() => {
+                  if (readOnly) return;
                   Alert.alert('Remove category', 'Delete this category?', [
                     { text: 'Cancel', style: 'cancel' },
                     {
@@ -141,16 +154,27 @@ function CategoryModal({
                     },
                   ]);
                 }}
+                disabled={readOnly}
               >
                 <Text style={styles.modalDangerText}>Remove</Text>
+              </TouchableOpacity>
+            )}
+            {editingCategoryId && (
+              <TouchableOpacity
+                style={styles.modalSecondary}
+                onPress={() => onToggleHidden(editingCategoryId)}
+              >
+                <Text style={styles.modalSecondaryText}>{isHidden ? 'Unhide' : 'Hide'}</Text>
               </TouchableOpacity>
             )}
             <TouchableOpacity style={styles.modalSecondary} onPress={onClose}>
               <Text style={styles.modalSecondaryText}>Cancel</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.modalPrimary} onPress={onSave} disabled={saving}>
-              <Text style={styles.modalPrimaryText}>{editingCategoryId ? 'Update' : 'Create'}</Text>
-            </TouchableOpacity>
+            {!readOnly && (
+              <TouchableOpacity style={styles.modalPrimary} onPress={onSave} disabled={saving}>
+                <Text style={styles.modalPrimaryText}>{editingCategoryId ? 'Update' : 'Create'}</Text>
+              </TouchableOpacity>
+            )}
           </View>
         </Pressable>
       </Pressable>

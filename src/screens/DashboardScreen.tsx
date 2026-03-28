@@ -19,6 +19,7 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
 import Icon, { LUCIDE_ICON_NAMES } from '../components/Icon';
@@ -52,6 +53,7 @@ import FriendsModal from '../components/dashboard/FriendsModal';
 
 export default function DashboardScreen() {
   const { user, signOut } = useAuth();
+  const navigation = useNavigation<any>();
   const { width, height } = useWindowDimensions();
 
   const data = useDashboardData(user);
@@ -61,6 +63,7 @@ export default function DashboardScreen() {
     tags,
     transactions,
     accountSettings,
+    hiddenCategoryIds, setHiddenCategoryIds,
     selectedAccountId, setSelectedAccountId,
     primaryAccountId,
     entryAccountId, setEntryAccountId,
@@ -169,6 +172,7 @@ export default function DashboardScreen() {
   const [iconPickerTarget, setIconPickerTarget] = useState<'category' | 'account' | 'tag' | null>(null);
   const [iconSearchQuery, setIconSearchQuery] = useState('');
   const [sidebarTxCount, setSidebarTxCount] = useState(12);
+  const [sidebarCategoryFilter, setSidebarCategoryFilter] = useState<string | null>(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [datePickerTarget, setDatePickerTarget] = useState<'entry' | 'transfer'>('entry');
   const [entryHadInitialCategory, setEntryHadInitialCategory] = useState(false);
@@ -256,6 +260,19 @@ export default function DashboardScreen() {
     }),
   ).current;
 
+  // Edge swipe to open menu (mobile only)
+  const menuSwipePanResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_evt, gestureState) =>
+        gestureState.dx > 10 && Math.abs(gestureState.dy) < 30,
+      onPanResponderRelease: (_evt, gestureState) => {
+        if (gestureState.dx > 50) {
+          setMenuOpen(true);
+        }
+      },
+    }),
+  ).current;
+
   const isDesktopBrowser = Platform.OS === 'web' && width >= 1024;
   const desktopView = isDesktopBrowser && viewModeOverride !== 'mobile';
   const framedMobileView = isDesktopBrowser && viewModeOverride === 'mobile';
@@ -293,8 +310,8 @@ export default function DashboardScreen() {
   }, [animMultiplier, reloading, selectedCurrency]);
 
   const selectedCategories = useMemo(
-    () => categories.filter((c) => c.account_id === selectedAccountId || c.account_id === null),
-    [categories, selectedAccountId],
+    () => categories.filter((c) => !hiddenCategoryIds.has(c.id)),
+    [categories, hiddenCategoryIds],
   );
 
   /** IDs of global "Transfer" categories — excluded from income/expense totals. */
@@ -305,9 +322,9 @@ export default function DashboardScreen() {
 
   const entryCategories = useMemo(
     () => categories
-      .filter((c) => c.account_id === entryAccountId || c.account_id === null)
+      .filter((c) => !hiddenCategoryIds.has(c.id))
       .filter((c) => c.type === entryType),
-    [categories, entryAccountId, entryType],
+    [categories, hiddenCategoryIds, entryType],
   );
 
   const entryTags = useMemo(() => tags, [tags]);
@@ -458,10 +475,39 @@ export default function DashboardScreen() {
     [transactions, includedAccountIds, inInterval],
   );
 
+  const sidebarFilteredTxs = useMemo(() => {
+    if (!sidebarCategoryFilter) return filteredIncludedTxs;
+    return filteredIncludedTxs.filter((tx) =>
+      sidebarCategoryFilter === 'uncategorized' ? !tx.category_id : tx.category_id === sidebarCategoryFilter,
+    );
+  }, [filteredIncludedTxs, sidebarCategoryFilter]);
+
   const accountsById = useMemo(
     () => Object.fromEntries(accounts.map((a) => [a.id, a])),
     [accounts],
   );
+
+  const tagsById = useMemo(
+    () => Object.fromEntries(tags.map((t) => [t.id, t])),
+    [tags],
+  );
+
+  const txDisplayLabel = useCallback((tx: AppTransaction, fallback: string): React.ReactNode => {
+    const txTags = (tx.tag_ids ?? []).map((id) => tagsById[id]).filter(Boolean);
+    const note = tx.note?.trim() || '';
+    if (txTags.length === 0 && !note) return fallback;
+    return (
+      <>
+        {txTags.map((tag) => (
+          <React.Fragment key={tag.id}>
+            {tag.icon ? <Icon name={tag.icon as any} size={12} color={tag.color ?? '#8FA8C9'} /> : null}
+            <Text style={{ color: tag.color ?? '#8FA8C9' }}>{tag.icon ? ' ' : ''}#{tag.name} </Text>
+          </React.Fragment>
+        ))}
+        {note ? <Text>{note}</Text> : null}
+      </>
+    );
+  }, [tagsById]);
 
   const includedAccountSummaries = useMemo(() => {
     return accounts
@@ -868,7 +914,6 @@ export default function DashboardScreen() {
       const deletions = [
         supabase.from('transactions').delete().eq('account_id', account.id),
         supabase.from('tags').delete().eq('account_id', account.id),
-        supabase.from('categories').delete().eq('account_id', account.id),
         supabase.from('account_invites').delete().eq('account_id', account.id),
         supabase.from('account_members').delete().eq('account_id', account.id),
         supabase.from('account_settings').delete().eq('account_id', account.id),
@@ -901,8 +946,8 @@ export default function DashboardScreen() {
   }, [accounts, loadData, selectedAccountId, user]);
 
   const saveCategory = useCallback(async () => {
-    if (!selectedAccountId) {
-      Alert.alert('No account selected', 'Select an account first.');
+    if (!user) {
+      Alert.alert('Not signed in', 'Sign in to create categories.');
       return;
     }
 
@@ -921,7 +966,7 @@ export default function DashboardScreen() {
         if (error) throw error;
       } else {
         const { error } = await supabase.from('categories').insert({
-          account_id: selectedAccountId,
+          user_id: user.id,
           name: categoryName.trim(),
           type: categoryType,
           color: categoryColor,
@@ -940,7 +985,7 @@ export default function DashboardScreen() {
     } finally {
       setSaving(false);
     }
-  }, [categoryColor, categoryIcon, categoryName, categoryTagIds, categoryType, editingCategoryId, loadData, selectedAccountId]);
+  }, [categoryColor, categoryIcon, categoryName, categoryTagIds, categoryType, editingCategoryId, loadData, user]);
 
   const deleteCategory = useCallback(async (categoryId: string) => {
     setSaving(true);
@@ -965,6 +1010,32 @@ export default function DashboardScreen() {
       setSaving(false);
     }
   }, [loadData]);
+
+  const toggleCategoryHidden = useCallback(async (categoryId: string) => {
+    if (!user) return;
+    const isHidden = hiddenCategoryIds.has(categoryId);
+    try {
+      if (isHidden) {
+        await supabase
+          .from('user_hidden_categories')
+          .delete()
+          .eq('user_id', user.id)
+          .eq('category_id', categoryId);
+        setHiddenCategoryIds((prev) => {
+          const next = new Set(prev);
+          next.delete(categoryId);
+          return next;
+        });
+      } else {
+        await supabase
+          .from('user_hidden_categories')
+          .insert({ user_id: user.id, category_id: categoryId });
+        setHiddenCategoryIds((prev) => new Set([...prev, categoryId]));
+      }
+    } catch (err) {
+      Alert.alert('Failed to update', err instanceof Error ? err.message : 'Unknown error');
+    }
+  }, [hiddenCategoryIds, setHiddenCategoryIds, user]);
 
   const createTag = useCallback(async () => {
     if (!newTagName.trim()) return;
@@ -1298,11 +1369,11 @@ export default function DashboardScreen() {
       const targetNote = customNote ? `${customNote} (← ${fromAccount.name})` : `Transfer ← ${fromAccount.name}`;
 
       // Find-or-create "Transfer" categories so transfers don't appear as uncategorized
-      // Creates per-account categories if no global (account_id=null) one exists.
-      const findOrCreateCat = async (type: 'expense' | 'income', accountId: string) => {
+      const findOrCreateCat = async (type: 'expense' | 'income') => {
         const existing = await supabase
           .from('categories')
           .select('id')
+          .eq('user_id', user.id)
           .eq('name', 'Transfer')
           .eq('type', type)
           .limit(1)
@@ -1310,15 +1381,15 @@ export default function DashboardScreen() {
         if (existing.data?.id) return existing.data.id as string;
         const created = await supabase
           .from('categories')
-          .insert({ account_id: accountId, name: 'Transfer', type })
+          .insert({ user_id: user.id, name: 'Transfer', type })
           .select('id')
           .single();
         return (created.data?.id ?? null) as string | null;
       };
 
       const [transferExpenseCatId, transferIncomeCatId] = await Promise.all([
-        findOrCreateCat('expense', transferFromId!),
-        findOrCreateCat('income', transferToId!),
+        findOrCreateCat('expense'),
+        findOrCreateCat('income'),
       ]);
 
       const { error: sourceError } = await supabase.from('transactions').insert({
@@ -1583,6 +1654,13 @@ export default function DashboardScreen() {
         ]}
       >
         <View style={styles.container}>
+          {/* Edge swipe zone to open menu on mobile */}
+          {!desktopView && (
+            <View
+              {...menuSwipePanResponder.panHandlers}
+              style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 20, zIndex: 50 }}
+            />
+          )}
           <View style={styles.headerRow}>
             <TouchableOpacity
               style={styles.avatarBtn}
@@ -1990,7 +2068,7 @@ export default function DashboardScreen() {
                     <TouchableOpacity key={tx.id} style={styles.transactionRow} onPress={() => openEditTransaction(tx)}>
                       <View style={{ flex: 1 }}>
                         <Text style={isTransfer ? [styles.transactionTitle, { color: '#a855f7' }] : styles.transactionTitle}>
-                          {tx.note || (isTransfer ? 'Transfer' : 'Untitled transaction')}
+                          {txDisplayLabel(tx, isTransfer ? 'Transfer' : 'Untitled transaction')}
                         </Text>
                         <Text style={styles.transactionMeta}>
                           {tx.date}{acct ? ` · ${acct.name}` : ''}
@@ -2037,22 +2115,25 @@ export default function DashboardScreen() {
 
           {/* ─── Desktop sidebar ─── */}
           {desktopView && includedAccountSummaries.length > 1 && (
-            <ScrollView
-              style={styles.desktopSidebar}
-              contentContainerStyle={styles.desktopSidebarContent}
-              showsVerticalScrollIndicator={false}
-            >
-              {/* Total card */}
-              <View style={[styles.cardStrong, { marginBottom: 12 }]}>
-                <Text style={styles.cardStrongLabel}>ALL ACCOUNTS</Text>
-                <Text style={[styles.cardStrongValue, totalIncludedSummary.net < 0 && styles.negative]}>
-                  {formatCurrency(totalIncludedSummary.net)}
-                </Text>
-                <View style={styles.summaryRow}>
-                  <Text style={[styles.summaryText, styles.positive]}>In {formatCurrency(totalIncludedSummary.income)}</Text>
-                  <Text style={[styles.summaryText, styles.negative]}>Out {formatCurrency(totalIncludedSummary.expense)}</Text>
+            <View style={styles.desktopSidebar}>
+              {/* Fixed total card */}
+              <View style={{ padding: 12, paddingBottom: 0 }}>
+                <View style={styles.cardStrong}>
+                  <Text style={styles.cardStrongLabel}>ALL ACCOUNTS</Text>
+                  <Text style={[styles.cardStrongValue, totalIncludedSummary.net < 0 && styles.negative]}>
+                    {formatCurrency(totalIncludedSummary.net)}
+                  </Text>
+                  <View style={styles.summaryRow}>
+                    <Text style={[styles.summaryText, styles.positive]}>In {formatCurrency(totalIncludedSummary.income)}</Text>
+                    <Text style={[styles.summaryText, styles.negative]}>Out {formatCurrency(totalIncludedSummary.expense)}</Text>
+                  </View>
                 </View>
               </View>
+              {/* Scrollable rest */}
+              <ScrollView
+                contentContainerStyle={styles.desktopSidebarContent}
+                showsVerticalScrollIndicator={false}
+              >
               <View style={styles.sectionHeader}>
                 <Text style={styles.sectionTitle}>Included Accounts</Text>
               </View>
@@ -2082,28 +2163,45 @@ export default function DashboardScreen() {
                 ))}
               </View>
               <View style={[styles.cardStrong, { marginTop: 12 }]}>
-                <Text style={[styles.cardStrongLabel, { marginBottom: 12 }]}>SPENDING (ALL ACCOUNTS)</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                  <Text style={styles.cardStrongLabel}>SPENDING (ALL ACCOUNTS)</Text>
+                  {sidebarCategoryFilter && (
+                    <TouchableOpacity onPress={() => setSidebarCategoryFilter(null)}>
+                      <Text style={styles.linkAction}>✕ Clear</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
                 {allIncludedCategorySpendData.length === 0 ? (
                   <Text style={styles.emptyText}>No expense data.</Text>
                 ) : (
-                  allIncludedCategorySpendData.map((row) => (
-                    <View key={row.id} style={styles.spendRow}>
-                      <View style={styles.spendLabelRow}>
-                        <Text style={styles.spendName}>{row.name}</Text>
-                        <Text style={styles.spendAmount}>{formatCurrency(row.total)}</Text>
-                      </View>
-                      <View style={styles.spendBarTrack}>
-                        <View style={[styles.spendBarFill, { width: `${row.widthPercent}%` as any }, row.color ? { backgroundColor: row.color } : undefined]} />
-                      </View>
-                    </View>
-                  ))
+                  allIncludedCategorySpendData.map((row) => {
+                    const isActive = sidebarCategoryFilter === row.id;
+                    return (
+                      <TouchableOpacity
+                        key={row.id}
+                        style={[styles.spendRow, isActive && styles.spendRowActive]}
+                        activeOpacity={0.7}
+                        onPress={() => setSidebarCategoryFilter(isActive ? null : row.id)}
+                      >
+                        <View style={styles.spendLabelRow}>
+                          <Text style={[styles.spendName, isActive && styles.spendNameActive]}>{row.name}</Text>
+                          <Text style={styles.spendAmount}>{formatCurrency(row.total)}</Text>
+                        </View>
+                        <View style={styles.spendBarTrack}>
+                          <View style={[styles.spendBarFill, { width: `${row.widthPercent}%` as any }, row.color ? { backgroundColor: row.color } : undefined, isActive && styles.spendBarFillActive]} />
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })
                 )}
               </View>
               <View style={[styles.sectionHeader, { marginTop: 12 }]}>
-                <Text style={styles.sectionTitle}>Included Transactions</Text>
+                <Text style={styles.sectionTitle}>
+                  {sidebarCategoryFilter ? `${allIncludedCategorySpendData.find((r) => r.id === sidebarCategoryFilter)?.name ?? 'Category'} Transactions` : 'Included Transactions'}
+                </Text>
               </View>
               <View style={styles.listCard}>
-                {filteredIncludedTxs.slice(0, sidebarTxCount).map((tx) => {
+                {sidebarFilteredTxs.slice(0, sidebarTxCount).map((tx) => {
                   const isSidebarTransfer = tx.category_id != null && transferCategoryIds.includes(tx.category_id);
                   return (
                   <TouchableOpacity
@@ -2111,20 +2209,21 @@ export default function DashboardScreen() {
                     style={styles.sidebarTxRow}
                     onPress={() => openEditTransaction(tx)}
                   >
-                    <Text style={isSidebarTransfer ? [styles.sidebarTxNote, { color: '#a855f7' }] : styles.sidebarTxNote} numberOfLines={1}>{tx.note || (isSidebarTransfer ? 'Transfer' : 'Untitled')}</Text>
+                    <Text style={isSidebarTransfer ? [styles.sidebarTxNote, { color: '#a855f7' }] : styles.sidebarTxNote} numberOfLines={1}>{txDisplayLabel(tx, isSidebarTransfer ? 'Transfer' : 'Untitled')}</Text>
                     <Text style={[styles.sidebarTxAmount, isSidebarTransfer ? styles.transferAmount : (tx.type === 'income' ? styles.positive : styles.negative)]}>
                       {isSidebarTransfer ? '↔' : (tx.type === 'income' ? '+' : '-')}{formatCurrency(Math.abs(Number(tx.amount)), accountsById[tx.account_id]?.currency)}
                     </Text>
                   </TouchableOpacity>
                   );
                 })}
-                {filteredIncludedTxs.length > sidebarTxCount && (
+                {sidebarFilteredTxs.length > sidebarTxCount && (
                   <TouchableOpacity onPress={() => setSidebarTxCount((c) => c + 12)} style={{ paddingVertical: 8 }}>
                     <Text style={styles.linkAction}>Load more</Text>
                   </TouchableOpacity>
                 )}
               </View>
-            </ScrollView>
+              </ScrollView>
+            </View>
           )}
           </View>{/* desktopBodyWrapper */}
 
@@ -2322,38 +2421,48 @@ export default function DashboardScreen() {
                   </TouchableOpacity>
                 </View>
               </View>
-              {menuIncomeCatExpanded && selectedCategories.filter((c) => c.type === 'income').map((category) => {
-                const catColor = category.color ?? '#4ade80';
+              {menuIncomeCatExpanded && (menuIncomeCatEditMode ? categories : selectedCategories).filter((c) => c.type === 'income').map((category) => {
+                const isHidden = hiddenCategoryIds.has(category.id);
+                const catColor = isHidden ? '#475569' : (category.color ?? '#4ade80');
+                const isMine = category.user_id === user?.id;
                 return (
                   <View key={category.id} style={styles.manageRow}>
                     <TouchableOpacity style={styles.managePrimary} onPress={() => { setMenuOpen(false); openEntryModal(category.type, category.id); }}>
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                         {category.icon ? <Icon name={category.icon as any} size={16} color={catColor} /> : null}
                         <Text style={[styles.manageTitle, { color: catColor }]}>{category.name}</Text>
+                        {!isMine && <Text style={{ color: '#64748B', fontSize: 10 }}>shared</Text>}
                       </View>
                     </TouchableOpacity>
                     {menuIncomeCatEditMode && (
                       <>
-                        <TouchableOpacity style={styles.manageIconButton} onPress={() => {
-                          setMenuOpen(false);
-                          setEditingCategoryId(category.id);
-                          setCategoryName(category.name);
-                          setCategoryType(category.type);
-                          setCategoryColor(category.color ?? null);
-                          setCategoryIcon(category.icon ?? null);
-                          setCategoryTagIds((category.tag_ids ?? []) as string[]);
-                          setShowCategoryModal(true);
-                        }}>
-                          <Text style={styles.manageIconText}>✎</Text>
+                        <TouchableOpacity style={styles.manageIconButton} onPress={() => void toggleCategoryHidden(category.id)}>
+                          <Icon name={hiddenCategoryIds.has(category.id) ? 'EyeOff' : 'Eye'} size={14} color="#94a3b8" />
                         </TouchableOpacity>
-                        <TouchableOpacity style={styles.manageIconButtonDanger} onPress={() => {
-                          Alert.alert('Remove category', `Remove ${category.name}?`, [
-                            { text: 'Cancel', style: 'cancel' },
-                            { text: 'Remove', style: 'destructive', onPress: () => { setMenuOpen(false); void deleteCategory(category.id); } },
-                          ]);
-                        }}>
-                          <Text style={styles.manageIconText}>✕</Text>
-                        </TouchableOpacity>
+                        {isMine && (
+                          <TouchableOpacity style={styles.manageIconButton} onPress={() => {
+                            setMenuOpen(false);
+                            setEditingCategoryId(category.id);
+                            setCategoryName(category.name);
+                            setCategoryType(category.type);
+                            setCategoryColor(category.color ?? null);
+                            setCategoryIcon(category.icon ?? null);
+                            setCategoryTagIds((category.tag_ids ?? []) as string[]);
+                            setShowCategoryModal(true);
+                          }}>
+                            <Text style={styles.manageIconText}>✎</Text>
+                          </TouchableOpacity>
+                        )}
+                        {isMine && (
+                          <TouchableOpacity style={styles.manageIconButtonDanger} onPress={() => {
+                            Alert.alert('Remove category', `Remove ${category.name}?`, [
+                              { text: 'Cancel', style: 'cancel' },
+                              { text: 'Remove', style: 'destructive', onPress: () => { setMenuOpen(false); void deleteCategory(category.id); } },
+                            ]);
+                          }}>
+                            <Text style={styles.manageIconText}>✕</Text>
+                          </TouchableOpacity>
+                        )}
                       </>
                     )}
                   </View>
@@ -2385,38 +2494,48 @@ export default function DashboardScreen() {
                   </TouchableOpacity>
                 </View>
               </View>
-              {menuExpenseCatExpanded && selectedCategories.filter((c) => c.type === 'expense').map((category) => {
-                const catColor = category.color ?? '#f87171';
+              {menuExpenseCatExpanded && (menuExpenseCatEditMode ? categories : selectedCategories).filter((c) => c.type === 'expense').map((category) => {
+                const isHidden = hiddenCategoryIds.has(category.id);
+                const catColor = isHidden ? '#475569' : (category.color ?? '#f87171');
+                const isMine = category.user_id === user?.id;
                 return (
                   <View key={category.id} style={styles.manageRow}>
                     <TouchableOpacity style={styles.managePrimary} onPress={() => { setMenuOpen(false); openEntryModal(category.type, category.id); }}>
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                         {category.icon ? <Icon name={category.icon as any} size={16} color={catColor} /> : null}
                         <Text style={[styles.manageTitle, { color: catColor }]}>{category.name}</Text>
+                        {!isMine && <Text style={{ color: '#64748B', fontSize: 10 }}>shared</Text>}
                       </View>
                     </TouchableOpacity>
                     {menuExpenseCatEditMode && (
                       <>
-                        <TouchableOpacity style={styles.manageIconButton} onPress={() => {
-                          setMenuOpen(false);
-                          setEditingCategoryId(category.id);
-                          setCategoryName(category.name);
-                          setCategoryType(category.type);
-                          setCategoryColor(category.color ?? null);
-                          setCategoryIcon(category.icon ?? null);
-                          setCategoryTagIds((category.tag_ids ?? []) as string[]);
-                          setShowCategoryModal(true);
-                        }}>
-                          <Text style={styles.manageIconText}>✎</Text>
+                        <TouchableOpacity style={styles.manageIconButton} onPress={() => void toggleCategoryHidden(category.id)}>
+                          <Icon name={hiddenCategoryIds.has(category.id) ? 'EyeOff' : 'Eye'} size={14} color="#94a3b8" />
                         </TouchableOpacity>
-                        <TouchableOpacity style={styles.manageIconButtonDanger} onPress={() => {
-                          Alert.alert('Remove category', `Remove ${category.name}?`, [
-                            { text: 'Cancel', style: 'cancel' },
-                            { text: 'Remove', style: 'destructive', onPress: () => { setMenuOpen(false); void deleteCategory(category.id); } },
-                          ]);
-                        }}>
-                          <Text style={styles.manageIconText}>✕</Text>
-                        </TouchableOpacity>
+                        {isMine && (
+                          <TouchableOpacity style={styles.manageIconButton} onPress={() => {
+                            setMenuOpen(false);
+                            setEditingCategoryId(category.id);
+                            setCategoryName(category.name);
+                            setCategoryType(category.type);
+                            setCategoryColor(category.color ?? null);
+                            setCategoryIcon(category.icon ?? null);
+                            setCategoryTagIds((category.tag_ids ?? []) as string[]);
+                            setShowCategoryModal(true);
+                          }}>
+                            <Text style={styles.manageIconText}>✎</Text>
+                          </TouchableOpacity>
+                        )}
+                        {isMine && (
+                          <TouchableOpacity style={styles.manageIconButtonDanger} onPress={() => {
+                            Alert.alert('Remove category', `Remove ${category.name}?`, [
+                              { text: 'Cancel', style: 'cancel' },
+                              { text: 'Remove', style: 'destructive', onPress: () => { setMenuOpen(false); void deleteCategory(category.id); } },
+                            ]);
+                          }}>
+                            <Text style={styles.manageIconText}>✕</Text>
+                          </TouchableOpacity>
+                        )}
                       </>
                     )}
                   </View>
@@ -2506,6 +2625,12 @@ export default function DashboardScreen() {
                 </View>
               )}
 
+              <TouchableOpacity style={styles.menuItem} onPress={() => {
+                setMenuOpen(false);
+                navigation.navigate('Settlements');
+              }}>
+                <Text style={styles.menuItemText}>Settlements</Text>
+              </TouchableOpacity>
               <TouchableOpacity style={styles.menuItem} onPress={() => {
                 setMenuOpen(false);
                 setShowFriendsModal(true);
@@ -2604,8 +2729,11 @@ export default function DashboardScreen() {
         tags={tags}
         onSave={() => void saveCategory()}
         onDelete={deleteCategory}
+        onToggleHidden={(catId) => { void toggleCategoryHidden(catId); setShowCategoryModal(false); }}
         openIconPickerSheet={openIconPickerSheet}
         saving={saving}
+        isOwnedByUser={!editingCategoryId || categories.find((c) => c.id === editingCategoryId)?.user_id === user?.id}
+        isHidden={editingCategoryId ? hiddenCategoryIds.has(editingCategoryId) : false}
       />
 
       <AccountModal

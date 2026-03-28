@@ -13,6 +13,7 @@ export type AppAccount = {
 
 export type AppCategory = {
   id: string;
+  user_id: string;
   account_id?: string | null;
   name: string;
   type: TransactionType;

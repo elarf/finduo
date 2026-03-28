@@ -24,6 +24,7 @@ export function useDashboardData(user: User | null) {
   const [tags, setTags] = useState<AppTag[]>([]);
   const [transactions, setTransactions] = useState<AppTransaction[]>([]);
   const [accountSettings, setAccountSettings] = useState<Record<string, AccountSetting>>({});
+  const [hiddenCategoryIds, setHiddenCategoryIds] = useState<Set<string>>(new Set());
 
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
   const [primaryAccountId, setPrimaryAccountId] = useState<string | null>(null);
@@ -246,11 +247,11 @@ export function useDashboardData(user: User | null) {
         { data: categoryData, error: categoryError },
         { data: tagData, error: tagError },
         { data: txData, error: txError },
+        { data: hiddenCatData, error: hiddenCatError },
       ] = await Promise.all([
         supabase
           .from('categories')
-          .select('id,account_id,name,type,color,icon,tag_ids')
-          .or(`account_id.in.(${accountIdList}),account_id.is.null`)
+          .select('id,user_id,name,type,color,icon,tag_ids')
           .order('name', { ascending: true }),
         supabase
           .from('tags')
@@ -263,11 +264,18 @@ export function useDashboardData(user: User | null) {
           .in('account_id', accountIds)
           .order('date', { ascending: false })
           .limit(1000),
+        supabase
+          .from('user_hidden_categories')
+          .select('category_id'),
       ]);
 
       if (categoryError) throw categoryError;
       if (tagError) throw tagError;
       if (txError) throw txError;
+      // hiddenCatError is non-fatal — table may not exist yet during migration rollout
+      if (!hiddenCatError) {
+        setHiddenCategoryIds(new Set((hiddenCatData ?? []).map((r: any) => r.category_id as string)));
+      }
 
       let settingsRows: any[] = [];
       const withCarryResponse = await supabase
@@ -391,6 +399,8 @@ export function useDashboardData(user: User | null) {
     setTransactions,
     accountSettings,
     setAccountSettings,
+    hiddenCategoryIds,
+    setHiddenCategoryIds,
 
     // Selection
     selectedAccountId,

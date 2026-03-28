@@ -1,0 +1,312 @@
+import React, { useEffect, useMemo } from 'react';
+import {
+  ActivityIndicator,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import { useAuth } from '../context/AuthContext';
+import { useDebts } from '../hooks/useDebts';
+import Icon from '../components/Icon';
+import type { AppDebt } from '../types/pools';
+
+function DebtRow({ debt, userId, onConfirm, onMarkPaid }: {
+  debt: AppDebt;
+  userId: string;
+  onConfirm: (id: string) => void;
+  onMarkPaid: (id: string) => void;
+}) {
+  const iOwe = debt.from_user === userId;
+  const myConfirmed = iOwe ? debt.from_confirmed : debt.to_confirmed;
+  const otherConfirmed = iOwe ? debt.to_confirmed : debt.from_confirmed;
+  const otherUserId = iOwe ? debt.to_user : debt.from_user;
+  const shortId = otherUserId.slice(0, 8);
+
+  const statusColor =
+    debt.status === 'paid' ? '#4ade80' :
+    debt.status === 'confirmed' ? '#53E3A6' :
+    '#f59e0b';
+
+  return (
+    <View style={s.debtRow}>
+      <View style={s.debtIcon}>
+        <Icon
+          name={iOwe ? 'ArrowUpRight' : 'ArrowDownLeft'}
+          size={18}
+          color={iOwe ? '#f87171' : '#4ade80'}
+        />
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={s.debtText}>
+          {iOwe ? `You owe ${shortId}...` : `${shortId}... owes you`}
+        </Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3 }}>
+          <View style={[s.statusBadge, { backgroundColor: statusColor + '22', borderColor: statusColor }]}>
+            <Text style={[s.statusText, { color: statusColor }]}>{debt.status}</Text>
+          </View>
+          {debt.pool_id && (
+            <Text style={s.debtMeta}>pool</Text>
+          )}
+          {myConfirmed && <Text style={s.debtMeta}>you confirmed</Text>}
+          {otherConfirmed && <Text style={s.debtMeta}>they confirmed</Text>}
+        </View>
+      </View>
+      <Text style={[s.debtAmount, { color: iOwe ? '#f87171' : '#4ade80' }]}>
+        {iOwe ? '-' : '+'}{Number(debt.amount).toFixed(2)}
+      </Text>
+      <View style={s.debtActions}>
+        {debt.status === 'pending' && !myConfirmed && (
+          <TouchableOpacity style={s.confirmBtn} onPress={() => onConfirm(debt.id)}>
+            <Icon name="Check" size={14} color="#060A14" />
+          </TouchableOpacity>
+        )}
+        {debt.status === 'confirmed' && (
+          <TouchableOpacity style={s.paidBtn} onPress={() => onMarkPaid(debt.id)}>
+            <Text style={s.paidBtnText}>Paid</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+    </View>
+  );
+}
+
+export default function LendingScreen({ navigation }: { navigation: any }) {
+  const { user } = useAuth();
+  const { debts, loading, getUserDebts, confirmDebt, markPaid } = useDebts(user);
+
+  useEffect(() => {
+    void getUserDebts();
+  }, [getUserDebts]);
+
+  const pendingDebts = useMemo(() => debts.filter((d) => d.status === 'pending'), [debts]);
+  const confirmedDebts = useMemo(() => debts.filter((d) => d.status === 'confirmed'), [debts]);
+  const paidDebts = useMemo(() => debts.filter((d) => d.status === 'paid'), [debts]);
+
+  const netBalance = useMemo(() => {
+    if (!user) return 0;
+    return debts
+      .filter((d) => d.status !== 'paid')
+      .reduce((sum, d) => {
+        if (d.to_user === user.id) return sum + Number(d.amount);
+        if (d.from_user === user.id) return sum - Number(d.amount);
+        return sum;
+      }, 0);
+  }, [debts, user]);
+
+  if (!user) return null;
+
+  return (
+    <View style={s.container}>
+      <View style={s.header}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={s.backButton}>
+          <Icon name="ArrowLeft" size={20} color="#EAF3FF" />
+        </TouchableOpacity>
+        <Text style={s.headerTitle}>Lending</Text>
+        <TouchableOpacity onPress={() => void getUserDebts()} style={s.backButton}>
+          <Icon name="RefreshCw" size={18} color="#64748B" />
+        </TouchableOpacity>
+      </View>
+
+      {/* Net balance */}
+      <View style={s.balanceCard}>
+        <Text style={s.balanceLabel}>Net balance</Text>
+        <Text style={[s.balanceValue, { color: netBalance >= 0 ? '#4ade80' : '#f87171' }]}>
+          {netBalance >= 0 ? '+' : ''}{netBalance.toFixed(2)}
+        </Text>
+        <Text style={s.balanceHint}>
+          {netBalance > 0 ? 'Others owe you' : netBalance < 0 ? 'You owe others' : 'All settled'}
+        </Text>
+      </View>
+
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 40 }}>
+        {loading && <ActivityIndicator color="#53E3A6" style={{ marginTop: 24 }} />}
+
+        {!loading && debts.length === 0 && (
+          <View style={s.emptyContainer}>
+            <Icon name="Handshake" size={40} color="#1F3A59" />
+            <Text style={s.emptyText}>No debts</Text>
+            <Text style={s.emptyHint}>Settle a pool to create debts</Text>
+          </View>
+        )}
+
+        {pendingDebts.length > 0 && (
+          <>
+            <Text style={s.sectionTitle}>Pending ({pendingDebts.length})</Text>
+            {pendingDebts.map((d) => (
+              <DebtRow key={d.id} debt={d} userId={user.id} onConfirm={confirmDebt} onMarkPaid={markPaid} />
+            ))}
+          </>
+        )}
+
+        {confirmedDebts.length > 0 && (
+          <>
+            <Text style={s.sectionTitle}>Confirmed ({confirmedDebts.length})</Text>
+            {confirmedDebts.map((d) => (
+              <DebtRow key={d.id} debt={d} userId={user.id} onConfirm={confirmDebt} onMarkPaid={markPaid} />
+            ))}
+          </>
+        )}
+
+        {paidDebts.length > 0 && (
+          <>
+            <Text style={s.sectionTitle}>Paid ({paidDebts.length})</Text>
+            {paidDebts.map((d) => (
+              <DebtRow key={d.id} debt={d} userId={user.id} onConfirm={confirmDebt} onMarkPaid={markPaid} />
+            ))}
+          </>
+        )}
+      </ScrollView>
+    </View>
+  );
+}
+
+const s = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#060A14',
+  },
+  header: {
+    paddingTop: Platform.OS === 'web' ? 14 : 48,
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: '#000',
+  },
+  backButton: {
+    padding: 6,
+  },
+  headerTitle: {
+    flex: 1,
+    color: '#EAF3FF',
+    fontSize: 18,
+    fontWeight: '700',
+  },
+
+  // Balance card
+  balanceCard: {
+    marginHorizontal: 16,
+    marginTop: 12,
+    backgroundColor: '#0E1A2B',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#1F3A59',
+    padding: 16,
+    alignItems: 'center',
+    gap: 4,
+  },
+  balanceLabel: {
+    color: '#64748B',
+    fontSize: 12,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  balanceValue: {
+    fontSize: 28,
+    fontWeight: '700',
+  },
+  balanceHint: {
+    color: '#475569',
+    fontSize: 12,
+  },
+
+  // Empty
+  emptyContainer: {
+    alignItems: 'center',
+    marginTop: 60,
+    gap: 8,
+  },
+  emptyText: {
+    color: '#64748B',
+    fontSize: 14,
+    textAlign: 'center',
+    marginTop: 12,
+  },
+  emptyHint: {
+    color: '#475569',
+    fontSize: 12,
+    textAlign: 'center',
+  },
+
+  // Section
+  sectionTitle: {
+    color: '#64748B',
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginHorizontal: 16,
+    marginTop: 20,
+    marginBottom: 6,
+  },
+
+  // Debt row
+  debtRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#101A2A',
+    gap: 10,
+  },
+  debtIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: '#0E1A2B',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  debtText: {
+    color: '#EAF3FF',
+    fontSize: 14,
+  },
+  debtMeta: {
+    color: '#475569',
+    fontSize: 10,
+  },
+  debtAmount: {
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  debtActions: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+
+  // Status badge
+  statusBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 4,
+    borderWidth: 1,
+  },
+  statusText: {
+    fontSize: 10,
+    fontWeight: '600',
+  },
+
+  // Buttons
+  confirmBtn: {
+    backgroundColor: '#53E3A6',
+    borderRadius: 6,
+    padding: 6,
+  },
+  paidBtn: {
+    backgroundColor: '#1F3A59',
+    borderRadius: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  paidBtnText: {
+    color: '#EAF3FF',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+});

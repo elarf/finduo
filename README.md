@@ -28,6 +28,8 @@ Financial tracking app for couples. Track income, expenses, and transfers across
 - Recent amount suggestions based on history
 - Infinite scroll with progressive loading (12 at a time)
 - Amount text colored green (income) or red (expense)
+- Transaction list shows tags with color and icon inline, followed by note text
+- If no note is provided, tag names are shown as the title; if neither, shows fallback text
 
 ### Transfers
 - Dedicated transfer flow between accounts with currency conversion support
@@ -37,15 +39,21 @@ Financial tracking app for couples. Track income, expenses, and transfers across
 - Transfer transactions display with a `↔` indicator
 
 ### Categories
-- Per-account categories with type (income/expense), color, and icon
+- User-global categories shared across all accounts (not per-account)
+- Categories are owned by users, not accounts — survive account deletion
+- Connected users (sharing any account) see each other's categories automatically
+- Per-user category hiding: hide categories you don't want without deleting them
+- Categories have type (income/expense), color, and icon
+- Friend's categories are read-only (view and use, but cannot edit or delete)
 - Income and Expense categories shown in separate dropdown sections in quick navigation
 - Icon picker with 37 Lucide icons mapped from Material Symbol names
 - Auto-suggest icon based on category name keywords
 - Category-based spending chart (horizontal bar chart with tap-to-filter)
 - Tap a category chip to quickly add a transaction pre-filled with that category
+- Enables cross-user spending comparison within the same category
 
 ### Tags
-- Per-account tags with optional color and icon
+- Global tags with optional color and icon
 - Attach tags to transactions, categories, and accounts
 - Inline tag creation in the transaction entry modal
 
@@ -64,6 +72,24 @@ Financial tracking app for couples. Track income, expenses, and transfers across
 - Configurable expiration (default 7 days)
 - Named invites for tracking who was invited
 - Shared accounts appear alongside owned accounts
+
+### Pools
+- Shared expense pools for splitting costs with friends
+- Two pool types: Event (one-time trip, dinner) or Continuous (roommates, recurring)
+- Pool creator can add members by user ID
+- All members can add expenses; only the payer can delete their own
+- Per-person split shown automatically (total / member count)
+- Pool can be closed to prevent further transactions
+- RLS ensures users can only see pools they are members of
+
+### Settlements & Lending
+- Unified Settlements screen accessible from Quick Navigation menu
+- Three sections: Pools list, Active pool view, Debts
+- Pool settlement calculates minimum debts using a greedy algorithm (equal split, minimize transfers)
+- Debts require dual confirmation (from_user and to_user must each confirm independently)
+- Status flow: pending → confirmed (both sides confirmed) → paid
+- Net balance card shows overall debt position
+- Confirm and Mark Paid buttons contextually shown per debt
 
 ### Overview Mode
 - Tap the balance card header to toggle between single-account and included-accounts overview
@@ -91,6 +117,7 @@ Financial tracking app for couples. Track income, expenses, and transfers across
 - Category picker also works as a normal tappable grid
 - Cannot save a transaction without choosing a category (enforced in UI)
 - Scroll-to-top floating action button appears when scrolled past 320px
+- Swipe from left edge to open Quick Navigation menu (PanResponder-based, 20px edge zone)
 - Logo shown on loading screen
 
 ### Desktop UX
@@ -98,16 +125,21 @@ Financial tracking app for couples. Track income, expenses, and transfers across
 - Framed mobile preview mode (430px max-width with borders)
 - Card-style modals with backdrop dismiss
 - Collapsible sections for spending chart and categories
+- Right sidebar: fixed "All Accounts" summary card at top, scrollable content below
+- Sidebar spending chart with independent tap-to-filter (does not affect main dashboard filter)
+- Sidebar filter updates transaction list title and filters transactions by selected category
 
 ### Quick Navigation Menu
 - Account management with icons (large when not editing, hidden in edit mode)
 - Income and Expense category sections with icons and colors
 - Edit/delete buttons hidden behind edit mode toggle per section (accounts, categories, tags)
+- Settlements link (navigates to unified Settlements screen)
 - Friends modal access
 - Full app reload (web: page reload, native: dashboard reload)
 - Invitations access
 - Interval selection
 - Sign out
+- Mobile: swipe from left edge to open
 
 ### Header
 - Logo click refreshes dashboard data (profile button is not blocked)
@@ -132,16 +164,24 @@ Financial tracking app for couples. Track income, expenses, and transfers across
 | `account_members` | User-account relationships for sharing (user_id, account_id, role) |
 | `account_settings` | Per-account config (included_in_balance, carry_over_balance, initial_balance, initial_balance_date) |
 | `account_invites` | Sharing tokens (token, name, invited_by, expires_at, used_at) |
-| `categories` | Transaction categories (name, type, color, icon, tag_ids); per-account or global |
+| `categories` | Transaction categories (name, type, color, icon, tag_ids); user-owned, shared via connected users |
 | `tags` | Tags per account (name, color, icon) |
 | `transactions` | Financial transactions (account_id, category_id, amount, note, type, date, tag_ids) |
 | `transaction_tags` | Many-to-many join between transactions and tags |
-| `user_preferences` | Per-user prefs (account_order, primary_account_id) |
+| `user_preferences` | Per-user prefs (account_order, primary_account_id, excluded_account_ids) |
+| `user_hidden_categories` | Per-user category hiding (user_id, category_id) |
 | `user_profiles` | Public user discovery (display_name, email, avatar_url) for friend system |
 | `friends` | Directional friend relationships (user_id → friend_user_id, status: pending/accepted/rejected/blocked) |
+| `pools` | Shared expense pools (name, type: event/continuous, created_by, start_date, end_date, status) |
+| `pool_members` | Pool membership join table (pool_id, user_id) |
+| `pool_transactions` | Pool expenses (pool_id, paid_by, amount, description, date) |
+| `debts` | Settlement debts (from_user, to_user, amount, pool_id, status, from_confirmed, to_confirmed) |
 
 ### Key Design Decisions
-- Transfer categories are detected by `category.name === 'Transfer'` — created per-account if no global one exists
+- Categories are user-owned (`user_id` FK) and shared across all accounts — no per-account scoping
+- Connected users (sharing at least one account) automatically see each other's categories via RLS
+- Users can hide unwanted categories per-user without affecting others (`user_hidden_categories` table)
+- Transfer categories are detected by `category.name === 'Transfer'` — auto-created per-user when making the first transfer
 - Category icons are stored as Material Symbol names in the database; `Icon.tsx` maps them to Lucide components at render time
 - Row Level Security (RLS) is enabled; users can only access their own data and shared accounts
 - Friends use directional rows with mutual acceptance; blocked users cannot see the relationship
@@ -181,18 +221,27 @@ finduo/
     hooks/
       useDashboardData.ts          Core data loading: accounts, categories, tags, transactions, settings
       useFriends.ts                Friends system: requests, acceptance, blocking, account sharing
+      usePools.ts                  Pool CRUD: create, list, add members, close
+      usePoolTransactions.ts       Pool transaction CRUD: add, list, delete expenses
+      useDebts.ts                  Debt management: settle pool, confirm, mark paid
     lib/
       supabase.ts                  Supabase client init (PKCE, AsyncStorage on native)
+    utils/
+      settlePool.ts                Pure settlement algorithm (greedy debtor-creditor matching)
     navigation/
       index.tsx                    Root navigator: Login vs Dashboard based on session
     screens/
       LoginScreen.tsx              Google sign-in UI
       DashboardScreen.tsx          Main screen: all CRUD, modals, charts, gestures
       DashboardScreen.styles.ts    Shared StyleSheet for dashboard components
+      PoolScreen.tsx               Standalone pool screen: list, create, detail, transactions
+      LendingScreen.tsx            Standalone lending screen: debts list, confirm, mark paid
+      SettlementsScreen.tsx         Unified settlements: pools + debts in one screen
     types/
       auth.ts                      AuthContextValue interface
       dashboard.ts                 App data types, helpers (AppAccount, AppCategory, etc.)
       friends.ts                   Friend system types (ResolvedFriend, ResolvedRequest, etc.)
+      pools.ts                     Pool and debt types (Pool, PoolMember, PoolTransaction, AppDebt)
   supabase/
     migrations/                    SQL migration files
 ```
@@ -291,7 +340,9 @@ git status --short
 - [ ] Bulk transaction operations (multi-select, delete, re-categorize)
 - [ ] Receipt photo attachment on transactions
 - [ ] Account balance history / net worth tracking over time
-- [ ] Shared pools and lending between friends
+- [x] Pool settlement calculations (who owes whom)
+- [x] Lending between friends
+- [ ] Friend-to-friend spending comparison (categories are shared, UI for comparison needed)
 
 ### Technical
 - [ ] Add unit tests and integration tests

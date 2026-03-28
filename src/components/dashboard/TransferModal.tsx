@@ -158,7 +158,11 @@ const TransferModal = React.memo(function TransferModal(props: TransferModalProp
         /* Desktop: card modal */
         <Pressable style={styles.modalBackdrop} onPress={onClose}>
           <Pressable style={[styles.modalCard, styles.entryModalCard]} onPress={(e) => e.stopPropagation()}>
-            <Text style={styles.modalTitle}>Transfer</Text>
+            <View style={{ alignItems: 'center', marginBottom: 12 }}>
+              <View style={[styles.toggleButton, { flex: 0, minWidth: 110, paddingHorizontal: 20, borderColor: '#a855f7', backgroundColor: '#1e0e2a' }]}>
+                <Text style={[styles.toggleButtonText, { color: '#a855f7' }]}>Transfer</Text>
+              </View>
+            </View>
             {content}
             <View style={styles.modalActions}>
               <TouchableOpacity style={styles.modalSecondary} onPress={onClose}>
@@ -175,11 +179,9 @@ const TransferModal = React.memo(function TransferModal(props: TransferModalProp
         <View style={styles.entryModalFullscreen}>
           {/* Top bar */}
           <View style={styles.entryModalTopBar}>
-            <TouchableOpacity onPress={onClose} style={styles.entryModalCloseBtn}>
-              <Icon name="close" size={22} color="#8FA8C9" />
-            </TouchableOpacity>
-            <Text style={styles.entryModalTitle}>Transfer</Text>
-            <View style={{ width: 40 }} />
+            <View style={[styles.toggleButton, { flex: 0, minWidth: 110, paddingHorizontal: 20, borderColor: '#a855f7', backgroundColor: '#1e0e2a' }]}>
+              <Text style={[styles.toggleButtonText, { color: '#a855f7' }]}>Transfer</Text>
+            </View>
           </View>
           {content}
           {/* Bottom bar */}

@@ -23,6 +23,7 @@ Financial tracking app for couples. Track income, expenses, and transfers across
 ### Transactions
 - Add income and expense transactions with amount, date, category, note, and tags
 - Display-only amount field with custom numpad (avoids keyboard on mobile)
+- Currency symbol shown inline with the amount (e.g. $123, €123, 123 Ft); no separate currency row
 - Custom calendar date picker for transaction date selection
 - Transactions sorted by user-chosen date (database `created_at` is hidden)
 - Recent amount suggestions based on history
@@ -54,8 +55,10 @@ Financial tracking app for couples. Track income, expenses, and transfers across
 
 ### Tags
 - Global tags with optional color and icon
+- Tag chips in transaction entry modal show each tag's icon and color; selected state uses background contrast
 - Attach tags to transactions, categories, and accounts
 - Inline tag creation in the transaction entry modal
+- Tag delete from Quick Navigation menu keeps menu open (no disruptive close)
 
 ### Friends System
 - Add other users as friends by email
@@ -110,15 +113,20 @@ Financial tracking app for couples. Track income, expenses, and transfers across
 - Net balance with negative indicator
 
 ### Mobile UX
-- Full-screen slide-up transaction modal with reordered layout: date → amount → note → tags → numpad → category → save/cancel
-- Income/expense toggle with colored active states (green/red)
+- Full-screen slide-up transaction modal layout: date → amount (with inline currency symbol) → note → tags → numpad → category → save/cancel
+- Income/Expense type toggle moved into the modal header — tap the button to switch type; color updates live (green/red)
+- No redundant close button — Cancel in the bottom bar is the only way to dismiss
+- Tag chips in entry modal show the tag's icon and color; selected tags highlighted with background contrast
+- Account icon displayed in modal header alongside account name
 - Persistent bottom bar with large Cancel and Save buttons
 - Swipe-to-select category picker: press "Choose Category" and drag to a category without lifting finger (PanResponder-based)
+- Category picker and account picker transitions are instant (no slide animation delay)
 - Category picker also works as a normal tappable grid
 - Cannot save a transaction without choosing a category (enforced in UI)
 - Scroll-to-top floating action button appears when scrolled past 320px
 - Swipe from left edge to open Quick Navigation menu (PanResponder-based, 20px edge zone)
-- Logo shown on loading screen
+- Android hardware back button closes the topmost open modal/sheet; never exits the app or pops navigation
+- Logo shown on full-width loading screen
 
 ### Desktop UX
 - Two-column layout at viewport width >= 1024px
@@ -133,13 +141,16 @@ Financial tracking app for couples. Track income, expenses, and transfers across
 - Account management with icons (large when not editing, hidden in edit mode)
 - Income and Expense category sections with icons and colors
 - Edit/delete buttons hidden behind edit mode toggle per section (accounts, categories, tags)
+- Lending link with pending debt badge (navigates to LendingScreen)
 - Settlements link (navigates to unified Settlements screen)
+- Pools link (navigates to PoolScreen)
 - Friends modal access
-- Full app reload (web: page reload, native: dashboard reload)
 - Invitations access
+- Full app reload (web: page reload, native: dashboard reload)
 - Interval selection
 - Sign out
 - Mobile: swipe from left edge to open
+- Menu order: Lending, Settlements, Pools, Friends, Invitations, Reload app, Sign out
 
 ### Header
 - Logo click refreshes dashboard data (profile button is not blocked)
@@ -219,7 +230,7 @@ finduo/
     context/
       AuthContext.tsx               Auth state, Google OAuth (web + native), deep link handling
     hooks/
-      useDashboardData.ts          Core data loading: accounts, categories, tags, transactions, settings
+      useDashboardData.ts          Core data loading + targeted state update setters (accounts, categories, tags, transactions, settings)
       useFriends.ts                Friends system: requests, acceptance, blocking, account sharing
       usePools.ts                  Pool CRUD: create, list, add members, close
       usePoolTransactions.ts       Pool transaction CRUD: add, list, delete expenses
@@ -349,7 +360,8 @@ git status --short
 - [ ] Remove legacy `loadMaterialSymbols` web/native files (dead code)
 - [ ] Remove `material-icons` package from dependencies (no longer used)
 - [ ] Add proper error boundaries
-- [ ] Implement optimistic updates for better perceived performance
+- [x] Implement targeted state updates for mutations (no full refetch after save/delete)
+- [x] Android back button intercept (closes modals, never exits app)
 - [ ] Add offline support with sync queue
 - [ ] Set up CI/CD pipeline (lint, typecheck, test, build)
 - [ ] Add Supabase realtime subscriptions for live updates between shared users

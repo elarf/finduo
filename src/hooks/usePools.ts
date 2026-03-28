@@ -76,9 +76,7 @@ export function usePools(user: User | null) {
   const loadPoolMembers = useCallback(async (poolId: string) => {
     try {
       const { data, error } = await supabase
-        .from('pool_members')
-        .select('*')
-        .eq('pool_id', poolId);
+        .rpc('get_pool_members', { p_pool_id: poolId });
       if (error) throw error;
       setMembers((prev) => ({ ...prev, [poolId]: (data ?? []) as PoolMember[] }));
     } catch (err) {

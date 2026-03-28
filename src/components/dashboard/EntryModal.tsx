@@ -1,7 +1,9 @@
 import React from 'react';
 import {
+  Alert,
   Animated,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -71,6 +73,8 @@ type EntryModalProps = {
   noteInputRef: React.RefObject<TextInput | null>;
   // Saving state
   saving: boolean;
+  // Delete (edit mode only)
+  onDelete?: () => void;
 };
 
 const EntryModal = React.memo(function EntryModal(props: EntryModalProps) {
@@ -123,10 +127,37 @@ const EntryModal = React.memo(function EntryModal(props: EntryModalProps) {
     height,
     noteInputRef,
     saving,
+    onDelete,
   } = props;
 
   const isIncome = entryType === 'income';
   const amountColor = isIncome ? '#4ade80' : '#f87171';
+  const currency = entryAccount?.currency ?? selectedCurrency;
+  const currencySymbol: { prefix: string; suffix: string } = (() => {
+    const map: Record<string, { prefix: string; suffix: string }> = {
+      USD: { prefix: '$', suffix: '' }, EUR: { prefix: '€', suffix: '' },
+      GBP: { prefix: '£', suffix: '' }, JPY: { prefix: '¥', suffix: '' },
+      CHF: { prefix: 'Fr', suffix: '' }, HUF: { prefix: '', suffix: 'Ft' },
+      SEK: { prefix: '', suffix: 'kr' }, NOK: { prefix: '', suffix: 'kr' },
+      DKK: { prefix: '', suffix: 'kr' }, PLN: { prefix: '', suffix: 'zł' },
+      CZK: { prefix: '', suffix: 'Kč' }, RUB: { prefix: '₽', suffix: '' },
+      CNY: { prefix: '¥', suffix: '' }, KRW: { prefix: '₩', suffix: '' },
+      INR: { prefix: '₹', suffix: '' }, AUD: { prefix: 'A$', suffix: '' },
+      CAD: { prefix: 'C$', suffix: '' }, NZD: { prefix: 'NZ$', suffix: '' },
+    };
+    return map[currency] ?? { prefix: '', suffix: currency };
+  })();
+
+  const confirmDelete = () => {
+    if (Platform.OS === 'web') {
+      if (window.confirm('Delete this transaction?')) { onDelete?.(); }
+    } else {
+      Alert.alert('Delete transaction', 'Delete this transaction?', [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete', style: 'destructive', onPress: () => onDelete?.() },
+      ]);
+    }
+  };
 
   return (
     <Modal visible={visible} transparent animationType={desktopView ? 'none' : 'slide'} onRequestClose={onClose}>
@@ -145,9 +176,10 @@ const EntryModal = React.memo(function EntryModal(props: EntryModalProps) {
                   <Icon name="calendar" size={16} color="#64748B" />
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[styles.entryAccountBtn, showEntryAccountPicker && styles.entryAccountBtnActive]}
+                  style={[styles.entryAccountBtn, { flexDirection: 'row', alignItems: 'center', gap: 6 }, showEntryAccountPicker && styles.entryAccountBtnActive]}
                   onPress={() => setShowEntryAccountPicker((p) => !p)}
                 >
+                  {entryAccount?.icon ? <Icon name={entryAccount.icon as any} size={13} color="#8FA8C9" /> : null}
                   <Text style={styles.entryAccountBtnText}>{entryAccount?.name ?? 'Account'} {showEntryAccountPicker ? '▾' : '▸'}</Text>
                 </TouchableOpacity>
               </View>
@@ -164,31 +196,28 @@ const EntryModal = React.memo(function EntryModal(props: EntryModalProps) {
                   ))}
                 </ScrollView>
               )}
-              {/* Income/Expense toggle */}
-              <View style={styles.entryTypeRow}>
+              {/* Type toggle */}
+              <View style={{ alignItems: 'center', marginBottom: 10 }}>
                 <TouchableOpacity
-                  style={[styles.toggleButton, isIncome && styles.toggleButtonActiveIncome]}
-                  onPress={() => setEntryType('income')}
+                  onPress={() => setEntryType(isIncome ? 'expense' : 'income')}
+                  style={[styles.toggleButton, { flex: 0, minWidth: 110, paddingHorizontal: 20 }, isIncome ? styles.toggleButtonActiveIncome : styles.toggleButtonActiveExpense]}
                 >
-                  <Text style={isIncome ? styles.toggleButtonTextIncome : styles.toggleButtonText}>Income</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.toggleButton, !isIncome && styles.toggleButtonActiveExpense]}
-                  onPress={() => setEntryType('expense')}
-                >
-                  <Text style={!isIncome ? styles.toggleButtonTextExpense : styles.toggleButtonText}>Expense</Text>
+                  <Text style={isIncome ? styles.toggleButtonTextIncome : styles.toggleButtonTextExpense}>
+                    {isIncome ? 'Income' : 'Expense'}
+                  </Text>
                 </TouchableOpacity>
               </View>
               {/* Amount display */}
-              <View style={styles.entryAmountDisplay}>
+              <View style={[styles.entryAmountDisplay, { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'center', gap: 4, paddingHorizontal: 12 }]}>
+                {currencySymbol.prefix ? <Text style={localModalStyles.currencyTag}>{currencySymbol.prefix}</Text> : null}
                 <Text style={[styles.entryAmountDisplayText, { color: amountColor }]}>{entryAmount || '0'}</Text>
+                {currencySymbol.suffix ? <Text style={localModalStyles.currencyTag}>{currencySymbol.suffix}</Text> : null}
               </View>
-              <Text style={styles.entryCurrencyText}>{entryAccount?.currency ?? selectedCurrency}</Text>
               {recentCategoryAmounts.length > 0 && (
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.modalChipsRow}>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[styles.modalChipsRow, { paddingBottom: 6 }]}>
                   {recentCategoryAmounts.map((v) => (
-                    <TouchableOpacity key={`${entryType}-${v}`} style={styles.modalChip} onPress={() => setEntryAmount(String(v))}>
-                      <Text style={styles.modalChipText}>{formatCurrency(v, entryAccount?.currency)}</Text>
+                    <TouchableOpacity key={`${entryType}-${v}`} style={[styles.modalChip, { paddingVertical: 5 }]} onPress={() => setEntryAmount(String(v))}>
+                      <Text style={[styles.modalChipText, { fontSize: 13 }]}>{formatCurrency(v, entryAccount?.currency)}</Text>
                     </TouchableOpacity>
                   ))}
                 </ScrollView>
@@ -216,15 +245,20 @@ const EntryModal = React.memo(function EntryModal(props: EntryModalProps) {
                 </ScrollView>
               )}
               {/* Tags */}
-              <Text style={styles.modalLabel}>Tags</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.modalChipsRow}>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[styles.modalChipsRow, { marginTop: 4, paddingBottom: 4 }]}>
                 {entryTags.map((tag) => (
                   <TouchableOpacity
                     key={tag.id}
-                    style={[styles.modalChip, entryTagIds.includes(tag.id) && styles.modalChipActive]}
+                    style={[
+                      styles.modalChip,
+                      { flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 5 },
+                      tag.color ? { borderColor: tag.color } : undefined,
+                      entryTagIds.includes(tag.id) ? [styles.modalChipActive, { backgroundColor: tag.color ? `${tag.color}22` : '#1A3A5C' }] : undefined,
+                    ]}
                     onPress={() => toggleTag(tag.id)}
                   >
-                    <Text style={styles.modalChipText}>#{tag.name}</Text>
+                    {tag.icon ? <Icon name={tag.icon as any} size={11} color={tag.color ?? '#EAF3FF'} /> : null}
+                    <Text style={[styles.modalChipText, { fontSize: 13 }, tag.color ? { color: tag.color } : undefined]}>#{tag.name}</Text>
                   </TouchableOpacity>
                 ))}
               </ScrollView>
@@ -264,6 +298,11 @@ const EntryModal = React.memo(function EntryModal(props: EntryModalProps) {
               </ScrollView>
             </ScrollView>
             <View style={styles.modalActions}>
+              {editingTransactionId && onDelete && (
+                <TouchableOpacity style={[styles.modalSecondary, { borderColor: '#7f1d1d', backgroundColor: '#200a0a' }]} onPress={confirmDelete} disabled={saving}>
+                  <Icon name="Trash2" size={16} color="#f87171" />
+                </TouchableOpacity>
+              )}
               <TouchableOpacity style={styles.modalSecondary} onPress={onClose}>
                 <Text style={styles.modalSecondaryText}>Cancel</Text>
               </TouchableOpacity>
@@ -278,32 +317,20 @@ const EntryModal = React.memo(function EntryModal(props: EntryModalProps) {
         <View style={styles.entryModalFullscreen}>
           {/* Top bar */}
           <View style={styles.entryModalTopBar}>
-            <TouchableOpacity onPress={onClose} style={styles.entryModalCloseBtn}>
-              <Icon name="close" size={22} color="#8FA8C9" />
-            </TouchableOpacity>
-            <Text style={styles.entryModalTitle}>
-              {editingTransactionId ? 'Edit' : (isIncome ? 'Income' : 'Expense')}
-            </Text>
             <TouchableOpacity
-              style={styles.entryAccountBtn}
+              onPress={() => setEntryType(isIncome ? 'expense' : 'income')}
+              style={[styles.toggleButton, { flex: 0, minWidth: 110, paddingHorizontal: 20 }, isIncome ? styles.toggleButtonActiveIncome : styles.toggleButtonActiveExpense]}
+            >
+              <Text style={isIncome ? styles.toggleButtonTextIncome : styles.toggleButtonTextExpense}>
+                {isIncome ? 'Income' : 'Expense'}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.entryAccountBtn, { flexDirection: 'row', alignItems: 'center', gap: 6 }]}
               onPress={() => openAcctPickerSheet('entry')}
             >
+              {entryAccount?.icon ? <Icon name={entryAccount.icon as any} size={13} color="#8FA8C9" /> : null}
               <Text style={styles.entryAccountBtnText}>{entryAccount?.name ?? 'Account'}</Text>
-            </TouchableOpacity>
-          </View>
-          {/* Income/Expense type toggle */}
-          <View style={[styles.entryTypeRow, { marginHorizontal: 16 }]}>
-            <TouchableOpacity
-              style={[styles.toggleButton, isIncome && styles.toggleButtonActiveIncome]}
-              onPress={() => setEntryType('income')}
-            >
-              <Text style={isIncome ? styles.toggleButtonTextIncome : styles.toggleButtonText}>Income</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.toggleButton, !isIncome && styles.toggleButtonActiveExpense]}
-              onPress={() => setEntryType('expense')}
-            >
-              <Text style={!isIncome ? styles.toggleButtonTextExpense : styles.toggleButtonText}>Expense</Text>
             </TouchableOpacity>
           </View>
           <ScrollView
@@ -312,20 +339,21 @@ const EntryModal = React.memo(function EntryModal(props: EntryModalProps) {
             contentContainerStyle={[styles.entryModalScrollContent, { flexGrow: 1 }]}
           >
             {/* 1. Date picker */}
-            <TouchableOpacity style={styles.datePressable} onPress={openDatePicker}>
+            <TouchableOpacity style={[styles.datePressable, { marginBottom: 6 }]} onPress={openDatePicker}>
               <Icon name="calendar" size={18} color="#8FA8C9" />
               <Text style={styles.datePressableText}>{entryDate || 'Select date'}</Text>
             </TouchableOpacity>
             {/* 2. Amount display + suggested values */}
-            <View style={styles.entryAmountDisplay}>
+            <View style={[styles.entryAmountDisplay, { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'center', gap: 4, paddingHorizontal: 12 }]}>
+              {currencySymbol.prefix ? <Text style={localModalStyles.currencyTag}>{currencySymbol.prefix}</Text> : null}
               <Text style={[styles.entryAmountDisplayText, { color: amountColor }]}>{entryAmount || '0'}</Text>
+              {currencySymbol.suffix ? <Text style={localModalStyles.currencyTag}>{currencySymbol.suffix}</Text> : null}
             </View>
-            <Text style={styles.entryCurrencyText}>{entryAccount?.currency ?? selectedCurrency}</Text>
             {recentCategoryAmounts.length > 0 && (
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.modalChipsRow}>
                 {recentCategoryAmounts.map((v) => (
                   <TouchableOpacity key={`${entryType}-${v}`} style={styles.modalChip} onPress={() => setEntryAmount(String(v))}>
-                    <Text style={styles.modalChipText}>{formatCurrency(v, entryAccount?.currency)}</Text>
+                    <Text style={[styles.modalChipText, { fontSize: 13 }]}>{formatCurrency(v, entryAccount?.currency)}</Text>
                   </TouchableOpacity>
                 ))}
               </ScrollView>
@@ -337,7 +365,7 @@ const EntryModal = React.memo(function EntryModal(props: EntryModalProps) {
               onChangeText={setEntryNote}
               placeholder="Note"
               placeholderTextColor="#64748B"
-              style={styles.input}
+              style={[styles.input, { marginBottom: 6 }]}
               returnKeyType="done"
               onSubmitEditing={() => void saveEntry()}
               onFocus={() => setNoteFieldFocused(true)}
@@ -355,15 +383,20 @@ const EntryModal = React.memo(function EntryModal(props: EntryModalProps) {
             {/* 4. Tags */}
             {entryTags.length > 0 && (
               <>
-                <Text style={styles.modalLabel}>Tags</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[styles.modalChipsRow, { marginBottom: 8 }]}>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[styles.modalChipsRow, { marginTop: 6, marginBottom: 2, paddingBottom: 4 }]}>
                   {entryTags.map((tag) => (
                     <TouchableOpacity
                       key={tag.id}
-                      style={[styles.modalChip, entryTagIds.includes(tag.id) && styles.modalChipActive]}
+                      style={[
+                        styles.modalChip,
+                        { flexDirection: 'row', alignItems: 'center', gap: 4 },
+                        tag.color ? { borderColor: tag.color } : undefined,
+                        entryTagIds.includes(tag.id) ? [styles.modalChipActive, tag.color ? { backgroundColor: `${tag.color}22` } : undefined] : undefined,
+                      ]}
                       onPress={() => toggleTag(tag.id)}
                     >
-                      <Text style={styles.modalChipText}>#{tag.name}</Text>
+                      {tag.icon ? <Icon name={tag.icon as any} size={11} color={tag.color ?? '#EAF3FF'} /> : null}
+                      <Text style={[styles.modalChipText, { fontSize: 13 }, tag.color ? { color: tag.color } : undefined]}>#{tag.name}</Text>
                     </TouchableOpacity>
                   ))}
                 </ScrollView>
@@ -380,15 +413,15 @@ const EntryModal = React.memo(function EntryModal(props: EntryModalProps) {
             {/* 6. Category selector */}
             <View
               {...chooseCatPanResponder.panHandlers}
-              style={{ marginTop: 8 }}
+              style={{ marginTop: 4 }}
             >
               {(!entryCategoryId && !entryHadInitialCategory) ? (
-                <TouchableOpacity style={styles.chooseCategoryBtn} onPress={openCatPicker}>
-                  <Icon name="label" size={22} color="#060A14" />
+                <TouchableOpacity style={[styles.chooseCategoryBtn, localModalStyles.chooseCatCompact]} onPress={openCatPicker}>
+                  <Icon name="label" size={20} color="#060A14" />
                   <Text style={styles.chooseCategoryBtnText}>Choose Category</Text>
                 </TouchableOpacity>
               ) : (
-                <TouchableOpacity style={[styles.chooseCategoryBtn, { backgroundColor: '#111F32', borderWidth: 1, borderColor: '#2A4060' }]} onPress={openCatPicker}>
+                <TouchableOpacity style={[styles.chooseCategoryBtn, { backgroundColor: '#111F32', borderWidth: 1, borderColor: '#2A4060' }, localModalStyles.chooseCatCompact]} onPress={openCatPicker}>
                   {(() => {
                     const cat = entryCategories.find((c) => c.id === entryCategoryId);
                     return (
@@ -407,6 +440,11 @@ const EntryModal = React.memo(function EntryModal(props: EntryModalProps) {
 
           {/* 7. Bottom bar — always visible with Cancel + Save */}
           <View style={entryModalBottomBarStyles.bottomBar}>
+            {editingTransactionId && onDelete && (
+              <TouchableOpacity style={entryModalBottomBarStyles.deleteBtn} onPress={confirmDelete} disabled={saving}>
+                <Icon name="Trash2" size={20} color="#f87171" />
+              </TouchableOpacity>
+            )}
             <TouchableOpacity style={entryModalBottomBarStyles.cancelBtn} onPress={onClose}>
               <Text style={entryModalBottomBarStyles.cancelText}>Cancel</Text>
             </TouchableOpacity>
@@ -478,6 +516,20 @@ const EntryModal = React.memo(function EntryModal(props: EntryModalProps) {
   );
 });
 
+const localModalStyles = StyleSheet.create({
+  currencyTag: {
+    color: '#8FA8C9',
+    fontSize: 18,
+    fontWeight: '600',
+    paddingBottom: 5,
+  },
+  chooseCatCompact: {
+    margin: 0,
+    marginTop: 6,
+    paddingVertical: 12,
+  },
+});
+
 const entryModalBottomBarStyles = StyleSheet.create({
   bottomBar: {
     flexDirection: 'row',
@@ -496,7 +548,17 @@ const entryModalBottomBarStyles = StyleSheet.create({
     borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 16,
+    paddingVertical: 14,
+  },
+  deleteBtn: {
+    width: 52,
+    backgroundColor: '#200a0a',
+    borderWidth: 1,
+    borderColor: '#7f1d1d',
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
   },
   cancelText: {
     color: '#8FA8C9',
@@ -509,7 +571,7 @@ const entryModalBottomBarStyles = StyleSheet.create({
     borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 16,
+    paddingVertical: 14,
   },
   saveText: {
     color: '#060A14',

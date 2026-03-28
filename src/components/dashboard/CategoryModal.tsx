@@ -1,5 +1,5 @@
 import React from 'react';
-import { Alert, Modal, Pressable, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, Modal, Platform, Pressable, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import Icon from '../Icon';
 import { styles } from '../../screens/DashboardScreen.styles';
 import { AppTag, TransactionType, COLOR_PRESETS, suggestIcon } from '../../types/dashboard';
@@ -143,16 +143,16 @@ function CategoryModal({
                 style={[styles.modalDanger, !isOwnedByUser && { opacity: 0.5 }]}
                 onPress={() => {
                   if (readOnly) return;
-                  Alert.alert('Remove category', 'Delete this category?', [
-                    { text: 'Cancel', style: 'cancel' },
-                    {
-                      text: 'Remove',
-                      style: 'destructive',
-                      onPress: () => {
-                        void onDelete(editingCategoryId);
-                      },
-                    },
-                  ]);
+                  if (Platform.OS === 'web') {
+                    if ((window as any).confirm('Delete this category?')) {
+                      void onDelete(editingCategoryId);
+                    }
+                  } else {
+                    Alert.alert('Remove category', 'Delete this category?', [
+                      { text: 'Cancel', style: 'cancel' },
+                      { text: 'Remove', style: 'destructive', onPress: () => { void onDelete(editingCategoryId); } },
+                    ]);
+                  }
                 }}
                 disabled={readOnly}
               >

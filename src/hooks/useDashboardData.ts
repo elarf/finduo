@@ -27,6 +27,7 @@ export function useDashboardData(user: User | null) {
 
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
   const [primaryAccountId, setPrimaryAccountId] = useState<string | null>(null);
+  const [excludedAccountIds, setExcludedAccountIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [reloading, setReloading] = useState(false);
   /** 0→1 multiplier applied to displayed numbers during the count-up animation after a silent reload. */
@@ -80,22 +81,32 @@ export function useDashboardData(user: User | null) {
   }, []);
 
   /** Persist account order + primary selection to database (+ local cache). */
-  const saveAccountPrefs = useCallback((orderedAccounts: AppAccount[], primaryId: string | null) => {
+  const saveAccountPrefs = useCallback((orderedAccounts: AppAccount[], primaryId: string | null, excluded?: string[]) => {
     if (!user) return;
     const order = orderedAccounts.map((a) => a.id);
-    // Save to Supabase
-    void supabase.from('user_preferences').upsert({
+    const payload: any = {
       user_id: user.id,
       account_order: order,
       primary_account_id: primaryId,
       updated_at: new Date().toISOString(),
-    });
+    };
+    if (excluded !== undefined) payload.excluded_account_ids = excluded;
+    // Save to Supabase
+    void supabase.from('user_preferences').upsert(payload);
     // Local cache for fast initial load
     void AsyncStorage.setItem(
       `finduo_account_prefs_${user.id}`,
       JSON.stringify({ order, primaryId }),
     );
   }, [user]);
+
+  const toggleAccountExclusion = useCallback((accountId: string) => {
+    setExcludedAccountIds((prev) => {
+      const next = prev.includes(accountId) ? prev.filter((id) => id !== accountId) : [...prev, accountId];
+      saveAccountPrefs(accounts, primaryAccountId, next);
+      return next;
+    });
+  }, [accounts, primaryAccountId, saveAccountPrefs]);
 
   /** Move an account up or down in the list and persist the new order. */
   const moveAccount = useCallback((idx: number, direction: 'up' | 'down') => {
@@ -164,12 +175,15 @@ export function useDashboardData(user: User | null) {
         // Try Supabase first
         const { data: dbPrefs } = await supabase
           .from('user_preferences')
-          .select('account_order, primary_account_id')
+          .select('account_order, primary_account_id, excluded_account_ids')
           .eq('user_id', user.id)
           .maybeSingle();
         if (dbPrefs) {
           order = dbPrefs.account_order as string[] | undefined;
           primaryId = dbPrefs.primary_account_id as string | undefined;
+          if (Array.isArray(dbPrefs.excluded_account_ids)) {
+            setExcludedAccountIds(dbPrefs.excluded_account_ids as string[]);
+          }
         }
 
         // Fall back to AsyncStorage if nothing in DB
@@ -385,6 +399,8 @@ export function useDashboardData(user: User | null) {
     setPrimaryAccountId,
     entryAccountId,
     setEntryAccountId,
+    excludedAccountIds,
+    setExcludedAccountIds,
 
     // Loading state
     loading,
@@ -407,5 +423,6 @@ export function useDashboardData(user: User | null) {
     saveAccountPrefs,
     moveAccount,
     setPrimary,
+    toggleAccountExclusion,
   };
 }

@@ -64,6 +64,7 @@ export default function DashboardScreen() {
     selectedAccountId, setSelectedAccountId,
     primaryAccountId,
     entryAccountId, setEntryAccountId,
+    excludedAccountIds,
     loading, reloading, animMultiplier,
     saving, setSaving,
     missingSchemaColumns,
@@ -71,7 +72,7 @@ export default function DashboardScreen() {
     hasLoadedOnceRef,
     schemaAlertSignatureRef,
     loadData, reloadDashboard,
-    moveAccount, setPrimary,
+    moveAccount, setPrimary, toggleAccountExclusion,
   } = data;
 
   const {
@@ -443,9 +444,9 @@ export default function DashboardScreen() {
 
   const includedAccountIds = useMemo(
     () => accounts
-      .filter((a) => accountSettings[a.id]?.included_in_balance ?? true)
+      .filter((a) => (accountSettings[a.id]?.included_in_balance ?? true) && !excludedAccountIds.includes(a.id))
       .map((a) => a.id),
-    [accountSettings, accounts],
+    [accountSettings, accounts, excludedAccountIds],
   );
 
   // All included-account transactions filtered by current interval (for overview mode)
@@ -972,7 +973,7 @@ export default function DashboardScreen() {
     try {
       const { data, error } = await supabase
         .from('tags')
-        .insert({ account_id: entryAccountId ?? selectedAccountId, name: newTagName.trim() })
+        .insert({ account_id: null, name: newTagName.trim() })
         .select('id,account_id,name,color')
         .single();
 
@@ -987,7 +988,7 @@ export default function DashboardScreen() {
     } finally {
       setSaving(false);
     }
-  }, [entryAccountId, loadData, newTagName, selectedAccountId]);
+  }, [loadData, newTagName]);
 
   const openCreateTag = useCallback(() => {
     setEditingTagId(null);
@@ -1006,10 +1007,6 @@ export default function DashboardScreen() {
   }, []);
 
   const saveTag = useCallback(async () => {
-    if (!selectedAccountId && !editingTagId) {
-      Alert.alert('No account selected', 'Select an account first.');
-      return;
-    }
     if (!tagName.trim()) {
       Alert.alert('Missing name', 'Provide a tag name.');
       return;
@@ -1026,7 +1023,7 @@ export default function DashboardScreen() {
       } else {
         const { error } = await supabase
           .from('tags')
-          .insert({ account_id: selectedAccountId, name: tagName.trim(), color: tagColor, icon: tagIcon });
+          .insert({ account_id: null, name: tagName.trim(), color: tagColor, icon: tagIcon });
         if (error) throw error;
       }
 
@@ -1566,7 +1563,7 @@ export default function DashboardScreen() {
         {!desktopView ? (
           <Image
             source={require('../../assets/logo.png')}
-            style={[styles.headerLogo, { marginBottom: 24 }]}
+            style={{ width: '80%', maxWidth: 400, height: 80, marginBottom: 24 }}
             resizeMode="contain"
           />
         ) : null}
@@ -2216,7 +2213,7 @@ export default function DashboardScreen() {
                       <Text style={styles.manageMeta}>
                         {account.currency}
                         {' • '}
-                        {(accountSettings[account.id]?.included_in_balance ?? true) ? 'Included' : 'Excluded'}
+                        {excludedAccountIds.includes(account.id) ? 'Excluded' : 'Included'}
                         {' • '}
                         {(accountSettings[account.id]?.carry_over_balance ?? true) ? 'Carry over' : 'No carry over'}
                       </Text>
@@ -2250,6 +2247,16 @@ export default function DashboardScreen() {
                           <Text style={[styles.manageSmallText, isPrimary && styles.manageSmallTextActive]}>★</Text>
                         </TouchableOpacity>
 
+                        {/* Include/exclude from overview */}
+                        <TouchableOpacity
+                          style={[styles.manageSmallButton, excludedAccountIds.includes(account.id) && styles.manageSmallButtonActive]}
+                          onPress={() => toggleAccountExclusion(account.id)}
+                        >
+                          <Text style={[styles.manageSmallText, excludedAccountIds.includes(account.id) && { color: '#f87171' }]}>
+                            {excludedAccountIds.includes(account.id) ? '⊘' : '◉'}
+                          </Text>
+                        </TouchableOpacity>
+
                         {isOwned ? (
                           <>
                             <TouchableOpacity style={styles.manageIconButton} onPress={() => {
@@ -2259,17 +2266,24 @@ export default function DashboardScreen() {
                               <Text style={styles.manageIconText}>✎</Text>
                             </TouchableOpacity>
                             <TouchableOpacity style={styles.manageIconButtonDanger} onPress={() => {
-                              Alert.alert('Remove account', `Remove ${account.name}?`, [
-                                { text: 'Cancel', style: 'cancel' },
-                                {
-                                  text: 'Remove',
-                                  style: 'destructive',
-                                  onPress: () => {
-                                    setMenuOpen(false);
-                                    void deleteAccount(account);
+                              if (Platform.OS === 'web') {
+                                if (window.confirm(`Remove ${account.name}? This will delete all transactions, categories, and tags for this account.`)) {
+                                  setMenuOpen(false);
+                                  void deleteAccount(account);
+                                }
+                              } else {
+                                Alert.alert('Remove account', `Remove ${account.name}?`, [
+                                  { text: 'Cancel', style: 'cancel' },
+                                  {
+                                    text: 'Remove',
+                                    style: 'destructive',
+                                    onPress: () => {
+                                      setMenuOpen(false);
+                                      void deleteAccount(account);
+                                    },
                                   },
-                                },
-                              ]);
+                                ]);
+                              }
                             }}>
                               <Text style={styles.manageIconText}>✕</Text>
                             </TouchableOpacity>

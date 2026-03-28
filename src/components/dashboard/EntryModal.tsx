@@ -377,16 +377,6 @@ const EntryModal = React.memo(function EntryModal(props: EntryModalProps) {
                 </TouchableOpacity>
               ))}
             </View>
-            {/* Spacer to push numpad + category to bottom */}
-            <View style={{ flex: 1, minHeight: 8 }} />
-            {/* 5. Numpad */}
-            <View style={styles.numpadGrid}>
-              {['7', '8', '9', '4', '5', '6', '1', '2', '3', 'C', '0', '<'].map((k) => (
-                <TouchableOpacity key={k} style={styles.numpadKey} onPress={() => appendNumpad(k)}>
-                  <Text style={styles.numpadKeyText}>{k}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
             {/* 6. Category selector */}
             <View
               {...chooseCatPanResponder.panHandlers}

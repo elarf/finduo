@@ -56,11 +56,11 @@ export default function DashboardScreen() {
 
   const data = useDashboardData(user);
   const {
-    accounts,
-    categories,
-    tags,
-    transactions,
-    accountSettings,
+    accounts, setAccounts,
+    categories, setCategories,
+    tags, setTags,
+    transactions, setTransactions,
+    accountSettings, setAccountSettings,
     selectedAccountId, setSelectedAccountId,
     primaryAccountId,
     entryAccountId, setEntryAccountId,
@@ -259,6 +259,27 @@ export default function DashboardScreen() {
   const isDesktopBrowser = Platform.OS === 'web' && width >= 1024;
   const desktopView = isDesktopBrowser && viewModeOverride !== 'mobile';
   const framedMobileView = isDesktopBrowser && viewModeOverride === 'mobile';
+
+  const desktopViewRef = useRef(desktopView);
+  desktopViewRef.current = desktopView;
+
+  const menuSwipePanResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (evt, gestureState) => {
+        if (desktopViewRef.current) return false;
+        return (
+          evt.nativeEvent.pageX < 25 &&
+          gestureState.dx > 10 &&
+          Math.abs(gestureState.dx) > Math.abs(gestureState.dy)
+        );
+      },
+      onPanResponderRelease: (_evt, gestureState) => {
+        if (gestureState.dx > 80) {
+          setMenuOpen(true);
+        }
+      },
+    }),
+  ).current;
 
   const selectedAccount = useMemo(
     () => accounts.find((a) => a.id === selectedAccountId) ?? null,
@@ -892,13 +913,17 @@ export default function DashboardScreen() {
       }
 
       setShowAccountModal(false);
-      await loadData();
+      setAccounts((prev) => prev.filter((a) => a.id !== account.id));
+      setCategories((prev) => prev.filter((c) => c.account_id !== account.id));
+      setTags((prev) => prev.filter((t) => t.account_id !== account.id));
+      setTransactions((prev) => prev.filter((t) => t.account_id !== account.id));
+      setAccountSettings((prev) => { const next = { ...prev }; delete next[account.id]; return next; });
     } catch (err) {
       Alert.alert('Remove account failed', err instanceof Error ? err.message : 'Unknown error');
     } finally {
       setSaving(false);
     }
-  }, [accounts, loadData, selectedAccountId, user]);
+  }, [accounts, selectedAccountId, user]);
 
   const saveCategory = useCallback(async () => {
     if (!selectedAccountId) {
@@ -919,28 +944,29 @@ export default function DashboardScreen() {
           .update({ name: categoryName.trim(), type: categoryType, color: categoryColor, icon: categoryIcon, tag_ids: categoryTagIds })
           .eq('id', editingCategoryId);
         if (error) throw error;
+        setCategories((prev) => prev.map((c) => c.id === editingCategoryId ? { ...c, name: categoryName.trim(), type: categoryType, color: categoryColor, icon: categoryIcon, tag_ids: categoryTagIds } : c));
       } else {
-        const { error } = await supabase.from('categories').insert({
+        const { data: newCat, error } = await supabase.from('categories').insert({
           account_id: selectedAccountId,
           name: categoryName.trim(),
           type: categoryType,
           color: categoryColor,
           icon: categoryIcon,
           tag_ids: categoryTagIds,
-        });
+        }).select('id,account_id,name,type,color,icon,tag_ids').single();
         if (error) throw error;
+        if (newCat) setCategories((prev) => [...prev, newCat as AppCategory]);
       }
       setCategoryColor(null);
       setCategoryIcon(null);
       setCategoryTagIds([]);
       setShowCategoryModal(false);
-      await loadData();
     } catch (err) {
       Alert.alert('Save category failed', err instanceof Error ? err.message : 'Unknown error');
     } finally {
       setSaving(false);
     }
-  }, [categoryColor, categoryIcon, categoryName, categoryTagIds, categoryType, editingCategoryId, loadData, selectedAccountId]);
+  }, [categoryColor, categoryIcon, categoryName, categoryTagIds, categoryType, editingCategoryId, selectedAccountId]);
 
   const deleteCategory = useCallback(async (categoryId: string) => {
     setSaving(true);
@@ -958,13 +984,14 @@ export default function DashboardScreen() {
       if (error) throw error;
 
       setShowCategoryModal(false);
-      await loadData();
+      setCategories((prev) => prev.filter((c) => c.id !== categoryId));
+      setTransactions((prev) => prev.map((t) => t.category_id === categoryId ? { ...t, category_id: null } : t));
     } catch (err) {
       Alert.alert('Remove category failed', err instanceof Error ? err.message : 'Unknown error');
     } finally {
       setSaving(false);
     }
-  }, [loadData]);
+  }, []);
 
   const createTag = useCallback(async () => {
     if (!newTagName.trim()) return;
@@ -980,15 +1007,15 @@ export default function DashboardScreen() {
       if (error) throw error;
       if (data?.id) {
         setEntryTagIds((prev) => (prev.includes(data.id) ? prev : [...prev, data.id]));
+        setTags((prev) => [...prev, { id: data.id, account_id: null, name: data.name, color: data.color ?? null, icon: null } as AppTag]);
       }
       setNewTagName('');
-      await loadData();
     } catch (err) {
       Alert.alert('Create tag failed', err instanceof Error ? err.message : 'Unknown error');
     } finally {
       setSaving(false);
     }
-  }, [loadData, newTagName]);
+  }, [newTagName]);
 
   const openCreateTag = useCallback(() => {
     setEditingTagId(null);
@@ -1020,23 +1047,26 @@ export default function DashboardScreen() {
           .update({ name: tagName.trim(), color: tagColor, icon: tagIcon })
           .eq('id', editingTagId);
         if (error) throw error;
+        setTags((prev) => prev.map((t) => t.id === editingTagId ? { ...t, name: tagName.trim(), color: tagColor, icon: tagIcon } : t));
       } else {
-        const { error } = await supabase
+        const { data: newTag, error } = await supabase
           .from('tags')
-          .insert({ account_id: null, name: tagName.trim(), color: tagColor, icon: tagIcon });
+          .insert({ account_id: null, name: tagName.trim(), color: tagColor, icon: tagIcon })
+          .select('id,account_id,name,color,icon')
+          .single();
         if (error) throw error;
+        if (newTag) setTags((prev) => [...prev, newTag as AppTag]);
       }
 
       setTagColor(null);
       setTagIcon(null);
       setShowTagModal(false);
-      await loadData();
     } catch (err) {
       Alert.alert('Save tag failed', err instanceof Error ? err.message : 'Unknown error');
     } finally {
       setSaving(false);
     }
-  }, [editingTagId, loadData, tagColor, tagIcon, tagName]);
+  }, [editingTagId, tagColor, tagIcon, tagName]);
 
   const deleteTag = useCallback(async (tagId: string) => {
     setSaving(true);
@@ -1054,13 +1084,14 @@ export default function DashboardScreen() {
       if (error) throw error;
 
       setShowTagModal(false);
-      await loadData();
+      setTags((prev) => prev.filter((t) => t.id !== tagId));
+      setTransactions((prev) => prev.map((t) => ({ ...t, tag_ids: (t.tag_ids ?? []).filter((id) => id !== tagId) })));
     } catch (err) {
       Alert.alert('Remove tag failed', err instanceof Error ? err.message : 'Unknown error');
     } finally {
       setSaving(false);
     }
-  }, [loadData]);
+  }, []);
 
   const toggleTag = useCallback((id: string) => {
     setEntryTagIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
@@ -1132,7 +1163,22 @@ export default function DashboardScreen() {
       }
 
       setShowEntryModal(false);
-      await loadData();
+      const updatedTx: AppTransaction = {
+        id: txId!,
+        account_id: entryAccountId,
+        category_id: entryCategoryId,
+        amount,
+        note: entryNote.trim() || null,
+        type: entryType,
+        date: entryDate,
+        created_at: new Date().toISOString(),
+        tag_ids: entryTagIds,
+      };
+      if (editingTransactionId) {
+        setTransactions((prev) => prev.map((t) => t.id === editingTransactionId ? updatedTx : t));
+      } else {
+        setTransactions((prev) => [updatedTx, ...prev]);
+      }
     } catch (err) {
       Alert.alert('Save entry failed', err instanceof Error ? err.message : 'Unknown error');
     } finally {
@@ -1147,7 +1193,6 @@ export default function DashboardScreen() {
     entryNote,
     entryTagIds,
     entryType,
-    loadData,
     user,
   ]);
 
@@ -1218,7 +1263,30 @@ export default function DashboardScreen() {
       }
       setAccountTagIds([]);
       setShowAccountModal(false);
-      await loadData();
+
+      const settingsObj = {
+        account_id: accountId!,
+        included_in_balance: settingsIncluded,
+        carry_over_balance: settingsCarryOver,
+        initial_balance: initial,
+        initial_balance_date: settingsInitialDate,
+      };
+      setAccountSettings((prev) => ({ ...prev, [accountId!]: settingsObj }));
+
+      if (editingAccountId) {
+        setAccounts((prev) => prev.map((a) => a.id === editingAccountId ? { ...a, name: newAccountName.trim(), currency: newAccountCurrency, tag_ids: accountTagIds, icon: newAccountIcon ?? null } : a));
+      } else {
+        const newAcct: AppAccount = {
+          id: accountId!,
+          name: newAccountName.trim(),
+          currency: newAccountCurrency,
+          icon: newAccountIcon ?? null,
+          created_at: new Date().toISOString(),
+          created_by: user.id,
+          tag_ids: [],
+        };
+        setAccounts((prev) => [...prev, newAcct]);
+      }
     } catch (err) {
       Alert.alert('Save account failed', err instanceof Error ? err.message : 'Unknown error');
     } finally {
@@ -1227,7 +1295,6 @@ export default function DashboardScreen() {
   }, [
     accountTagIds,
     editingAccountId,
-    loadData,
     newAccountCurrency,
     newAccountIcon,
     newAccountName,
@@ -1299,6 +1366,7 @@ export default function DashboardScreen() {
 
       // Find-or-create "Transfer" categories so transfers don't appear as uncategorized
       // Creates per-account categories if no global (account_id=null) one exists.
+      const newCats: AppCategory[] = [];
       const findOrCreateCat = async (type: 'expense' | 'income', accountId: string) => {
         const existing = await supabase
           .from('categories')
@@ -1311,8 +1379,9 @@ export default function DashboardScreen() {
         const created = await supabase
           .from('categories')
           .insert({ account_id: accountId, name: 'Transfer', type })
-          .select('id')
+          .select('id,account_id,name,type,color,icon,tag_ids')
           .single();
+        if (created.data) newCats.push(created.data as AppCategory);
         return (created.data?.id ?? null) as string | null;
       };
 
@@ -1321,7 +1390,7 @@ export default function DashboardScreen() {
         findOrCreateCat('income', transferToId!),
       ]);
 
-      const { error: sourceError } = await supabase.from('transactions').insert({
+      const { data: srcData, error: sourceError } = await supabase.from('transactions').insert({
         account_id: transferFromId,
         category_id: transferExpenseCatId,
         amount: sourceAmount,
@@ -1329,10 +1398,10 @@ export default function DashboardScreen() {
         note: sourceNote,
         date: transferDate,
         created_by: user.id,
-      });
+      }).select('id').single();
       if (sourceError) throw sourceError;
 
-      const { error: targetError } = await supabase.from('transactions').insert({
+      const { data: tgtData, error: targetError } = await supabase.from('transactions').insert({
         account_id: transferToId,
         category_id: transferIncomeCatId,
         amount: targetAmount,
@@ -1340,11 +1409,39 @@ export default function DashboardScreen() {
         note: targetNote,
         date: transferDate,
         created_by: user.id,
-      });
+      }).select('id').single();
       if (targetError) throw targetError;
 
       setShowTransferModal(false);
-      await loadData();
+
+      if (newCats.length > 0) {
+        setCategories((prev) => [...prev, ...newCats]);
+      }
+
+      const sourceTx: AppTransaction = {
+        id: srcData!.id,
+        account_id: transferFromId!,
+        category_id: transferExpenseCatId,
+        amount: sourceAmount,
+        note: sourceNote,
+        type: 'expense',
+        date: transferDate,
+        created_at: new Date().toISOString(),
+        tag_ids: [],
+      };
+      const targetTx: AppTransaction = {
+        id: tgtData!.id,
+        account_id: transferToId!,
+        category_id: transferIncomeCatId,
+        amount: targetAmount,
+        note: targetNote,
+        type: 'income',
+        date: transferDate,
+        created_at: new Date().toISOString(),
+        tag_ids: [],
+      };
+      setTransactions((prev) => [sourceTx, targetTx, ...prev]);
+
       Alert.alert('Transfer saved', `${formatCurrency(sourceAmount, fromAccount.currency)} -> ${formatCurrency(targetAmount, toAccount.currency)}`);
     } catch (err) {
       Alert.alert('Transfer failed', err instanceof Error ? err.message : 'Unknown error');
@@ -1354,7 +1451,6 @@ export default function DashboardScreen() {
   }, [
     accounts,
     formatCurrency,
-    loadData,
     transferDate,
     transferFromId,
     transferNote,
@@ -1582,7 +1678,7 @@ export default function DashboardScreen() {
           framedMobileView && styles.surfaceFrameMobile,
         ]}
       >
-        <View style={styles.container}>
+        <View style={styles.container} {...menuSwipePanResponder.panHandlers}>
           <View style={styles.headerRow}>
             <TouchableOpacity
               style={styles.avatarBtn}

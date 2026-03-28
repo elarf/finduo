@@ -65,6 +65,20 @@ Financial tracking app for couples. Track income, expenses, and transfers across
 - Named invites for tracking who was invited
 - Shared accounts appear alongside owned accounts
 
+### Pools & Shared Expenses
+- Create event or continuous pools for shared expense tracking
+- Add members to pools, track expenses, and settle balances
+- Settlement algorithm minimizes number of transfers
+- Event pools close after settlement; continuous pools remain active
+- Pool settlements automatically generate debts in the lending system
+
+### Lending System
+- Person-to-person debt tracking independent of pools
+- Create debts with amount, description, and optional due date
+- Both parties must confirm debt before status becomes 'confirmed'
+- Track debt status: pending → confirmed → paid
+- Debts can be disputed or cancelled
+
 ### Overview Mode
 - Tap the balance card header to toggle between single-account and included-accounts overview
 - Overview mode shows combined balance across all included accounts
@@ -122,6 +136,13 @@ Financial tracking app for couples. Track income, expenses, and transfers across
 - Apple-specific meta tags for iOS home screen experience
 - Post-build script injects all PWA tags into the Expo web export
 
+## 🧠 Architecture Notes
+
+- Pool and Lending systems are implemented as separate domains
+- Pool handles shared expense tracking and settlement calculation
+- Lending handles persistent debts between users
+- Integration between the two is planned but not tightly coupled
+
 ## Database Schema
 
 ### Tables
@@ -139,6 +160,12 @@ Financial tracking app for couples. Track income, expenses, and transfers across
 | `user_preferences` | Per-user prefs (account_order, primary_account_id) |
 | `user_profiles` | Public user discovery (display_name, email, avatar_url) for friend system |
 | `friends` | Directional friend relationships (user_id → friend_user_id, status: pending/accepted/rejected/blocked) |
+| `pools` | Shared expense pools (name, type: event/continuous, currency, status, created_by) |
+| `pool_members` | Pool membership (pool_id, user_id, role: owner/member) |
+| `pool_expenses` | Pool transactions (pool_id, paid_by, amount, description, split_among) |
+| `pool_settlements` | Settlement snapshots (balances, transfers, expense_ids) |
+| `pool_debts` | Pool-generated debts (settlement_id, from/to user, amount, status) |
+| `debts` | Standalone lending system (from/to user, amount, description, status, confirmations) |
 
 ### Key Design Decisions
 - Transfer categories are detected by `category.name === 'Transfer'` — created per-account if no global one exists
@@ -146,6 +173,8 @@ Financial tracking app for couples. Track income, expenses, and transfers across
 - Row Level Security (RLS) is enabled; users can only access their own data and shared accounts
 - Friends use directional rows with mutual acceptance; blocked users cannot see the relationship
 - Account sharing via friends creates `account_members` rows — same as invite tokens but non-expiring and revocable
+- Pool settlements generate debts in both `pool_debts` (tied to settlement) and `debts` (standalone tracking)
+- Pool expenses are stored separately from account transactions — pools don't affect account balances
 
 ## Project Structure
 
@@ -174,25 +203,33 @@ finduo/
         FriendsModal.tsx           Friends management (list, requests, add, account sharing)
         IconPickerSheet.tsx        Lucide icon grid picker
         InvitationsModal.tsx       Token-based invite management
+        PoolListModal.tsx          Pool management UI (list, create, expenses, settlement)
         TagModal.tsx               Create/edit tag modal
         TransferModal.tsx          Cross-account transfer modal
     context/
       AuthContext.tsx               Auth state, Google OAuth (web + native), deep link handling
     hooks/
       useDashboardData.ts          Core data loading: accounts, categories, tags, transactions, settings
+      useDebt.ts                   Standalone debt system: create, confirm, list debts
       useFriends.ts                Friends system: requests, acceptance, blocking, account sharing
+      usePool.ts                   Pool management: create, expenses, settlements, pool-specific debts
     lib/
       supabase.ts                  Supabase client init (PKCE, AsyncStorage on native)
     navigation/
       index.tsx                    Root navigator: Login vs Dashboard based on session
     screens/
-      LoginScreen.tsx              Google sign-in UI
       DashboardScreen.tsx          Main screen: all CRUD, modals, charts, gestures
       DashboardScreen.styles.ts    Shared StyleSheet for dashboard components
+      LoginScreen.tsx              Google sign-in UI
+      PoolScreen.tsx               Pool management screen (standalone, not integrated with dashboard)
     types/
       auth.ts                      AuthContextValue interface
       dashboard.ts                 App data types, helpers (AppAccount, AppCategory, etc.)
+      debt.ts                      Standalone debt types (Debt, ResolvedDebt, CreateDebtData)
       friends.ts                   Friend system types (ResolvedFriend, ResolvedRequest, etc.)
+      pool.ts                      Pool types (Pool, PoolExpense, PoolSettlement, etc.)
+    utils/
+      settlement.ts                Pure settlement algorithm (minimize transfers)
   supabase/
     migrations/                    SQL migration files
 ```
@@ -291,7 +328,6 @@ git status --short
 - [ ] Bulk transaction operations (multi-select, delete, re-categorize)
 - [ ] Receipt photo attachment on transactions
 - [ ] Account balance history / net worth tracking over time
-- [ ] Shared pools and lending between friends
 
 ### Technical
 - [ ] Add unit tests and integration tests

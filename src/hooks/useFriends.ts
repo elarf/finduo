@@ -19,10 +19,14 @@ export function useFriends(user: User | null) {
         user_id: user.id,
         display_name:
           (user.user_metadata?.full_name as string | undefined) ??
+          (user.user_metadata?.name as string | undefined) ??
           user.email?.split('@')[0] ??
           null,
         email: user.email?.toLowerCase() ?? null,
-        avatar_url: (user.user_metadata?.avatar_url as string | undefined) ?? null,
+        avatar_url:
+          (user.user_metadata?.avatar_url as string | undefined) ||
+          (user.user_metadata?.picture as string | undefined) ||
+          null,
       },
       { onConflict: 'user_id' },
     );

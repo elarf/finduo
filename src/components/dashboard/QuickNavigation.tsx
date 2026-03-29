@@ -82,6 +82,8 @@ type QuickNavigationProps = {
   openCreateTag: () => void;
   openEditTag: (tag: AppTag) => void;
   deleteTag: (id: string) => Promise<void>;
+  selectedTagFilter: string | null;
+  onFilterTag: (id: string) => void;
 
   // Interval
   interval: IntervalKey;
@@ -123,6 +125,7 @@ function QuickNavigation({
   menuTagsExpanded, setMenuTagsExpanded,
   menuTagsEditMode, setMenuTagsEditMode,
   openCreateTag, openEditTag, deleteTag,
+  selectedTagFilter, onFilterTag,
   interval, setInterval, customStart, setCustomStart, customEnd, setCustomEnd,
   pendingDebtCount,
   setShowFriendsModal, openInvitationsModal, reloadDashboard,
@@ -458,12 +461,18 @@ function QuickNavigation({
                 </TouchableOpacity>
               </View>
             </View>
-            {menuTagsExpanded && selectedTags.map((tag) => (
-              <View key={tag.id} style={styles.manageRow}>
-                <View style={styles.managePrimary}>
-                  <Text style={styles.manageTitle}>#{tag.name}</Text>
-                  <Text style={styles.manageMeta}>{accounts.find((a) => a.id === tag.account_id)?.name ?? 'Global'}</Text>
-                </View>
+            {menuTagsExpanded && selectedTags.map((tag) => {
+              const isActive = selectedTagFilter === tag.id;
+              const tagColor = tag.color ?? '#8FA8C9';
+              return (
+              <View key={tag.id} style={[styles.manageRow, isActive && { backgroundColor: '#0D2137', borderRadius: 6 }]}>
+                <TouchableOpacity style={styles.managePrimary} onPress={() => { onFilterTag(tag.id); onClose(); }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    {tag.icon ? <Icon name={tag.icon as any} size={16} color={tagColor} /> : null}
+                    <Text style={[styles.manageTitle, { color: isActive ? tagColor : (tag.color ?? undefined) }]}>#{tag.name}</Text>
+                    {isActive && <Icon name="Filter" size={12} color={tagColor} />}
+                  </View>
+                </TouchableOpacity>
                 {menuTagsEditMode && (
                   <>
                     <TouchableOpacity style={styles.manageIconButton} onPress={() => {
@@ -487,7 +496,8 @@ function QuickNavigation({
                   </>
                 )}
               </View>
-            ))}
+              );
+            })}
 
             {/* ── Interval ── */}
             <Text style={styles.menuSectionTitle}>Interval</Text>

@@ -46,13 +46,15 @@ const DatePickerModal: React.FC<DatePickerModalProps> = ({
           </TouchableOpacity>
         </View>
         <View style={styles.dpWeekRow}>
-          {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map((d) => (
-            <Text key={d} style={styles.dpWeekDay}>{d}</Text>
+          {['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'].map((d, i) => (
+            <Text key={d} style={[styles.dpWeekDay, i >= 5 && { color: '#f87171' }]}>{d}</Text>
           ))}
         </View>
         <View style={styles.dpDayGrid}>
           {(() => {
-            const firstDay = new Date(dpYear, dpMonth, 1).getDay();
+            const rawFirstDay = new Date(dpYear, dpMonth, 1).getDay();
+            // Shift so Monday=0 … Sunday=6
+            const firstDay = (rawFirstDay + 6) % 7;
             const daysInMonth = new Date(dpYear, dpMonth + 1, 0).getDate();
             const cells: React.ReactNode[] = [];
             for (let i = 0; i < firstDay; i++) {
@@ -62,6 +64,8 @@ const DatePickerModal: React.FC<DatePickerModalProps> = ({
               const isoDate = `${dpYear}-${String(dpMonth + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
               const isSelected = entryDate === isoDate;
               const isToday = todayIso() === isoDate;
+              const dow = new Date(dpYear, dpMonth, d).getDay(); // 0=Sun, 6=Sat
+              const isWeekend = dow === 0 || dow === 6;
               cells.push(
                 <TouchableOpacity
                   key={d}
@@ -72,7 +76,7 @@ const DatePickerModal: React.FC<DatePickerModalProps> = ({
                   ]}
                   onPress={() => { setEntryDate(isoDate); onClose(); }}
                 >
-                  <Text style={[styles.dpDayText, isSelected && styles.dpDayTextSelected]}>{d}</Text>
+                  <Text style={[styles.dpDayText, isSelected && styles.dpDayTextSelected, isWeekend && !isSelected && { color: '#f87171' }]}>{d}</Text>
                 </TouchableOpacity>,
               );
             }

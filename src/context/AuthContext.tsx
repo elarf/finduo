@@ -33,6 +33,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // Normalise the Google avatar — OAuth may populate either avatar_url or picture.
+  const avatarUrl: string | null =
+    (user?.user_metadata?.avatar_url as string | undefined) ||
+    (user?.user_metadata?.picture as string | undefined) ||
+    null;
+
   const handleDeepLink = useCallback(async (url: string) => {
     const { params, errorCode } = QueryParams.getQueryParams(url);
 
@@ -167,7 +173,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ session, user, loading, signInWithGoogle, signOut }}>
+    <AuthContext.Provider value={{ session, user, avatarUrl, loading, signInWithGoogle, signOut }}>
       {children}
     </AuthContext.Provider>
   );

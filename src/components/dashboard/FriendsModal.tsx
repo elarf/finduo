@@ -63,6 +63,9 @@ const FriendsModal: React.FC<FriendsModalProps> = ({
   const [sending, setSending] = useState(false);
   const [friendsEditMode, setFriendsEditMode] = useState(false);
   const [expandedFriendId, setExpandedFriendId] = useState<string | null>(null);
+  const [failedAvatars, setFailedAvatars] = useState<Set<string>>(new Set());
+  const onAvatarError = (id: string) =>
+    setFailedAvatars((prev) => new Set([...prev, id]));
 
   const handleOpen = () => {
     setTab('friends');
@@ -177,8 +180,8 @@ const FriendsModal: React.FC<FriendsModalProps> = ({
                                 onPress={() => setExpandedFriendId(isExpanded ? null : f.userId)}
                               >
                                 {/* Avatar */}
-                                {avatar ? (
-                                  <Image source={{ uri: avatar }} style={local.avatar} />
+                                {avatar && !failedAvatars.has(f.rowId) ? (
+                                  <Image source={{ uri: avatar }} style={local.avatar} onError={() => onAvatarError(f.rowId)} />
                                 ) : (
                                   <View style={local.avatarFallback}>
                                     <Text style={local.avatarFallbackText}>{avatarFallback(f)}</Text>
@@ -274,8 +277,8 @@ const FriendsModal: React.FC<FriendsModalProps> = ({
                         const avatar = getAvatar(r);
                         return (
                           <View key={r.rowId} style={local.friendCard}>
-                            {avatar ? (
-                              <Image source={{ uri: avatar }} style={local.avatarSmall} />
+                            {avatar && !failedAvatars.has(r.rowId) ? (
+                              <Image source={{ uri: avatar }} style={local.avatarSmall} onError={() => onAvatarError(r.rowId)} />
                             ) : (
                               <View style={[local.avatarFallback, local.avatarSmall]}>
                                 <Text style={local.avatarFallbackText}>{avatarFallback(r)}</Text>
@@ -310,8 +313,8 @@ const FriendsModal: React.FC<FriendsModalProps> = ({
                         const avatar = getAvatar(r);
                         return (
                           <View key={r.rowId} style={local.friendCard}>
-                            {avatar ? (
-                              <Image source={{ uri: avatar }} style={local.avatarSmall} />
+                            {avatar && !failedAvatars.has(r.rowId) ? (
+                              <Image source={{ uri: avatar }} style={local.avatarSmall} onError={() => onAvatarError(r.rowId)} />
                             ) : (
                               <View style={[local.avatarFallback, local.avatarSmall]}>
                                 <Text style={local.avatarFallbackText}>{avatarFallback(r)}</Text>

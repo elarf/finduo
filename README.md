@@ -2,6 +2,41 @@
 
 Financial tracking app for couples. Track income, expenses, and transfers across shared accounts with real-time sync, category-based spending insights, and cross-currency support.
 
+## Patch Notes
+
+### v0.6 — UX polish, tag filtering, avatar reliability
+**Entry modal**
+- Desktop view now uses a centred 390 px card instead of the full viewport width
+- Bottom bar is now context-aware: no category selected → "Choose Category" button; category selected → "Save to [icon] [name]"; category selected + back → "Reselect" clears the selection
+- Tags section moved above the numpad and rendered as a wrap grid (two rows), sorted by usage frequency within the selected category
+- Note field shows a live read-only preview of selected tags alongside the typed note, matching how the transaction will be displayed in the list
+- Date field appends ", Today" when the selected date is the current day
+
+**Date picker**
+- Week now starts on Monday
+- Saturday and Sunday are colored red in both the header row and day cells
+
+**Tag filter**
+- Tags in the Quick Navigation menu are now tappable: tap to filter all transactions globally; tap again to deactivate
+- Active tag filter highlighted with the tag's own color and a small filter icon
+- "global" label removed from tag rows
+
+**Filter notification bar**
+- A bar slides in above the bottom navigation whenever any filter is active (category, tag, or transfers-only)
+- Shows a summary of active filters (e.g. "category + tag filter active")
+- A "✕ Clear all" button on the right resets all filters at once
+
+**Scroll-to-top FAB**
+- Repositioned to `right: 100, bottom: 130` to avoid overlapping the bottom bar and keep small transaction amounts visible
+
+**Avatar reliability**
+- `AuthContext` now normalises the Google profile image from both `avatar_url` and `picture` metadata keys and exposes it as `avatarUrl`
+- All avatar `<Image>` components have an `onError` handler that falls back to the user's initial; error state resets automatically on re-login
+- `useFriends` profile upsert also checks the `picture` key so the `user_profiles` table stays in sync
+
+**Android back button**
+- Pressing back when no modal is open now shows an "Exit app?" confirmation dialog instead of silently doing nothing
+
 ## Tech Stack
 
 - **Frontend:** React Native 0.83.2 + Expo SDK 55, TypeScript
@@ -361,7 +396,7 @@ git status --short
 - [ ] Remove `material-icons` package from dependencies (no longer used)
 - [ ] Add proper error boundaries
 - [x] Implement targeted state updates for mutations (no full refetch after save/delete)
-- [x] Android back button intercept (closes modals, never exits app)
+- [x] Android back button intercept (closes modals; exit confirmation dialog on dashboard)
 - [ ] Add offline support with sync queue
 - [ ] Set up CI/CD pipeline (lint, typecheck, test, build)
 - [ ] Add Supabase realtime subscriptions for live updates between shared users

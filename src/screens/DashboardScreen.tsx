@@ -56,7 +56,7 @@ import QuickNavigation from '../components/dashboard/QuickNavigation';
 import { useDebts } from '../hooks/useDebts';
 
 export default function DashboardScreen() {
-  const { user, signOut } = useAuth();
+  const { user, avatarUrl, signOut } = useAuth();
   const navigation = useNavigation<any>();
   const { width, height } = useWindowDimensions();
 
@@ -133,6 +133,7 @@ export default function DashboardScreen() {
   const [menuTagsEditMode, setMenuTagsEditMode] = useState(false);
   const [showFriendsModal, setShowFriendsModal] = useState(false);
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<string | null>(null);
+  const [selectedTagFilter, setSelectedTagFilter] = useState<string | null>(null);
   const [showOnlyTransfers, setShowOnlyTransfers] = useState(false);
 
   const [entryType, setEntryType] = useState<TransactionType>('expense');
@@ -186,8 +187,8 @@ export default function DashboardScreen() {
   const [sidebarCategoryFilter, setSidebarCategoryFilter] = useState<string | null>(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [datePickerTarget, setDatePickerTarget] = useState<'entry' | 'transfer'>('entry');
-  const [entryHadInitialCategory, setEntryHadInitialCategory] = useState(false);
   const [scrollY, setScrollY] = useState(0);
+  const [avatarImgError, setAvatarImgError] = useState(false);
   const [isCatPickerOpen, setIsCatPickerOpen] = useState(false);
   const [dragHighlightedCatId, setDragHighlightedCatId] = useState<string | null>(null);
   // Date picker navigation state
@@ -198,7 +199,6 @@ export default function DashboardScreen() {
   const [acctPickerSheetTarget, setAcctPickerSheetTarget] = useState<'entry' | 'invite' | 'transfer-from' | 'transfer-to' | null>(null);
 
   const [showIntervalPicker, setShowIntervalPicker] = useState(false);
-  const [showEntryAccountPicker, setShowEntryAccountPicker] = useState(false);
   const [overviewCollapsed, setOverviewCollapsed] = useState(false);
   const [spendingCollapsed, setSpendingCollapsed] = useState(true);
   const [categoriesCollapsed, setCategoriesCollapsed] = useState(false);
@@ -213,57 +213,9 @@ export default function DashboardScreen() {
   const acctPickerAnim = useRef(new Animated.Value(0)).current;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const iconPickerAnim = useRef(new Animated.Value(0)).current;
+  const filterBarAnim = useRef(new Animated.Value(0)).current;
   const catCellMeasurements = useRef<Record<string, { x: number; y: number; w: number; h: number }>>({});
   const catCellRefs = useRef<Record<string, View | null>>({});
-
-  // PanResponder for the "Choose Category" button – swipe-to-select
-  const chooseCatPanResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: () => true,
-      onPanResponderGrant: () => {
-        isCatPickerOpenRef.current = true;
-        setIsCatPickerOpen(true);
-        catPickerAnim.setValue(1);
-      },
-      onPanResponderMove: (evt) => {
-        if (!isCatPickerOpenRef.current) return;
-        const { pageX, pageY } = evt.nativeEvent;
-        let hitId: string | null = null;
-        for (const [id, m] of Object.entries(catCellMeasurements.current)) {
-          if (pageX >= m.x && pageX <= m.x + m.w && pageY >= m.y && pageY <= m.y + m.h) {
-            hitId = id;
-            break;
-          }
-        }
-        setDragHighlightedCatId(hitId);
-      },
-      onPanResponderRelease: (evt) => {
-        const { pageX, pageY } = evt.nativeEvent;
-        let hitId: string | null = null;
-        for (const [id, m] of Object.entries(catCellMeasurements.current)) {
-          if (pageX >= m.x && pageX <= m.x + m.w && pageY >= m.y && pageY <= m.y + m.h) {
-            hitId = id;
-            break;
-          }
-        }
-        if (hitId) {
-          // Finger released over a category → select it immediately
-          setEntryCategoryId(hitId);
-          setDragHighlightedCatId(null);
-          isCatPickerOpenRef.current = false;
-          catPickerAnim.setValue(0);
-          setIsCatPickerOpen(false);
-        } else {
-          // Short tap or missed target → keep picker open for normal tap selection
-          setDragHighlightedCatId(null);
-        }
-      },
-      onPanResponderTerminate: () => {
-        setDragHighlightedCatId(null);
-      },
-    }),
-  ).current;
 
   // Edge swipe to open menu (mobile only)
   const menuSwipePanResponder = useRef(
@@ -334,6 +286,19 @@ export default function DashboardScreen() {
 
   const entryTags = useMemo(() => tags, [tags]);
 
+  const entryTagUsage = useMemo(() => {
+    const usage: Record<string, number> = {};
+    if (!entryCategoryId) return usage;
+    for (const tx of transactions) {
+      if (tx.account_id !== entryAccountId) continue;
+      if (tx.category_id !== entryCategoryId) continue;
+      for (const tagId of tx.tag_ids ?? []) {
+        usage[tagId] = (usage[tagId] ?? 0) + 1;
+      }
+    }
+    return usage;
+  }, [entryCategoryId, entryAccountId, transactions]);
+
   const selectedTxs = useMemo(
     () => transactions.filter((t) => t.account_id === selectedAccountId),
     [transactions, selectedAccountId],
@@ -402,8 +367,12 @@ export default function DashboardScreen() {
   }, [interval, intervalBounds.end, intervalBounds.start]);
 
   const filteredSelectedTxs = useMemo(
-    () => selectedTxs.filter((t) => inInterval(t.date)),
-    [inInterval, selectedTxs],
+    () => selectedTxs.filter((t) => {
+      if (!inInterval(t.date)) return false;
+      if (selectedTagFilter && !(t.tag_ids ?? []).includes(selectedTagFilter)) return false;
+      return true;
+    }),
+    [inInterval, selectedTxs, selectedTagFilter],
   );
 
   const visibleSelectedTxs = useMemo(
@@ -475,9 +444,13 @@ export default function DashboardScreen() {
   const filteredIncludedTxs = useMemo(
     () =>
       transactions
-        .filter((t) => includedAccountIds.includes(t.account_id) && inInterval(t.date))
+        .filter((t) => {
+          if (!includedAccountIds.includes(t.account_id) || !inInterval(t.date)) return false;
+          if (selectedTagFilter && !(t.tag_ids ?? []).includes(selectedTagFilter)) return false;
+          return true;
+        })
         .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0)),
-    [transactions, includedAccountIds, inInterval],
+    [transactions, includedAccountIds, inInterval, selectedTagFilter],
   );
 
   const sidebarFilteredTxs = useMemo(() => {
@@ -495,6 +468,11 @@ export default function DashboardScreen() {
   const tagsById = useMemo(
     () => Object.fromEntries(tags.map((t) => [t.id, t])),
     [tags],
+  );
+
+  const categoriesById = useMemo(
+    () => Object.fromEntries(categories.map((c) => [c.id, c])),
+    [categories],
   );
 
   const txDisplayLabel = useCallback((tx: AppTransaction, fallback: string): React.ReactNode => {
@@ -682,6 +660,14 @@ export default function DashboardScreen() {
   }, [missingSchemaColumns]);
 
   useEffect(() => {
+    const active = !!(selectedCategoryFilter || selectedTagFilter || showOnlyTransfers);
+    Animated.timing(filterBarAnim, { toValue: active ? 1 : 0, duration: 220, useNativeDriver: false }).start();
+  }, [selectedCategoryFilter, selectedTagFilter, showOnlyTransfers, filterBarAnim]);
+
+  // Reset image error flag whenever the URL changes (e.g. after re-login).
+  useEffect(() => { setAvatarImgError(false); }, [avatarUrl]);
+
+  useEffect(() => {
     if (!user || hasLoadedOnceRef.current) return;
     hasLoadedOnceRef.current = true;
     void loadData();
@@ -823,7 +809,17 @@ export default function DashboardScreen() {
       if (showInvitationsModal)  { setShowInvitationsModal(false);  return true; }
       if (showFriendsModal)      { setShowFriendsModal(false);      return true; }
       if (menuOpen)              { setMenuOpen(false);              return true; }
-      return true; // no modal open — stay on dashboard, never exit
+      // No modal open — confirm exit
+      Alert.alert(
+        'Exit app?',
+        'Do you want to close Finduo?',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Exit', style: 'destructive', onPress: () => BackHandler.exitApp() },
+        ],
+        { cancelable: true },
+      );
+      return true;
     };
     const sub = BackHandler.addEventListener('hardwareBackPress', onBack);
     return () => sub.remove();
@@ -857,12 +853,10 @@ export default function DashboardScreen() {
     setEntryAmount('');
     setEntryDate(todayIso());
     setEntryCategoryId(categoryId ?? null);
-    setEntryHadInitialCategory(!!categoryId);
     setEntryNote('');
     setEntryTagIds([]);
     setNewTagName('');
     setEntryAccountId(selectedAccountId);
-    setShowEntryAccountPicker(false);
     isCatPickerOpenRef.current = false;
     setIsCatPickerOpen(false);
     catPickerAnim.setValue(0);
@@ -875,11 +869,9 @@ export default function DashboardScreen() {
     setEntryAmount(String(Math.abs(Number(tx.amount) || 0)));
     setEntryDate(tx.date);
     setEntryCategoryId(tx.category_id ?? null);
-    setEntryHadInitialCategory(true); // editing always has context
     setEntryNote(tx.note ?? '');
     setEntryTagIds(tx.tag_ids);
     setEntryAccountId(tx.account_id);
-    setShowEntryAccountPicker(false);
     isCatPickerOpenRef.current = false;
     setIsCatPickerOpen(false);
     catPickerAnim.setValue(0);
@@ -1779,10 +1771,11 @@ export default function DashboardScreen() {
                 setMenuOpen(true);
               }}
             >
-              {user?.user_metadata?.avatar_url ? (
+              {avatarUrl && !avatarImgError ? (
                 <Image
-                  source={{ uri: user.user_metadata.avatar_url as string }}
+                  source={{ uri: avatarUrl }}
                   style={styles.avatarImg}
+                  onError={() => setAvatarImgError(true)}
                 />
               ) : (
                 <View style={styles.avatarFallback}>
@@ -2176,12 +2169,17 @@ export default function DashboardScreen() {
                 return txSource.map((tx) => {
                   const isTransfer = tx.category_id != null && transferCategoryIds.includes(tx.category_id);
                   const acct = showAccountOverviewPicker ? accountsById[tx.account_id] : null;
+                  const txCat = tx.category_id ? categoriesById[tx.category_id] : null;
+                  const titleColor = isTransfer ? '#a855f7' : (txCat?.color ?? undefined);
                   return (
                     <TouchableOpacity key={tx.id} style={styles.transactionRow} onPress={() => openEditTransaction(tx)}>
                       <View style={{ flex: 1 }}>
-                        <Text style={isTransfer ? [styles.transactionTitle, { color: '#a855f7' }] : styles.transactionTitle}>
-                          {txDisplayLabel(tx, isTransfer ? 'Transfer' : 'Untitled transaction')}
-                        </Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          {txCat?.icon && <Icon name={txCat.icon} size={14} color={titleColor ?? '#F0F6FF'} />}
+                          <Text style={titleColor ? [styles.transactionTitle, { color: titleColor }] : styles.transactionTitle}>
+                            {txDisplayLabel(tx, isTransfer ? 'Transfer' : 'Untitled transaction')}
+                          </Text>
+                        </View>
                         <Text style={styles.transactionMeta}>
                           {tx.date}{acct ? ` · ${acct.name}` : ''}
                         </Text>
@@ -2317,13 +2315,18 @@ export default function DashboardScreen() {
               <View style={styles.listCard}>
                 {sidebarFilteredTxs.slice(0, sidebarTxCount).map((tx) => {
                   const isSidebarTransfer = tx.category_id != null && transferCategoryIds.includes(tx.category_id);
+                  const sidebarTxCat = tx.category_id ? categoriesById[tx.category_id] : null;
+                  const sidebarTitleColor = isSidebarTransfer ? '#a855f7' : (sidebarTxCat?.color ?? undefined);
                   return (
                   <TouchableOpacity
                     key={tx.id}
                     style={styles.sidebarTxRow}
                     onPress={() => openEditTransaction(tx)}
                   >
-                    <Text style={isSidebarTransfer ? [styles.sidebarTxNote, { color: '#a855f7' }] : styles.sidebarTxNote} numberOfLines={1}>{txDisplayLabel(tx, isSidebarTransfer ? 'Transfer' : 'Untitled')}</Text>
+                    <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 5, marginRight: 8 }}>
+                      {sidebarTxCat?.icon && <Icon name={sidebarTxCat.icon} size={12} color={sidebarTitleColor ?? '#C5D9F3'} />}
+                      <Text style={[styles.sidebarTxNote, { flex: 1, marginRight: 0 }, sidebarTitleColor ? { color: sidebarTitleColor } : null]} numberOfLines={1}>{txDisplayLabel(tx, isSidebarTransfer ? 'Transfer' : 'Untitled')}</Text>
+                    </View>
                     <Text style={[styles.sidebarTxAmount, isSidebarTransfer ? styles.transferAmount : (tx.type === 'income' ? styles.positive : styles.negative)]}>
                       {isSidebarTransfer ? '↔' : (tx.type === 'income' ? '+' : '-')}{formatCurrency(Math.abs(Number(tx.amount)), accountsById[tx.account_id]?.currency)}
                     </Text>
@@ -2352,28 +2355,53 @@ export default function DashboardScreen() {
           )}
 
           {!showAccountOverviewPicker && (
-          <View style={styles.bottomBar}>
-            <TouchableOpacity
-              style={[styles.bottomBarIncome, filterIsExpense && styles.bottomBarDisabled]}
-              onPress={() => !filterIsExpense && openEntryModal('income', null)}
-              accessibilityLabel="Add income"
-            >
-              <Icon name="add" size={28} color="#EAF2FF" />
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.bottomBarTransfer, filterIsExpense && styles.bottomBarDisabled]}
-              onPress={() => !filterIsExpense && openTransfer()}
-              accessibilityLabel="Transfer between accounts"
-            >
-              <Icon name={"swap_horiz" as any} size={28} color="#EAF2FF" />
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.bottomBarExpense}
-              onPress={() => openEntryModal('expense', filterIsExpense ? selectedCategoryFilter : null)}
-              accessibilityLabel="Add expense"
-            >
-              <Icon name="remove" size={28} color="#EAF2FF" />
-            </TouchableOpacity>
+          <View style={{ position: 'absolute', left: 0, right: 0, bottom: 0 }}>
+            {/* Filter notification bar */}
+            <Animated.View style={{
+              height: filterBarAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 36] }),
+              overflow: 'hidden',
+              backgroundColor: '#0D2137',
+              borderTopWidth: 1,
+              borderTopColor: '#1B3553',
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              paddingHorizontal: 16,
+            }}>
+              <Text style={{ color: '#8FA8C9', fontSize: 12, flex: 1 }} numberOfLines={1}>
+                {[
+                  selectedCategoryFilter && 'category',
+                  selectedTagFilter && 'tag',
+                  showOnlyTransfers && 'transfers',
+                ].filter(Boolean).join(' + ')} filter active
+              </Text>
+              <TouchableOpacity onPress={() => { setSelectedCategoryFilter(null); setSelectedTagFilter(null); setShowOnlyTransfers(false); }}>
+                <Text style={{ color: '#f87171', fontSize: 12, fontWeight: '600' }}>✕ Clear all</Text>
+              </TouchableOpacity>
+            </Animated.View>
+            <View style={[styles.bottomBar, { position: 'relative' }]}>
+              <TouchableOpacity
+                style={[styles.bottomBarIncome, filterIsExpense && styles.bottomBarDisabled]}
+                onPress={() => !filterIsExpense && openEntryModal('income', null)}
+                accessibilityLabel="Add income"
+              >
+                <Icon name="add" size={28} color="#EAF2FF" />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.bottomBarTransfer, filterIsExpense && styles.bottomBarDisabled]}
+                onPress={() => !filterIsExpense && openTransfer()}
+                accessibilityLabel="Transfer between accounts"
+              >
+                <Icon name={"swap_horiz" as any} size={28} color="#EAF2FF" />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.bottomBarExpense}
+                onPress={() => openEntryModal('expense', filterIsExpense ? selectedCategoryFilter : null)}
+                accessibilityLabel="Add expense"
+              >
+                <Icon name="remove" size={28} color="#EAF2FF" />
+              </TouchableOpacity>
+            </View>
           </View>
           )}
         </View>
@@ -2440,12 +2468,13 @@ export default function DashboardScreen() {
         openInvitationsModal={openInvitationsModal}
         reloadDashboard={reloadDashboard}
         onFilterTransfers={() => { setMenuOpen(false); setShowOnlyTransfers(true); }}
+        selectedTagFilter={selectedTagFilter}
+        onFilterTag={(id) => { setSelectedTagFilter((prev) => (prev === id ? null : id)); }}
       />
 
       <EntryModal
         visible={showEntryModal}
         onClose={() => setShowEntryModal(false)}
-        desktopView={desktopView}
         editingTransactionId={editingTransactionId}
         entryType={entryType}
         setEntryType={setEntryType}
@@ -2458,11 +2487,8 @@ export default function DashboardScreen() {
         setEntryCategoryId={setEntryCategoryId}
         entryTagIds={entryTagIds}
         toggleTag={toggleTag}
-        entryHadInitialCategory={entryHadInitialCategory}
         noteFieldFocused={noteFieldFocused}
         setNoteFieldFocused={setNoteFieldFocused}
-        showEntryAccountPicker={showEntryAccountPicker}
-        setShowEntryAccountPicker={setShowEntryAccountPicker}
         accounts={accounts}
         entryAccountId={entryAccountId}
         setEntryAccountId={setEntryAccountId}
@@ -2470,6 +2496,7 @@ export default function DashboardScreen() {
         selectedCurrency={selectedCurrency}
         entryCategories={entryCategories}
         entryTags={entryTags}
+        entryTagUsage={entryTagUsage}
         recentCategoryAmounts={recentCategoryAmounts}
         noteSuggestions={noteSuggestions}
         newTagName={newTagName}
@@ -2480,7 +2507,6 @@ export default function DashboardScreen() {
         formatCurrency={formatCurrency}
         openDatePicker={openDatePicker}
         openAcctPickerSheet={openAcctPickerSheet}
-        chooseCatPanResponder={chooseCatPanResponder}
         catPickerAnim={catPickerAnim}
         isCatPickerOpen={isCatPickerOpen}
         dragHighlightedCatId={dragHighlightedCatId}

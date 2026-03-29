@@ -1166,8 +1166,8 @@ export const styles = StyleSheet.create({
   // Scroll-to-top FAB
   scrollTopFab: {
     position: 'absolute',
-    right: 20,
-    bottom: 100,
+    right: 100,
+    bottom: 130,
     width: 44,
     height: 44,
     borderRadius: 22,

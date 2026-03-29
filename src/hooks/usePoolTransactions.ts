@@ -30,6 +30,7 @@ export function usePoolTransactions(user: User | null) {
     amount: number,
     description: string,
     date: string,
+    paidBy?: string,
   ) => {
     if (!user) return null;
     try {
@@ -37,7 +38,7 @@ export function usePoolTransactions(user: User | null) {
         .from('pool_transactions')
         .insert({
           pool_id: poolId,
-          paid_by: user.id,
+          paid_by: paidBy ?? user.id,
           amount,
           description,
           date,
@@ -49,6 +50,34 @@ export function usePoolTransactions(user: User | null) {
       return data as PoolTransaction;
     } catch (err) {
       Alert.alert('Error', err instanceof Error ? err.message : 'Failed to add transaction');
+      return null;
+    }
+  }, [getPoolTransactions, user]);
+
+  const updatePoolTransaction = useCallback(async (
+    txId: string,
+    poolId: string,
+    amount: number,
+    description: string,
+    paidBy?: string,
+  ) => {
+    if (!user) return null;
+    try {
+      const { data, error } = await supabase
+        .from('pool_transactions')
+        .update({
+          amount,
+          description,
+          paid_by: paidBy ?? user.id,
+        })
+        .eq('id', txId)
+        .select('*')
+        .single();
+      if (error) throw error;
+      await getPoolTransactions(poolId);
+      return data as PoolTransaction;
+    } catch (err) {
+      Alert.alert('Error', err instanceof Error ? err.message : 'Failed to update transaction');
       return null;
     }
   }, [getPoolTransactions, user]);
@@ -71,6 +100,7 @@ export function usePoolTransactions(user: User | null) {
     loading,
     getPoolTransactions,
     addPoolTransaction,
+    updatePoolTransaction,
     deletePoolTransaction,
   };
 }

@@ -2,6 +2,28 @@
 
 ---
 
+## [Unreleased] — 2026-03-29
+
+### 🏗 Architecture
+
+#### DashboardScreen Refactor
+- `DashboardScreen.tsx` reduced from ~2710 lines to a 10-line composition shell (`<DashboardProvider><DashboardLayout /></DashboardProvider>`)
+- All state, effects, and callbacks extracted into `src/context/DashboardContext.tsx` (`DashboardProvider` + `useDashboard()` hook)
+- UI sections extracted into independent Box components (`OverviewCard`, `SpendingChart`, `CategoriesRow`, `TransactionSection`) under `src/components/dashboard/boxes/`
+- Layout components (`DashboardLayout`, `DashboardHeader`, `DashboardBody`, `MainScrollView`, `DesktopSidebar`, `ScrollTopFab`, `BottomActions`) under `src/components/dashboard/layout/`
+- All modal/sheet components (`ModalsRoot`) read state from context — no prop drilling
+- Zero behavior changes: all existing functionality, gestures, and interactions preserved
+
+### ✨ UI / UX Improvements
+
+#### Quick Navigation — Experimental Section
+- Lending, Settlements, Pools, and Invitations are now grouped under a collapsible **Experimental** section
+- The section is collapsed by default; tap "Experimental ⚗" to expand/collapse
+- Friends remains a direct top-level link
+- New menu order: Friends → Experimental → Reload app → Sign out
+
+---
+
 ## [Unreleased] — 2026-03-28
 
 ### ✨ UI / UX Improvements

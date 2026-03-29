@@ -176,16 +176,17 @@ Financial tracking app for couples. Track income, expenses, and transfers across
 - Account management with icons (large when not editing, hidden in edit mode)
 - Income and Expense category sections with icons and colors
 - Edit/delete buttons hidden behind edit mode toggle per section (accounts, categories, tags)
-- Lending link with pending debt badge (navigates to LendingScreen)
-- Settlements link (navigates to unified Settlements screen)
-- Pools link (navigates to PoolScreen)
 - Friends modal access
-- Invitations access
+- **Experimental** section (collapsed by default, toggled by tapping): Lending, Settlements, Pools, Invitations
+  - Lending link with pending debt badge (navigates to LendingScreen)
+  - Settlements link (navigates to unified Settlements screen)
+  - Pools link (navigates to PoolScreen)
+  - Invitations access
 - Full app reload (web: page reload, native: dashboard reload)
 - Interval selection
 - Sign out
 - Mobile: swipe from left edge to open
-- Menu order: Lending, Settlements, Pools, Friends, Invitations, Reload app, Sign out
+- Menu order: Friends, Experimental (collapsed), Reload app, Sign out
 
 ### Header
 - Logo click refreshes dashboard data (profile button is not blocked)
@@ -262,8 +263,23 @@ finduo/
         InvitationsModal.tsx       Token-based invite management
         TagModal.tsx               Create/edit tag modal
         TransferModal.tsx          Cross-account transfer modal
+        boxes/
+          OverviewCard.tsx         Balance overview + interval picker + account overview grid
+          SpendingChart.tsx        Spending by category bars + desktop battery chart
+          CategoriesRow.tsx        Category chips row (tap-to-add, long-press-to-edit)
+          TransactionSection.tsx   Transaction list with filter-aware header + invite card
+        layout/
+          DashboardLayout.tsx      Outermost frame: loading screen + assembles all sections
+          DashboardHeader.tsx      Header: avatar button, centered logo, view-toggle
+          DashboardBody.tsx        desktopBodyWrapper + edge swipe PanResponder + sidebar
+          MainScrollView.tsx       Main ScrollView + warning banner + Box components
+          DesktopSidebar.tsx       Sidebar (desktop only): totals, accounts, spending, transactions
+          ScrollTopFab.tsx         Scroll-to-top FAB (visible when scrollY > 320)
+          BottomActions.tsx        Filter bar + income/transfer/expense bottom buttons
+          ModalsRoot.tsx           Renders all 11 modal/sheet components from context
     context/
       AuthContext.tsx               Auth state, Google OAuth (web + native), deep link handling
+      DashboardContext.tsx          All dashboard state + actions (DashboardProvider + useDashboard())
     hooks/
       useDashboardData.ts          Core data loading + targeted state update setters (accounts, categories, tags, transactions, settings)
       useFriends.ts                Friends system: requests, acceptance, blocking, account sharing
@@ -278,7 +294,7 @@ finduo/
       index.tsx                    Root navigator: Login vs Dashboard based on session
     screens/
       LoginScreen.tsx              Google sign-in UI
-      DashboardScreen.tsx          Main screen: all CRUD, modals, charts, gestures
+      DashboardScreen.tsx          Composition shell: <DashboardProvider><DashboardLayout />
       DashboardScreen.styles.ts    Shared StyleSheet for dashboard components
       PoolScreen.tsx               Standalone pool screen: list, create, detail, transactions
       LendingScreen.tsx            Standalone lending screen: debts list, confirm, mark paid
@@ -370,8 +386,8 @@ git status --short
 ## Areas for Improvement
 
 ### Architecture
-- [ ] Extract more business logic into custom hooks (useTransactions, useAccounts, useCategories)
-- [ ] Add a state management layer (Zustand, Jotai) to replace deeply nested useState
+- [x] Extract dashboard logic into context (`DashboardContext`/`DashboardProvider`) and UI into Box/layout components
+- [ ] Split `DashboardContext` into finer-grained hooks (useTransactions, useAccounts, useCategories) to reduce re-renders
 - [ ] Create dedicated screens for account management, category management, settings
 
 ### Features

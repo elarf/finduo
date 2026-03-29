@@ -132,6 +132,7 @@ function QuickNavigation({
   onFilterTransfers,
 }: QuickNavigationProps) {
   const [deletingCategoryIds, setDeletingCategoryIds] = useState<Set<string>>(new Set());
+  const [showExperimental, setShowExperimental] = useState(false);
 
   const handleDeleteCategory = useCallback((categoryId: string) => {
     setDeletingCategoryIds((prev) => new Set([...prev, categoryId]));
@@ -534,42 +535,52 @@ function QuickNavigation({
             {/* ── Navigation links ── */}
             <TouchableOpacity style={styles.menuItem} onPress={() => {
               onClose();
-              navigation.navigate('Lending');
-            }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <Icon name="Banknote" size={18} color="#EAF2FF" />
-                <Text style={styles.menuItemText}>Lending</Text>
-                {pendingDebtCount > 0 && (
-                  <View style={{ backgroundColor: '#f87171', borderRadius: 10, minWidth: 20, height: 20, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 5 }}>
-                    <Text style={{ color: '#fff', fontSize: 11, fontWeight: '700' }}>{pendingDebtCount}</Text>
-                  </View>
-                )}
-              </View>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.menuItem} onPress={() => {
-              onClose();
-              navigation.navigate('Settlements');
-            }}>
-              <Text style={styles.menuItemText}>Settlements</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.menuItem} onPress={() => {
-              onClose();
-              navigation.navigate('Pools');
-            }}>
-              <Text style={styles.menuItemText}>Pools</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.menuItem} onPress={() => {
-              onClose();
               setShowFriendsModal(true);
             }}>
               <Text style={styles.menuItemText}>Friends</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.menuItem} onPress={() => {
-              onClose();
-              void openInvitationsModal();
-            }}>
-              <Text style={styles.menuItemText}>Invitations</Text>
+            <TouchableOpacity style={styles.menuItem} onPress={() => setShowExperimental((p) => !p)}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Text style={styles.menuItemText}>Experimental</Text>
+                <Text style={{ color: '#f59e0b', fontSize: 11, fontWeight: '600' }}>⚗ {showExperimental ? '▾' : '▸'}</Text>
+              </View>
             </TouchableOpacity>
+            {showExperimental && (
+              <>
+                <TouchableOpacity style={[styles.menuItem, { paddingLeft: 20 }]} onPress={() => {
+                  onClose();
+                  navigation.navigate('Lending');
+                }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <Icon name="Banknote" size={18} color="#EAF2FF" />
+                    <Text style={styles.menuItemText}>Lending</Text>
+                    {pendingDebtCount > 0 && (
+                      <View style={{ backgroundColor: '#f87171', borderRadius: 10, minWidth: 20, height: 20, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 5 }}>
+                        <Text style={{ color: '#fff', fontSize: 11, fontWeight: '700' }}>{pendingDebtCount}</Text>
+                      </View>
+                    )}
+                  </View>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.menuItem, { paddingLeft: 20 }]} onPress={() => {
+                  onClose();
+                  navigation.navigate('Settlements');
+                }}>
+                  <Text style={styles.menuItemText}>Settlements</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.menuItem, { paddingLeft: 20 }]} onPress={() => {
+                  onClose();
+                  navigation.navigate('Pools');
+                }}>
+                  <Text style={styles.menuItemText}>Pools</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.menuItem, { paddingLeft: 20 }]} onPress={() => {
+                  onClose();
+                  void openInvitationsModal();
+                }}>
+                  <Text style={styles.menuItemText}>Invitations</Text>
+                </TouchableOpacity>
+              </>
+            )}
             <TouchableOpacity style={styles.menuItem} onPress={() => {
               onClose();
               if (Platform.OS === 'web') {

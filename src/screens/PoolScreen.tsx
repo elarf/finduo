@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Image,
   Modal,
   Platform,
   Pressable,
@@ -16,8 +17,10 @@ import { useAuth } from '../context/AuthContext';
 import { usePools } from '../hooks/usePools';
 import { usePoolTransactions } from '../hooks/usePoolTransactions';
 import { useDebts } from '../hooks/useDebts';
+import { useFriends } from '../hooks/useFriends';
 import Icon from '../components/Icon';
-import type { Pool, PoolType } from '../types/pools';
+import type { Pool, PoolType, PoolTransaction } from '../types/pools';
+import type { ResolvedFriend } from '../types/friends';
 
 export default function PoolScreen({ navigation }: { navigation: any }) {
   const { user } = useAuth();
@@ -27,9 +30,10 @@ export default function PoolScreen({ navigation }: { navigation: any }) {
   } = usePools(user);
   const {
     transactions, loading: txLoading,
-    getPoolTransactions, addPoolTransaction, deletePoolTransaction,
+    getPoolTransactions, addPoolTransaction, updatePoolTransaction, deletePoolTransaction,
   } = usePoolTransactions(user);
   const { settlePoolDebts } = useDebts(user);
+  const { friends, loading: friendsLoading, loadFriends } = useFriends(user);
 
   const [selectedPool, setSelectedPool] = useState<Pool | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -43,10 +47,15 @@ export default function PoolScreen({ navigation }: { navigation: any }) {
   // Add transaction form
   const [txAmount, setTxAmount] = useState('');
   const [txDescription, setTxDescription] = useState('');
+  const [txPaidBy, setTxPaidBy] = useState<string>('');
 
   // Add member form
-  const [memberUserId, setMemberUserId] = useState('');
+  const [memberMode, setMemberMode] = useState<'friends' | 'external'>('friends');
+  const [memberSearch, setMemberSearch] = useState('');
+  const [externalName, setExternalName] = useState('');
 
+  // Editing transaction
+  const [editingTx, setEditingTx] = useState<PoolTransaction | null>(null);
   useEffect(() => {
     void getUserPools();
   }, [getUserPools]);
@@ -55,7 +64,8 @@ export default function PoolScreen({ navigation }: { navigation: any }) {
     setSelectedPool(pool);
     void getPoolTransactions(pool.id);
     void loadPoolMembers(pool.id);
-  }, [getPoolTransactions, loadPoolMembers]);
+    void loadFriends(); // pre-load so the modal is instant
+  }, [getPoolTransactions, loadFriends, loadPoolMembers]);
 
   const handleCreatePool = useCallback(async () => {
     if (!newName.trim()) {
@@ -69,6 +79,38 @@ export default function PoolScreen({ navigation }: { navigation: any }) {
     if (pool) openPool(pool);
   }, [createPool, newName, newType, openPool]);
 
+  // Seed paidBy when modal opens (default: current user)
+  useEffect(() => {
+    if (showAddTxModal && !editingTx) setTxPaidBy(user?.id ?? '');
+  }, [showAddTxModal, editingTx, user?.id]);
+
+  const openEditTxModal = useCallback((tx: PoolTransaction) => {
+    setEditingTx(tx);
+    setTxAmount(String(Number(tx.amount)));
+    setTxDescription(tx.description);
+    setTxPaidBy(tx.paid_by);
+    setShowAddTxModal(true);
+  }, []);
+
+  const closeTxModal = useCallback(() => {
+    setShowAddTxModal(false);
+    setEditingTx(null);
+    setTxAmount('');
+    setTxDescription('');
+  }, []);
+
+  const appendNumpad = useCallback((key: string) => {
+    setTxAmount((prev) => {
+      if (key === '⌫') return prev.slice(0, -1);
+      if (key === '.' && prev.includes('.')) return prev;
+      if (key === '.' && prev === '') return '0.';
+      const parts = prev.split('.');
+      if (parts.length === 2 && parts[1].length >= 2) return prev;
+      if (prev === '0' && key !== '.') return key;
+      return prev + key;
+    });
+  }, []);
+
   const handleAddTransaction = useCallback(async () => {
     if (!selectedPool) return;
     const amount = parseFloat(txAmount);
@@ -76,23 +118,83 @@ export default function PoolScreen({ navigation }: { navigation: any }) {
       Alert.alert('Invalid amount', 'Enter a positive number.');
       return;
     }
-    await addPoolTransaction(
-      selectedPool.id,
-      amount,
-      txDescription.trim(),
-      new Date().toISOString().slice(0, 10),
-    );
-    setTxAmount('');
-    setTxDescription('');
-    setShowAddTxModal(false);
-  }, [addPoolTransaction, selectedPool, txAmount, txDescription]);
+    if (editingTx) {
+      await updatePoolTransaction(
+        editingTx.id,
+        selectedPool.id,
+        amount,
+        txDescription.trim(),
+        txPaidBy || user?.id,
+      );
+    } else {
+      await addPoolTransaction(
+        selectedPool.id,
+        amount,
+        txDescription.trim(),
+        new Date().toISOString().slice(0, 10),
+        txPaidBy || user?.id,
+      );
+    }
+    closeTxModal();
+  }, [addPoolTransaction, updatePoolTransaction, closeTxModal, editingTx, selectedPool, txAmount, txDescription, txPaidBy, user?.id]);
 
-  const handleAddMember = useCallback(async () => {
-    if (!selectedPool || !memberUserId.trim()) return;
-    await addPoolMember(selectedPool.id, memberUserId.trim());
-    setMemberUserId('');
+  const closeMemberModal = useCallback(() => {
     setShowAddMemberModal(false);
-  }, [addPoolMember, memberUserId, selectedPool]);
+    setMemberSearch('');
+    setExternalName('');
+  }, []);
+
+  const handleAddFriend = useCallback(async (friend: ResolvedFriend) => {
+    if (!selectedPool) return;
+    const displayName =
+      friend.profile?.display_name ?? friend.profile?.email ?? friend.userId;
+    await addPoolMember(selectedPool.id, friend.userId, displayName);
+    closeMemberModal();
+  }, [addPoolMember, closeMemberModal, selectedPool]);
+
+  const handleAddExternal = useCallback(async () => {
+    if (!selectedPool) return;
+    const name = externalName.trim();
+    if (!name) {
+      Alert.alert('Name required', 'Enter a name for the external member.');
+      return;
+    }
+    const alreadyAdded = (members[selectedPool.id] ?? []).some(
+      (m) => m.display_name?.toLowerCase() === name.toLowerCase(),
+    );
+    if (alreadyAdded) {
+      Alert.alert('Duplicate', `"${name}" is already a member of this pool.`);
+      return;
+    }
+    await addPoolMember(selectedPool.id, null, name);
+    closeMemberModal();
+  }, [addPoolMember, closeMemberModal, externalName, members, selectedPool]);
+
+  useEffect(() => {
+    if (showAddMemberModal) {
+      setMemberSearch('');
+      setExternalName('');
+      // If friends haven't been loaded yet, kick off a load
+      if (friends.length === 0 && !friendsLoading) void loadFriends();
+    }
+  }, [friendsLoading, friends.length, loadFriends, showAddMemberModal]);
+
+  // Auto-switch to manual entry if friends finished loading and list is still empty
+  useEffect(() => {
+    if (showAddMemberModal && !friendsLoading && friends.length === 0) {
+      setMemberMode('external');
+    }
+  }, [friendsLoading, friends.length, showAddMemberModal]);
+
+  const filteredFriends = useMemo(() => {
+    const q = memberSearch.toLowerCase();
+    return friends.filter((f) => {
+      if (!q) return true;
+      const name = (f.profile?.display_name ?? '').toLowerCase();
+      const email = (f.profile?.email ?? '').toLowerCase();
+      return name.includes(q) || email.includes(q);
+    });
+  }, [friends, memberSearch]);
 
   const handleClosePool = useCallback(async () => {
     if (!selectedPool) return;
@@ -176,6 +278,25 @@ export default function PoolScreen({ navigation }: { navigation: any }) {
           </View>
         </View>
 
+        {/* Members */}
+        {poolMembers.length > 0 && (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={s.membersRow}
+          >
+            {poolMembers.map((m) => {
+              const label = m.display_name ?? (m.user_id === user?.id ? 'You' : (m.user_id?.slice(0, 8) ?? '?'));
+              const isExternal = !m.user_id;
+              return (
+                <View key={m.id} style={[s.memberChip, isExternal && s.memberChipExternal]}>
+                  <Text style={s.memberChipText}>{label}</Text>
+                </View>
+              );
+            })}
+          </ScrollView>
+        )}
+
         {/* Actions */}
         {selectedPool.status === 'active' && (
           <View style={s.actionsRow}>
@@ -197,14 +318,17 @@ export default function PoolScreen({ navigation }: { navigation: any }) {
           {!txLoading && transactions.length === 0 && (
             <Text style={s.emptyText}>No transactions yet</Text>
           )}
-          {transactions.map((tx) => (
-            <View key={tx.id} style={s.txRow}>
+          {transactions.map((tx) => {
+            const payer = poolMembers.find((m) => m.user_id === tx.paid_by);
+            const payerLabel = payer?.display_name ?? (tx.paid_by === user?.id ? 'You' : tx.paid_by?.slice(0, 8));
+            return (
+            <TouchableOpacity key={tx.id} style={s.txRow} onPress={() => openEditTxModal(tx)} activeOpacity={0.7}>
               <View style={{ flex: 1 }}>
                 <Text style={s.txDescription}>{tx.description || 'Expense'}</Text>
-                <Text style={s.txDate}>{tx.date}</Text>
+                <Text style={s.txDate}>{tx.date} &middot; {payerLabel}</Text>
               </View>
               <Text style={s.txAmount}>{Number(tx.amount).toFixed(2)}</Text>
-              {tx.paid_by === user?.id && (
+              {(tx.paid_by === user?.id || selectedPool.created_by === user?.id) && (
                 <TouchableOpacity
                   style={s.txDelete}
                   onPress={() => {
@@ -217,36 +341,68 @@ export default function PoolScreen({ navigation }: { navigation: any }) {
                   <Icon name="Trash2" size={14} color="#f87171" />
                 </TouchableOpacity>
               )}
-            </View>
-          ))}
+            </TouchableOpacity>
+            );
+          })}
         </ScrollView>
 
-        {/* Add transaction modal */}
-        <Modal visible={showAddTxModal} transparent animationType="none" onRequestClose={() => setShowAddTxModal(false)}>
-          <Pressable style={s.modalBackdrop} onPress={() => setShowAddTxModal(false)}>
+        {/* Add/Edit transaction modal */}
+        <Modal visible={showAddTxModal} transparent animationType="none" onRequestClose={closeTxModal}>
+          <Pressable style={s.modalBackdrop} onPress={closeTxModal}>
             <Pressable style={s.modalCard} onPress={(e) => e.stopPropagation()}>
-              <Text style={s.modalTitle}>Add expense</Text>
-              <TextInput
-                placeholder="Amount"
-                placeholderTextColor="#64748B"
-                value={txAmount}
-                onChangeText={setTxAmount}
-                keyboardType="numeric"
-                style={s.input}
-              />
+              <Text style={s.modalTitle}>{editingTx ? 'Edit expense' : 'Add expense'}</Text>
+
+              {/* Payer selector */}
+              {poolMembers.filter((m) => m.user_id).length > 1 && (
+                <View style={{ marginBottom: 12 }}>
+                  <Text style={s.label}>Who paid?</Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
+                    {poolMembers.filter((m) => m.user_id !== null).map((m) => {
+                      const label = m.display_name ?? (m.user_id === user?.id ? 'You' : m.user_id!.slice(0, 8));
+                      const active = txPaidBy === m.user_id;
+                      return (
+                        <TouchableOpacity
+                          key={m.id}
+                          style={[s.payerChip, active && s.payerChipActive]}
+                          onPress={() => setTxPaidBy(m.user_id!)}
+                        >
+                          <Text style={[s.payerChipText, active && s.payerChipTextActive]}>{label}</Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </ScrollView>
+                </View>
+              )}
+
+              {/* Amount display */}
+              <View style={s.amountDisplay}>
+                <Text style={s.amountText}>{txAmount || '0'}</Text>
+              </View>
+
+              {/* Description */}
               <TextInput
                 placeholder="Description (optional)"
                 placeholderTextColor="#64748B"
                 value={txDescription}
                 onChangeText={setTxDescription}
-                style={s.input}
+                style={[s.input, { marginTop: 8 }]}
               />
+
+              {/* Numpad */}
+              <View style={s.numpad}>
+                {(['7','8','9','4','5','6','1','2','3','.','0','⌫'] as const).map((key) => (
+                  <TouchableOpacity key={key} style={s.numpadKey} onPress={() => appendNumpad(key)}>
+                    <Text style={s.numpadKeyText}>{key}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
               <View style={s.modalActions}>
-                <TouchableOpacity style={s.modalSecondary} onPress={() => setShowAddTxModal(false)}>
+                <TouchableOpacity style={s.modalSecondary} onPress={closeTxModal}>
                   <Text style={s.modalSecondaryText}>Cancel</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={s.modalPrimary} onPress={() => void handleAddTransaction()}>
-                  <Text style={s.modalPrimaryText}>Add</Text>
+                  <Text style={s.modalPrimaryText}>{editingTx ? 'Save' : 'Add'}</Text>
                 </TouchableOpacity>
               </View>
             </Pressable>
@@ -254,26 +410,107 @@ export default function PoolScreen({ navigation }: { navigation: any }) {
         </Modal>
 
         {/* Add member modal */}
-        <Modal visible={showAddMemberModal} transparent animationType="none" onRequestClose={() => setShowAddMemberModal(false)}>
-          <Pressable style={s.modalBackdrop} onPress={() => setShowAddMemberModal(false)}>
+        <Modal visible={showAddMemberModal} transparent animationType="none" onRequestClose={closeMemberModal}>
+          <Pressable style={s.modalBackdrop} onPress={closeMemberModal}>
             <Pressable style={s.modalCard} onPress={(e) => e.stopPropagation()}>
               <Text style={s.modalTitle}>Add member</Text>
-              <Text style={s.hintText}>Paste the user ID of the person to add</Text>
-              <TextInput
-                placeholder="User ID"
-                placeholderTextColor="#64748B"
-                value={memberUserId}
-                onChangeText={setMemberUserId}
-                style={s.input}
-                autoCapitalize="none"
-              />
+
+              {/* Tab toggle */}
+              <View style={s.tabRow}>
+                <TouchableOpacity
+                  style={[s.tab, memberMode === 'friends' && s.tabActive]}
+                  onPress={() => setMemberMode('friends')}
+                >
+                  <Icon name="Users" size={13} color={memberMode === 'friends' ? '#53E3A6' : '#64748B'} />
+                  <Text style={[s.tabText, memberMode === 'friends' && s.tabTextActive]}>Friends</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[s.tab, memberMode === 'external' && s.tabActive]}
+                  onPress={() => setMemberMode('external')}
+                >
+                  <Icon name="UserPlus" size={13} color={memberMode === 'external' ? '#53E3A6' : '#64748B'} />
+                  <Text style={[s.tabText, memberMode === 'external' && s.tabTextActive]}>Add manually</Text>
+                </TouchableOpacity>
+              </View>
+
+              {memberMode === 'friends' ? (
+                <View>
+                  <TextInput
+                    placeholder="Search friends…"
+                    placeholderTextColor="#64748B"
+                    value={memberSearch}
+                    onChangeText={setMemberSearch}
+                    style={[s.input, { marginTop: 10 }]}
+                  />
+                  {friendsLoading ? (
+                    <ActivityIndicator color="#53E3A6" style={{ marginVertical: 16 }} />
+                  ) : filteredFriends.length === 0 ? (
+                    <View style={{ alignItems: 'center', paddingVertical: 16, gap: 6 }}>
+                      <Icon name="Users" size={28} color="#1F3A59" />
+                      <Text style={[s.hintText, { textAlign: 'center' }]}>
+                        {friends.length === 0
+                          ? 'No friends yet. Use "Add manually" to add anyone by name.'
+                          : 'No results for that search'}
+                      </Text>
+                    </View>
+                  ) : (
+                    <ScrollView style={{ maxHeight: 250 }} keyboardShouldPersistTaps="handled">
+                      {filteredFriends.map((f) => {
+                        const alreadyAdded = poolMembers.some((m) => m.user_id === f.userId);
+                        const label = f.profile?.display_name ?? f.profile?.email ?? f.userId;
+                        const sub = f.profile?.display_name && f.profile?.email ? f.profile.email : null;
+                        return (
+                          <TouchableOpacity
+                            key={f.rowId}
+                            style={[s.friendRow, alreadyAdded && s.friendRowDisabled]}
+                            disabled={alreadyAdded}
+                            onPress={() => void handleAddFriend(f)}
+                          >
+                            <View style={s.avatar}>
+                              {f.profile?.avatar_url ? (
+                                <Image source={{ uri: f.profile.avatar_url }} style={s.avatarImg} />
+                              ) : (
+                                <Text style={s.avatarInitial}>{label[0]?.toUpperCase() ?? '?'}</Text>
+                              )}
+                            </View>
+                            <View style={{ flex: 1 }}>
+                              <Text style={[s.friendName, alreadyAdded && { color: '#475569' }]}>{label}</Text>
+                              {sub && <Text style={s.friendEmail}>{sub}</Text>}
+                            </View>
+                            {alreadyAdded && <Icon name="Check" size={14} color="#475569" />}
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </ScrollView>
+                  )}
+                </View>
+              ) : (
+                <View style={{ marginTop: 10 }}>
+                  <Text style={s.hintText}>Add anyone — no app account needed.</Text>
+                  <TextInput
+                    placeholder="Name (required)"
+                    placeholderTextColor="#64748B"
+                    value={externalName}
+                    onChangeText={setExternalName}
+                    style={s.input}
+                    autoCorrect={false}
+                  />
+                </View>
+              )}
+
               <View style={s.modalActions}>
-                <TouchableOpacity style={s.modalSecondary} onPress={() => setShowAddMemberModal(false)}>
+                <TouchableOpacity style={s.modalSecondary} onPress={closeMemberModal}>
                   <Text style={s.modalSecondaryText}>Cancel</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={s.modalPrimary} onPress={() => void handleAddMember()}>
-                  <Text style={s.modalPrimaryText}>Add</Text>
-                </TouchableOpacity>
+                {memberMode === 'external' && (
+                  <TouchableOpacity
+                    style={[s.modalPrimary, !externalName.trim() && { opacity: 0.4 }]}
+                    disabled={!externalName.trim()}
+                    onPress={() => void handleAddExternal()}
+                  >
+                    <Text style={s.modalPrimaryText}>Add</Text>
+                  </TouchableOpacity>
+                )}
               </View>
             </Pressable>
           </Pressable>
@@ -629,5 +866,158 @@ const s = StyleSheet.create({
   typeButtonText: {
     color: '#EAF3FF',
     fontSize: 13,
+  },
+
+  // Member chips (pool detail)
+  membersRow: {
+    flexDirection: 'row',
+    gap: 6,
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    paddingBottom: 2,
+  },
+  memberChip: {
+    backgroundColor: '#1F3A59',
+    borderRadius: 20,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  memberChipExternal: {
+    backgroundColor: '#2A1F3A',
+  },
+  memberChipText: {
+    color: '#BAD0EE',
+    fontSize: 12,
+  },
+
+  // Add member modal — tabs
+  tabRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  tab: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#1F3A59',
+  },
+  tabActive: {
+    borderColor: '#53E3A6',
+    backgroundColor: '#0D2818',
+  },
+  tabText: {
+    color: '#64748B',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  tabTextActive: {
+    color: '#53E3A6',
+  },
+
+  // Add member modal — friend list
+  friendRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#111E2E',
+  },
+  friendRowDisabled: {
+    opacity: 0.45,
+  },
+  friendName: {
+    color: '#EAF3FF',
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  friendEmail: {
+    color: '#64748B',
+    fontSize: 11,
+    marginTop: 2,
+  },
+  avatar: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#1F3A59',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  avatarImg: {
+    width: 34,
+    height: 34,
+  },
+  avatarInitial: {
+    color: '#53E3A6',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+
+  // Add expense modal — payer chips
+  payerChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#1F3A59',
+    backgroundColor: '#0E1A2B',
+  },
+  payerChipActive: {
+    borderColor: '#53E3A6',
+    backgroundColor: '#0D2818',
+  },
+  payerChipText: {
+    color: '#64748B',
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  payerChipTextActive: {
+    color: '#53E3A6',
+    fontWeight: '700',
+  },
+
+  // Add expense modal — amount display
+  amountDisplay: {
+    backgroundColor: '#060A14',
+    borderWidth: 1,
+    borderColor: '#1F3A59',
+    borderRadius: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    alignItems: 'flex-end',
+  },
+  amountText: {
+    color: '#EAF3FF',
+    fontSize: 28,
+    fontWeight: '300',
+    fontVariant: ['tabular-nums'],
+  },
+
+  // Numpad
+  numpad: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginTop: 8,
+    gap: 6,
+  },
+  numpadKey: {
+    width: '30.5%',
+    paddingVertical: 14,
+    borderRadius: 8,
+    backgroundColor: '#111F32',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  numpadKeyText: {
+    color: '#EAF3FF',
+    fontSize: 18,
+    fontWeight: '500',
   },
 });

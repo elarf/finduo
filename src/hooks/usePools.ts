@@ -61,18 +61,6 @@ export function usePools(user: User | null) {
     }
   }, [getUserPools, user]);
 
-  const addPoolMember = useCallback(async (poolId: string, userId: string) => {
-    try {
-      const { error } = await supabase
-        .from('pool_members')
-        .insert({ pool_id: poolId, user_id: userId });
-      if (error) throw error;
-      await loadPoolMembers(poolId);
-    } catch (err) {
-      Alert.alert('Error', err instanceof Error ? err.message : 'Failed to add member');
-    }
-  }, []);
-
   const loadPoolMembers = useCallback(async (poolId: string) => {
     try {
       const { data, error } = await supabase
@@ -83,6 +71,24 @@ export function usePools(user: User | null) {
       // non-fatal
     }
   }, []);
+
+  const addPoolMember = useCallback(async (
+    poolId: string,
+    userId: string | null,
+    displayName: string,
+  ) => {
+    try {
+      const { error } = await supabase.rpc('add_pool_member', {
+        p_pool_id: poolId,
+        p_user_id: userId,
+        p_display_name: displayName,
+      });
+      if (error) throw error;
+      await loadPoolMembers(poolId);
+    } catch (err) {
+      Alert.alert('Error', err instanceof Error ? err.message : 'Failed to add member');
+    }
+  }, [loadPoolMembers]);
 
   const closePool = useCallback(async (poolId: string) => {
     try {

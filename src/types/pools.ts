@@ -13,8 +13,10 @@ export type Pool = {
 };
 
 export type PoolMember = {
+  id: string;
   pool_id: string;
-  user_id: string;
+  user_id: string | null;
+  display_name: string | null;
   joined_at: string;
 };
 

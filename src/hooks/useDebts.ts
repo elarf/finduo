@@ -35,13 +35,13 @@ export function useDebts(user: User | null) {
   const settlePoolDebts = useCallback(async (poolId: string) => {
     if (!user) return;
     try {
-      // Fetch participants
+      // Fetch participants via RPC (direct query only returns own row)
       const { data: memberData, error: memberError } = await supabase
-        .from('pool_members')
-        .select('user_id')
-        .eq('pool_id', poolId);
+        .rpc('get_pool_members', { p_pool_id: poolId });
       if (memberError) throw memberError;
-      const participants = (memberData ?? []).map((m: any) => m.user_id as string);
+      const participants = (memberData ?? [])
+        .filter((m: any) => m.user_id != null)
+        .map((m: any) => m.user_id as string);
 
       if (participants.length < 2) {
         Alert.alert('Cannot settle', 'Pool needs at least 2 members.');

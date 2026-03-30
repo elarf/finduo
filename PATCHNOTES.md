@@ -2,7 +2,26 @@
 
 ---
 
-## [Unreleased] — 2026-03-29
+## [0.7.1] — 2026-03-30
+
+### 🐛 Bug Fixes
+
+#### Account Creation — No More Default Categories
+- Creating a new account no longer seeds default categories. Categories are user-global and should only be created explicitly by the user. Any database trigger that auto-seeded categories on account insert has been dropped.
+
+#### Account Settings RLS — Owners Can Now Save Settings
+- Saving account settings (carry-over, initial balance, include in balance) immediately after creating a new account no longer returns `403 Forbidden`. The RLS policy on `account_settings` previously only allowed access for users already in `account_members`, but the creator may not have a membership row yet. Policy updated to allow the account owner (`accounts.created_by`) as well as members.
+
+### 🔧 Technical
+
+#### Database Cleanup — Baseline Migration
+- All 26 incremental migration files consolidated into a single `supabase/migrations/0000_baseline.sql` that recreates the full schema from scratch (16 tables, indexes, RLS policies, SECURITY DEFINER functions, grants).
+- Old migration files archived to `supabase/migrations/archive/` (history preserved).
+- New `supabase/db/schema.md` documents the final schema in human-readable form (tables, columns, types, constraints, relationships, RLS summaries).
+
+---
+
+## [0.7.0] — 2026-03-29
 
 ### 🏗 Architecture
 
@@ -22,12 +41,6 @@
 - Friends remains a direct top-level link
 - New menu order: Friends → Experimental → Reload app → Sign out
 
----
-
-## [Unreleased] — 2026-03-28
-
-### ✨ UI / UX Improvements
-
 #### Transaction Modal (Entry)
 - **Inline currency** — Currency symbol now sits beside the amount (e.g. `$123`, `€123`, `123 Ft`). The separate currency line below the amount is gone.
 - **Smarter header** — Income/Expense toggle is now a single button in the modal header. Tap it to switch type. The button color updates live: green for Income, red for Expense.
@@ -45,8 +58,6 @@
 #### Loading Screen
 - Logo now fills the full width of the screen instead of being constrained to 80%.
 
----
-
 ### 🐛 Bug Fixes
 
 #### Account Deletion
@@ -63,8 +74,6 @@
 
 #### Android Back Button
 - The Android hardware back button now closes the topmost open modal or sheet. Previously it would navigate back or exit the app entirely. If no modal is open, the back button is absorbed — the dashboard stays visible.
-
----
 
 ### 🔧 Technical
 

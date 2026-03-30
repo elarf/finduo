@@ -4,38 +4,16 @@ Financial tracking app for couples. Track income, expenses, and transfers across
 
 ## Patch Notes
 
-### v0.6 — UX polish, tag filtering, avatar reliability
-**Entry modal**
-- Desktop view now uses a centred 390 px card instead of the full viewport width
-- Bottom bar is now context-aware: no category selected → "Choose Category" button; category selected → "Save to [icon] [name]"; category selected + back → "Reselect" clears the selection
-- Tags section moved above the numpad and rendered as a wrap grid (two rows), sorted by usage frequency within the selected category
-- Note field shows a live read-only preview of selected tags alongside the typed note, matching how the transaction will be displayed in the list
-- Date field appends ", Today" when the selected date is the current day
+### v0.7.1 — Bug fixes, account settings RLS, DB baseline migration
 
-**Date picker**
-- Week now starts on Monday
-- Saturday and Sunday are colored red in both the header row and day cells
+**Bug fixes**
+- Creating a new account no longer seeds default categories — categories are user-global and only created explicitly by the user
+- Saving account settings immediately after account creation no longer returns `403 Forbidden` — RLS policy now allows the account owner as well as members
+- Full list: [PATCHNOTES.md](./PATCHNOTES.md)
 
-**Tag filter**
-- Tags in the Quick Navigation menu are now tappable: tap to filter all transactions globally; tap again to deactivate
-- Active tag filter highlighted with the tag's own color and a small filter icon
-- "global" label removed from tag rows
-
-**Filter notification bar**
-- A bar slides in above the bottom navigation whenever any filter is active (category, tag, or transfers-only)
-- Shows a summary of active filters (e.g. "category + tag filter active")
-- A "✕ Clear all" button on the right resets all filters at once
-
-**Scroll-to-top FAB**
-- Repositioned to `right: 100, bottom: 130` to avoid overlapping the bottom bar and keep small transaction amounts visible
-
-**Avatar reliability**
-- `AuthContext` now normalises the Google profile image from both `avatar_url` and `picture` metadata keys and exposes it as `avatarUrl`
-- All avatar `<Image>` components have an `onError` handler that falls back to the user's initial; error state resets automatically on re-login
-- `useFriends` profile upsert also checks the `picture` key so the `user_profiles` table stays in sync
-
-**Android back button**
-- Pressing back when no modal is open now shows an "Exit app?" confirmation dialog instead of silently doing nothing
+**Database**
+- All migrations consolidated into a single baseline file (`supabase/migrations/0000_baseline.sql`)
+- Full schema documented at `supabase/db/schema.md`
 
 ## Tech Stack
 
@@ -203,6 +181,8 @@ Financial tracking app for couples. Track income, expenses, and transfers across
 
 ## Database Schema
 
+> Full schema reference: [`supabase/db/schema.md`](./supabase/db/schema.md)
+
 ### Tables
 
 | Table | Purpose |
@@ -305,7 +285,11 @@ finduo/
       friends.ts                   Friend system types (ResolvedFriend, ResolvedRequest, etc.)
       pools.ts                     Pool and debt types (Pool, PoolMember, PoolTransaction, AppDebt)
   supabase/
-    migrations/                    SQL migration files
+    db/
+      schema.md                    Human-readable schema reference (all tables, columns, RLS)
+    migrations/
+      0000_baseline.sql            Complete schema baseline (recreates all 16 tables from scratch)
+      archive/                     Superseded incremental migrations (kept for history)
 ```
 
 ## Getting Started
@@ -327,33 +311,20 @@ Edit `.env` with your Supabase project URL and anon key (Supabase Dashboard > Se
 3. Add `finduo://` as an authorised redirect URL (for native).
 4. Add your production web URL as a redirect URL (for web).
 
-### 4. Create the `user_preferences` table
-Run this in your Supabase SQL editor:
-```sql
-CREATE TABLE IF NOT EXISTS public.user_preferences (
-  user_id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
-  account_order TEXT[] NOT NULL DEFAULT '{}',
-  primary_account_id UUID REFERENCES public.accounts(id) ON DELETE SET NULL,
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
+### 4. Apply the database schema
 
-ALTER TABLE public.user_preferences ENABLE ROW LEVEL SECURITY;
+Run `supabase/migrations/0000_baseline.sql` in your Supabase SQL editor, or push via CLI:
 
-CREATE POLICY "Users can manage their own preferences"
-  ON public.user_preferences FOR ALL
-  TO authenticated
-  USING (auth.uid() = user_id)
-  WITH CHECK (auth.uid() = user_id);
-```
-
-### 5. Apply other migrations
 ```bash
 npx supabase login
 npx supabase link --project-ref <your-project-ref>
 npx supabase db push
 ```
 
-### 6. Start development
+This single file creates all 16 tables, indexes, RLS policies, and functions. See `supabase/db/schema.md` for the full schema reference.
+
+### 5. Start development
+
 ```bash
 npx expo start          # All platforms
 npx expo start --web    # Web only

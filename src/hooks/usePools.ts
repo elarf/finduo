@@ -2,11 +2,11 @@ import { useCallback, useState } from 'react';
 import { Alert } from 'react-native';
 import { supabase } from '../lib/supabase';
 import type { User } from '@supabase/supabase-js';
-import type { Pool, PoolType, PoolMember } from '../types/pools';
+import type { Pool, PoolType, PoolParticipant } from '../types/pools';
 
 export function usePools(user: User | null) {
   const [pools, setPools] = useState<Pool[]>([]);
-  const [members, setMembers] = useState<Record<string, PoolMember[]>>({});
+  const [members, setMembers] = useState<Record<string, PoolParticipant[]>>({});
   const [loading, setLoading] = useState(false);
 
   const getUserPools = useCallback(async () => {
@@ -47,10 +47,12 @@ export function usePools(user: User | null) {
         .single();
       if (poolError) throw poolError;
 
-      // Auto-add creator as member
-      const { error: memberError } = await supabase
-        .from('pool_members')
-        .insert({ pool_id: pool.id, user_id: user.id });
+      // Auto-add creator as a participant via RPC (keeps ownership check + type='auth' consistent)
+      const { error: memberError } = await supabase.rpc('add_pool_member', {
+        p_pool_id: pool.id,
+        p_user_id: user.id,
+        p_display_name: null,
+      });
       if (memberError) throw memberError;
 
       await getUserPools();
@@ -66,7 +68,7 @@ export function usePools(user: User | null) {
       const { data, error } = await supabase
         .rpc('get_pool_members', { p_pool_id: poolId });
       if (error) throw error;
-      setMembers((prev) => ({ ...prev, [poolId]: (data ?? []) as PoolMember[] }));
+      setMembers((prev) => ({ ...prev, [poolId]: (data ?? []) as PoolParticipant[] }));
     } catch (err) {
       // non-fatal
     }

@@ -2,6 +2,52 @@
 
 ---
 
+## [0.8.0] — 2026-03-30
+
+### 🏗 Architecture
+
+#### PoolScreen Refactor — 1024 Lines → Component Architecture
+- `PoolScreen.tsx` reduced from 1024 lines to a ~120-line orchestration shell
+- All pool UI extracted into dedicated components under `src/components/pool/`: `PoolHeader`, `PoolSummaryCard`, `PoolMemberChips`, `PoolActions`, `TransactionList`, `TransactionModal`, `AddMemberModal`, `CreatePoolModal`, `PoolListContent`, `poolStyles.ts`
+- Pool state and computed values (`poolMembers`, `poolTotal`, `perPerson`, `handleClosePool`, `handleSettlePool`) extracted into `src/hooks/usePool.ts`
+- Supabase queries remain exclusively in `usePools.ts`, `usePoolTransactions.ts`, and `useDebts.ts` — no direct DB calls in the screen or components
+
+#### Settlement Domain Separation
+- `SettlementsScreen` is now a pure **read-only derivation** view — it never writes pool transactions or manages pool membership
+- Settlement flow changed from one-click auto-write to explicit **compute → preview → commit**:
+  1. **Calculate Settlement** — reads members + transactions, runs the greedy algorithm, returns `PreTransaction[]` with no DB write
+  2. **Preview** — shows each transfer (debtor → creditor, amount) before committing
+  3. **Commit** confirms and persists debts + closes pool; **Discard** clears the preview with no DB change
+- `PreTransaction` type added to `types/pools.ts`: `{ fromParticipantId, toParticipantId, amount, metadata: { reason, sourcePoolId } }`
+- `computePoolSettlement()` and `commitPoolSettlement()` added to `useDebts.ts`; `settlePoolDebts()` kept as a thin wrapper for PoolScreen's one-step Settle button
+
+#### Unified Pool Participant System (DB Migration: `20260401_unified_pool_participants.sql`)
+- New `pool_participants` table replaces `pool_members`, unifying auth users and external (manually added) participants in a single table
+- `pool_transactions.paid_by` now references `pool_participants.id` (was `auth.users.id`) — enables external payers
+- Auth participants: `type = 'auth'`, `user_id` set; External: `type = 'external'`, `external_name` set; display_name denormalized for UI
+- `pool_members` table dropped after data migration (existing UUIDs preserved for FK remapping)
+- Final FK graph is a strict DAG: `auth.users ← pool_participants.user_id (RESTRICT)`, `pool_participants ← pool_transactions.paid_by (RESTRICT)`, no cascades that race with restricts
+- FK constraints removed from `pools.created_by`, `debts.from_user`, `debts.to_user` — stored as plain UUID; RLS value-comparisons (`= auth.uid()`) unaffected
+- Three SECURITY DEFINER RPCs: `get_pool_members`, `add_pool_member`, `remove_pool_member` (updated for new table)
+
+### ✨ Features
+
+#### External Pool Members
+- Pool owners can now add participants who are not registered app users (by display name only)
+- External members appear with purple chip styling in the member list
+- External members can be selected as payer when adding or editing an expense
+- Settlement algorithm includes external payers' contributions in the pool total but excludes them from the debt graph (debts are between auth users only)
+
+### 🐛 Bug Fixes
+
+#### Payer Selector Not Rendering
+- The "paid by" chip row in the expense modal now renders with 1+ pool member (previously required 2+ registered members, hiding it in single-member test pools)
+
+#### Transaction List Payer Lookup
+- Payer display name in the transaction list now correctly resolves for both auth and external members (lookup matches `m.user_id === paid_by` OR `m.id === paid_by`)
+
+---
+
 ## [0.7.1] — 2026-03-30
 
 ### 🐛 Bug Fixes

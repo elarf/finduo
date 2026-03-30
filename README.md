@@ -4,16 +4,20 @@ Financial tracking app for couples. Track income, expenses, and transfers across
 
 ## Patch Notes
 
-### v0.7.1 — Bug fixes, account settings RLS, DB baseline migration
+### v0.8.0 — Pool architecture, external members, settlement preview
+
+**Architecture**
+- `PoolScreen.tsx` refactored from 1024 lines to a ~120-line orchestration shell; all pool UI split into `src/components/pool/` components and a dedicated `usePool.ts` hook
+- `SettlementsScreen` is now a pure read-only derivation view — settlement uses a **compute → preview → commit** flow; nothing writes to DB until the user explicitly confirms
+- New `PreTransaction` type: settlement results are held in memory and previewed before being committed as debt records
+
+**Features**
+- External pool members: add participants who are not app users (by name); they can be selected as payer on expenses
+- Unified `pool_participants` table replaces `pool_members`; `pool_transactions.paid_by` now references participant UUIDs (supports external payers)
 
 **Bug fixes**
-- Creating a new account no longer seeds default categories — categories are user-global and only created explicitly by the user
-- Saving account settings immediately after account creation no longer returns `403 Forbidden` — RLS policy now allows the account owner as well as members
+- Payer selector now renders with any number of members (previously required 2+)
 - Full list: [PATCHNOTES.md](./PATCHNOTES.md)
-
-**Database**
-- All migrations consolidated into a single baseline file (`supabase/migrations/0000_baseline.sql`)
-- Full schema documented at `supabase/db/schema.md`
 
 ## Tech Stack
 
@@ -92,17 +96,22 @@ Financial tracking app for couples. Track income, expenses, and transfers across
 ### Pools
 - Shared expense pools for splitting costs with friends
 - Two pool types: Event (one-time trip, dinner) or Continuous (roommates, recurring)
-- Pool creator can add members by user ID
-- All members can add expenses; only the payer can delete their own
+- Pool creator can add registered app users (friends) or external participants by display name
+- External members shown with purple chip styling; can be selected as payer on any expense
+- All members can add and edit expenses; payer selector shows every participant (auth + external)
 - Per-person split shown automatically (total / member count)
-- Pool can be closed to prevent further transactions
-- RLS ensures users can only see pools they are members of
+- Pool can be settled or closed; settlement excludes external participants from the debt graph (their payments still count toward the total)
+- Unified `pool_participants` table — `pool_transactions.paid_by` references participant UUIDs, not user UUIDs directly
+- RLS ensures users can only see pools they are members of; member list exposed via SECURITY DEFINER RPC to bypass terminal SELECT policy
 
 ### Settlements & Lending
-- Unified Settlements screen accessible from Quick Navigation menu
-- Three sections: Pools list, Active pool view, Debts
-- Pool settlement calculates minimum debts using a greedy algorithm (equal split, minimize transfers)
-- Debts require dual confirmation (from_user and to_user must each confirm independently)
+- Unified Settlements screen accessible from Quick Navigation menu (Experimental section)
+- Two sections: read-only pool browser, Debts list
+- Settlement uses a **compute → preview → commit** flow: tap Calculate Settlement, review each transfer (debtor → creditor, amount) as a `PreTransaction`, then Commit (persists debts + closes pool) or Discard (no DB write)
+- `SettlementsScreen` is read-only — pool management (create, add expense, add member, close) is done exclusively in PoolScreen
+- Settlement algorithm: greedy debtor-creditor matching (equal split, minimum transfers)
+- External pool members are excluded from the debt graph (debts are between auth users only)
+- Debts require dual confirmation (from_user and to_user each confirm independently)
 - Status flow: pending → confirmed (both sides confirmed) → paid
 - Net balance card shows overall debt position
 - Confirm and Mark Paid buttons contextually shown per debt
@@ -200,14 +209,15 @@ Financial tracking app for couples. Track income, expenses, and transfers across
 | `user_profiles` | Public user discovery (display_name, email, avatar_url) for friend system |
 | `friends` | Directional friend relationships (user_id → friend_user_id, status: pending/accepted/rejected/blocked) |
 | `pools` | Shared expense pools (name, type: event/continuous, created_by, start_date, end_date, status) |
-| `pool_members` | Pool membership join table (pool_id, user_id) |
-| `pool_transactions` | Pool expenses (pool_id, paid_by, amount, description, date) |
+| `pool_participants` | Unified pool membership: auth users and external participants (type: auth/external, user_id nullable, external_name nullable) |
+| `pool_transactions` | Pool expenses (pool_id, paid_by → pool_participants.id, amount, description, date) |
 | `debts` | Settlement debts (from_user, to_user, amount, pool_id, status, from_confirmed, to_confirmed) |
 
 ### Key Design Decisions
 - Categories are user-owned (`user_id` FK) and shared across all accounts — no per-account scoping
 - Connected users (sharing at least one account) automatically see each other's categories via RLS
 - Users can hide unwanted categories per-user without affecting others (`user_hidden_categories` table)
+- Pool participants unified in `pool_participants` (replaces `pool_members`); `paid_by` on transactions references participant UUIDs, enabling external (non-user) payers; FK to `auth.users` is RESTRICT-only (not CASCADE) to prevent silent data loss
 - Transfer categories are detected by `category.name === 'Transfer'` — auto-created per-user when making the first transfer
 - Category icons are stored as Material Symbol names in the database; `Icon.tsx` maps them to Lucide components at render time
 - Row Level Security (RLS) is enabled; users can only access their own data and shared accounts
@@ -257,15 +267,27 @@ finduo/
           ScrollTopFab.tsx         Scroll-to-top FAB (visible when scrollY > 320)
           BottomActions.tsx        Filter bar + income/transfer/expense bottom buttons
           ModalsRoot.tsx           Renders all 11 modal/sheet components from context
+      pool/
+        PoolHeader.tsx             Header with back/settle/close/add action buttons
+        PoolSummaryCard.tsx        Total / members / per-person summary card
+        PoolMemberChips.tsx        Horizontal member chip row (purple for external)
+        PoolActions.tsx            Add Expense + Add Member action buttons
+        TransactionList.tsx        Read-only transaction list with edit/delete (owner only)
+        TransactionModal.tsx       Add/edit expense modal with full member payer selector
+        AddMemberModal.tsx         Add member: friends tab (invite accepted users) or external tab (by name)
+        CreatePoolModal.tsx        Create pool modal (name + type selector)
+        PoolListContent.tsx        Pool list with loading and empty states
+        poolStyles.ts              Shared StyleSheet for all pool components
     context/
       AuthContext.tsx               Auth state, Google OAuth (web + native), deep link handling
       DashboardContext.tsx          All dashboard state + actions (DashboardProvider + useDashboard())
     hooks/
       useDashboardData.ts          Core data loading + targeted state update setters (accounts, categories, tags, transactions, settings)
       useFriends.ts                Friends system: requests, acceptance, blocking, account sharing
-      usePools.ts                  Pool CRUD: create, list, add members, close
-      usePoolTransactions.ts       Pool transaction CRUD: add, list, delete expenses
-      useDebts.ts                  Debt management: settle pool, confirm, mark paid
+      usePools.ts                  Pool CRUD: create, list, add participants (auth+external), close
+      usePool.ts                   Pool detail state: selectedPool, poolMembers, poolTotal, perPerson, settle/close handlers
+      usePoolTransactions.ts       Pool transaction CRUD: add, list, update, delete expenses
+      useDebts.ts                  Debt management: computePoolSettlement (read-only), commitPoolSettlement (write), settlePoolDebts (wrapper), confirm, mark paid
     lib/
       supabase.ts                  Supabase client init (PKCE, AsyncStorage on native)
     utils/
@@ -276,14 +298,14 @@ finduo/
       LoginScreen.tsx              Google sign-in UI
       DashboardScreen.tsx          Composition shell: <DashboardProvider><DashboardLayout />
       DashboardScreen.styles.ts    Shared StyleSheet for dashboard components
-      PoolScreen.tsx               Standalone pool screen: list, create, detail, transactions
+      PoolScreen.tsx               Orchestration shell (~120 lines): mounts pool components, owns modal state
       LendingScreen.tsx            Standalone lending screen: debts list, confirm, mark paid
-      SettlementsScreen.tsx         Unified settlements: pools + debts in one screen
+      SettlementsScreen.tsx        Derivation-only settlements: read-only pool browser + compute→preview→commit flow + debts
     types/
       auth.ts                      AuthContextValue interface
       dashboard.ts                 App data types, helpers (AppAccount, AppCategory, etc.)
       friends.ts                   Friend system types (ResolvedFriend, ResolvedRequest, etc.)
-      pools.ts                     Pool and debt types (Pool, PoolMember, PoolTransaction, AppDebt)
+      pools.ts                     Pool and debt types (Pool, PoolParticipant, PoolMember alias, PoolTransaction, AppDebt, PreTransaction)
   supabase/
     db/
       schema.md                    Human-readable schema reference (all tables, columns, RLS)
@@ -321,7 +343,9 @@ npx supabase link --project-ref <your-project-ref>
 npx supabase db push
 ```
 
-This single file creates all 16 tables, indexes, RLS policies, and functions. See `supabase/db/schema.md` for the full schema reference.
+This single file creates all tables, indexes, RLS policies, and functions. See `supabase/db/schema.md` for the full schema reference.
+
+For incremental updates, apply any `supabase/migrations/*.sql` files that post-date your last push (e.g. `20260401_unified_pool_participants.sql` replaces `pool_members` with `pool_participants`).
 
 ### 5. Start development
 

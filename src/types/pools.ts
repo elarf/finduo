@@ -1,5 +1,6 @@
 export type PoolType = 'event' | 'continuous';
 export type PoolStatus = 'active' | 'closed';
+export type PoolParticipantType = 'auth' | 'external';
 
 export type Pool = {
   id: string;
@@ -12,13 +13,22 @@ export type Pool = {
   created_at: string;
 };
 
-export type PoolMember = {
+/** Unified participant row — mirrors pool_participants table */
+export type PoolParticipant = {
   id: string;
   pool_id: string;
+  type: PoolParticipantType;
+  /** Non-null when type = 'auth' */
   user_id: string | null;
+  /** Non-null when type = 'external' */
+  external_name: string | null;
+  /** Denormalized display name for UI (works for both types) */
   display_name: string | null;
-  joined_at: string;
+  created_at: string;
 };
+
+/** Alias kept for compatibility with existing UI components */
+export type PoolMember = PoolParticipant;
 
 export type PoolTransaction = {
   id: string;
@@ -28,6 +38,20 @@ export type PoolTransaction = {
   description: string;
   date: string;
   created_at: string;
+};
+
+/**
+ * In-memory settlement result — not persisted until the user explicitly commits.
+ * fromParticipantId / toParticipantId are auth user UUIDs (resolved from participants).
+ */
+export type PreTransaction = {
+  fromParticipantId: string;
+  toParticipantId: string;
+  amount: number;
+  metadata: {
+    reason: 'settlement';
+    sourcePoolId: string;
+  };
 };
 
 export type DebtStatus = 'pending' | 'confirmed' | 'paid';

@@ -2,13 +2,10 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  Modal,
   Platform,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -17,36 +14,27 @@ import { usePools } from '../hooks/usePools';
 import { usePoolTransactions } from '../hooks/usePoolTransactions';
 import { useDebts } from '../hooks/useDebts';
 import Icon from '../components/Icon';
-import type { Pool, PoolType } from '../types/pools';
-import type { AppDebt } from '../types/pools';
+import type { Pool, PoolMember, AppDebt, PreTransaction } from '../types/pools';
 
 export default function SettlementsScreen({ navigation }: { navigation: any }) {
   const { user } = useAuth();
   const {
     pools, members, loading: poolsLoading,
-    getUserPools, createPool, addPoolMember, loadPoolMembers, closePool,
+    getUserPools, loadPoolMembers,
   } = usePools(user);
   const {
     transactions, loading: txLoading,
-    getPoolTransactions, addPoolTransaction, deletePoolTransaction,
+    getPoolTransactions,
   } = usePoolTransactions(user);
-  const { debts, loading: debtsLoading, getUserDebts, settlePoolDebts, confirmDebt, markPaid } = useDebts(user);
+  const {
+    debts, loading: debtsLoading,
+    getUserDebts, computePoolSettlement, commitPoolSettlement, confirmDebt, markPaid,
+  } = useDebts(user);
 
   const [selectedPool, setSelectedPool] = useState<Pool | null>(null);
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [showAddTxModal, setShowAddTxModal] = useState(false);
-  const [showAddMemberModal, setShowAddMemberModal] = useState(false);
-
-  // Create pool form
-  const [newName, setNewName] = useState('');
-  const [newType, setNewType] = useState<PoolType>('event');
-
-  // Add transaction form
-  const [txAmount, setTxAmount] = useState('');
-  const [txDescription, setTxDescription] = useState('');
-
-  // Add member form
-  const [memberUserId, setMemberUserId] = useState('');
+  const [preTransactions, setPreTransactions] = useState<PreTransaction[]>([]);
+  const [computing, setComputing] = useState(false);
+  const [committing, setCommitting] = useState(false);
 
   useEffect(() => {
     void getUserPools();
@@ -55,86 +43,80 @@ export default function SettlementsScreen({ navigation }: { navigation: any }) {
 
   const openPool = useCallback((pool: Pool) => {
     setSelectedPool(pool);
+    setPreTransactions([]);
     void getPoolTransactions(pool.id);
     void loadPoolMembers(pool.id);
   }, [getPoolTransactions, loadPoolMembers]);
 
-  const handleCreatePool = useCallback(async () => {
-    if (!newName.trim()) {
-      Alert.alert('Missing name', 'Enter a pool name.');
-      return;
-    }
-    const pool = await createPool(newName.trim(), newType);
-    setNewName('');
-    setNewType('event');
-    setShowCreateModal(false);
-    if (pool) openPool(pool);
-  }, [createPool, newName, newType, openPool]);
+  const closePool = useCallback(() => {
+    setSelectedPool(null);
+    setPreTransactions([]);
+  }, []);
 
-  const handleAddTransaction = useCallback(async () => {
+  const handleCalculate = useCallback(async () => {
     if (!selectedPool) return;
-    const amount = parseFloat(txAmount);
-    if (isNaN(amount) || amount <= 0) {
-      Alert.alert('Invalid amount', 'Enter a positive number.');
-      return;
+    setComputing(true);
+    try {
+      const preTxs = await computePoolSettlement(selectedPool.id);
+      if (preTxs.length === 0) {
+        Alert.alert('All settled', 'Everyone paid their fair share — no transfers needed.');
+        return;
+      }
+      setPreTransactions(preTxs);
+    } catch (err) {
+      Alert.alert('Cannot calculate', err instanceof Error ? err.message : 'Calculation failed');
+    } finally {
+      setComputing(false);
     }
-    await addPoolTransaction(
-      selectedPool.id,
-      amount,
-      txDescription.trim(),
-      new Date().toISOString().slice(0, 10),
+  }, [computePoolSettlement, selectedPool]);
+
+  const handleCommit = useCallback(async () => {
+    if (!selectedPool || preTransactions.length === 0) return;
+    Alert.alert(
+      'Commit settlement',
+      `Create ${preTransactions.length} debt(s) and close "${selectedPool.name}"?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Commit',
+          onPress: async () => {
+            setCommitting(true);
+            try {
+              await commitPoolSettlement(selectedPool.id, preTransactions);
+              await getUserPools();
+              Alert.alert('Settled', `${preTransactions.length} debt(s) created.`);
+              setSelectedPool(null);
+              setPreTransactions([]);
+            } catch (err) {
+              Alert.alert('Error', err instanceof Error ? err.message : 'Commit failed');
+            } finally {
+              setCommitting(false);
+            }
+          },
+        },
+      ],
     );
-    setTxAmount('');
-    setTxDescription('');
-    setShowAddTxModal(false);
-  }, [addPoolTransaction, selectedPool, txAmount, txDescription]);
+  }, [commitPoolSettlement, getUserPools, preTransactions, selectedPool]);
 
-  const handleAddMember = useCallback(async () => {
-    if (!selectedPool || !memberUserId.trim()) return;
-    await addPoolMember(selectedPool.id, memberUserId.trim());
-    setMemberUserId('');
-    setShowAddMemberModal(false);
-  }, [addPoolMember, memberUserId, selectedPool]);
-
-  const handleClosePool = useCallback(async () => {
-    if (!selectedPool) return;
-    Alert.alert('Close pool', `Close "${selectedPool.name}"? No more transactions can be added.`, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Close',
-        style: 'destructive',
-        onPress: async () => {
-          await closePool(selectedPool.id);
-          setSelectedPool(null);
-        },
-      },
-    ]);
-  }, [closePool, selectedPool]);
-
-  const handleSettlePool = useCallback(async () => {
-    if (!selectedPool) return;
-    Alert.alert('Settle pool', `Settle "${selectedPool.name}"? This will calculate debts and close the pool.`, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Settle',
-        onPress: async () => {
-          await settlePoolDebts(selectedPool.id);
-          await getUserPools();
-          setSelectedPool(null);
-        },
-      },
-    ]);
-  }, [getUserPools, selectedPool, settlePoolDebts]);
+  const handleDiscard = useCallback(() => {
+    setPreTransactions([]);
+  }, []);
 
   // Pool totals
   const poolTotal = useMemo(
     () => transactions.reduce((sum, tx) => sum + Number(tx.amount), 0),
     [transactions],
   );
-
-  const poolMembers = selectedPool ? (members[selectedPool.id] ?? []) : [];
+  const poolMembers: PoolMember[] = selectedPool ? (members[selectedPool.id] ?? []) : [];
   const memberCount = poolMembers.length || 1;
   const perPerson = poolTotal / memberCount;
+
+  // Resolve a user_id to a display name using the loaded pool members
+  const nameFor = useCallback((userId: string) => {
+    if (userId === user?.id) return 'You';
+    const m = poolMembers.find((pm) => pm.user_id === userId);
+    return m?.display_name ?? userId.slice(0, 8) + '…';
+  }, [poolMembers, user?.id]);
 
   // Debt groupings
   const pendingDebts = useMemo(() => debts.filter((d) => d.status === 'pending'), [debts]);
@@ -158,26 +140,24 @@ export default function SettlementsScreen({ navigation }: { navigation: any }) {
     <View style={s.container}>
       {/* Header */}
       <View style={s.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={s.backButton}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={s.iconBtn}>
           <Icon name="ArrowLeft" size={20} color="#EAF3FF" />
         </TouchableOpacity>
         <Text style={s.headerTitle}>Settlements</Text>
         <TouchableOpacity
           onPress={() => { void getUserPools(); void getUserDebts(); }}
-          style={s.backButton}
+          style={s.iconBtn}
         >
           <Icon name="RefreshCw" size={18} color="#64748B" />
         </TouchableOpacity>
       </View>
 
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 40 }}>
-        {/* ═══════════════ SECTION 1: POOLS ═══════════════ */}
+
+        {/* ═══════════════ POOL LIST (read-only) ═══════════════ */}
         <View style={s.sectionHeader}>
           <Text style={s.sectionTitle}>Pools</Text>
-          <TouchableOpacity style={s.sectionAction} onPress={() => setShowCreateModal(true)}>
-            <Icon name="Plus" size={16} color="#53E3A6" />
-            <Text style={s.sectionActionText}>Create</Text>
-          </TouchableOpacity>
+          <Text style={s.sectionHint}>Manage in Pool tab</Text>
         </View>
 
         {poolsLoading && <ActivityIndicator color="#53E3A6" style={{ marginTop: 12 }} />}
@@ -186,12 +166,16 @@ export default function SettlementsScreen({ navigation }: { navigation: any }) {
           <View style={s.emptyContainer}>
             <Icon name="Users" size={32} color="#1F3A59" />
             <Text style={s.emptyText}>No pools yet</Text>
-            <Text style={s.emptyHint}>Create a pool to split expenses with friends</Text>
+            <Text style={s.emptyHint}>Create a pool in the Pool tab to start splitting expenses</Text>
           </View>
         )}
 
         {pools.map((pool) => (
-          <TouchableOpacity key={pool.id} style={s.poolCard} onPress={() => openPool(pool)}>
+          <TouchableOpacity
+            key={pool.id}
+            style={[s.poolCard, selectedPool?.id === pool.id && s.poolCardActive]}
+            onPress={() => openPool(pool)}
+          >
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
               <View style={[s.poolIcon, pool.status === 'closed' && { opacity: 0.4 }]}>
                 <Icon name={pool.type === 'event' ? 'CalendarDays' : 'Repeat'} size={18} color="#53E3A6" />
@@ -200,7 +184,7 @@ export default function SettlementsScreen({ navigation }: { navigation: any }) {
                 <Text style={[s.poolName, pool.status === 'closed' && { color: '#475569' }]}>{pool.name}</Text>
                 <Text style={s.poolMeta}>
                   {pool.type === 'event' ? 'Event' : 'Continuous'}
-                  {pool.status === 'closed' ? ' \u00b7 Closed' : ''}
+                  {pool.status === 'closed' ? ' · Closed' : ' · Active'}
                 </Text>
               </View>
               <Icon name="ChevronRight" size={16} color="#475569" />
@@ -208,23 +192,24 @@ export default function SettlementsScreen({ navigation }: { navigation: any }) {
           </TouchableOpacity>
         ))}
 
-        {/* ═══════════════ ACTIVE POOL VIEW ═══════════════ */}
+        {/* ═══════════════ POOL DETAIL (read-only) ═══════════════ */}
         {selectedPool && (
           <>
             <View style={s.divider} />
+
             <View style={s.sectionHeader}>
               <View style={{ flex: 1 }}>
                 <Text style={s.sectionTitle}>{selectedPool.name}</Text>
                 <Text style={s.poolDetailSub}>
-                  {selectedPool.type === 'event' ? 'Event' : 'Continuous'} &middot; {selectedPool.status}
+                  {selectedPool.type === 'event' ? 'Event' : 'Continuous'} · {selectedPool.status}
                 </Text>
               </View>
-              <TouchableOpacity onPress={() => setSelectedPool(null)} style={s.backButton}>
+              <TouchableOpacity onPress={closePool} style={s.iconBtn}>
                 <Icon name="X" size={18} color="#64748B" />
               </TouchableOpacity>
             </View>
 
-            {/* Summary */}
+            {/* Summary (read-only) */}
             <View style={s.summaryCard}>
               <View style={s.summaryRow}>
                 <Text style={s.summaryLabel}>Total</Text>
@@ -240,37 +225,25 @@ export default function SettlementsScreen({ navigation }: { navigation: any }) {
               </View>
             </View>
 
-            {/* Pool actions */}
-            {selectedPool.status === 'active' && (
-              <View style={s.actionsRow}>
-                <TouchableOpacity style={s.actionButton} onPress={() => setShowAddTxModal(true)}>
-                  <Icon name="Plus" size={16} color="#060A14" />
-                  <Text style={s.actionButtonText}>Add expense</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={[s.actionButton, s.actionButtonSecondary]} onPress={() => setShowAddMemberModal(true)}>
-                  <Icon name="UserPlus" size={16} color="#EAF3FF" />
-                  <Text style={[s.actionButtonText, { color: '#EAF3FF' }]}>Add member</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-            {selectedPool.status === 'active' && (
-              <View style={s.actionsRow}>
-                <TouchableOpacity style={s.settleButton} onPress={() => void handleSettlePool()}>
-                  <Icon name="Check" size={16} color="#060A14" />
-                  <Text style={s.actionButtonText}>Settle</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={s.closeButton} onPress={() => void handleClosePool()}>
-                  <Icon name="X" size={16} color="#f87171" />
-                  <Text style={[s.actionButtonText, { color: '#f87171' }]}>Close</Text>
-                </TouchableOpacity>
-              </View>
+            {/* Member chips (read-only) */}
+            {poolMembers.length > 0 && (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.chipsRow} contentContainerStyle={{ gap: 8, paddingHorizontal: 16 }}>
+                {poolMembers.map((m) => (
+                  <View key={m.id} style={[s.chip, m.type === 'external' && s.chipExternal]}>
+                    <Text style={s.chipText}>
+                      {m.user_id === user.id ? 'You' : (m.display_name ?? m.id.slice(0, 8))}
+                    </Text>
+                    {m.type === 'external' && <Text style={s.chipExt}> ext</Text>}
+                  </View>
+                ))}
+              </ScrollView>
             )}
 
-            {/* Pool transactions */}
-            <Text style={[s.subSectionTitle, { marginTop: 16 }]}>Transactions</Text>
+            {/* Transactions (read-only) */}
+            <Text style={s.subSectionTitle}>Transactions</Text>
             {txLoading && <ActivityIndicator color="#53E3A6" style={{ marginTop: 8 }} />}
             {!txLoading && transactions.length === 0 && (
-              <Text style={s.emptyTextSmall}>No transactions yet</Text>
+              <Text style={s.emptyTextSmall}>No transactions in this pool</Text>
             )}
             {transactions.map((tx) => (
               <View key={tx.id} style={s.txRow}>
@@ -279,25 +252,74 @@ export default function SettlementsScreen({ navigation }: { navigation: any }) {
                   <Text style={s.txDate}>{tx.date}</Text>
                 </View>
                 <Text style={s.txAmount}>{Number(tx.amount).toFixed(2)}</Text>
-                {tx.paid_by === user.id && selectedPool.status === 'active' && (
-                  <TouchableOpacity
-                    style={s.txDelete}
-                    onPress={() => {
-                      Alert.alert('Delete', 'Remove this expense?', [
-                        { text: 'Cancel', style: 'cancel' },
-                        { text: 'Delete', style: 'destructive', onPress: () => void deletePoolTransaction(tx.id, selectedPool.id) },
-                      ]);
-                    }}
-                  >
-                    <Icon name="Trash2" size={14} color="#f87171" />
-                  </TouchableOpacity>
-                )}
               </View>
             ))}
+
+            {/* ─── Settlement calculation ─── */}
+            {selectedPool.status === 'active' && preTransactions.length === 0 && (
+              <TouchableOpacity
+                style={s.calcButton}
+                onPress={() => void handleCalculate()}
+                disabled={computing}
+              >
+                {computing
+                  ? <ActivityIndicator color="#060A14" size="small" />
+                  : <Icon name="Calculator" size={16} color="#060A14" />
+                }
+                <Text style={s.calcButtonText}>
+                  {computing ? 'Calculating…' : 'Calculate Settlement'}
+                </Text>
+              </TouchableOpacity>
+            )}
+
+            {/* ─── Pre-transaction preview ─── */}
+            {preTransactions.length > 0 && (
+              <>
+                <View style={s.preTxHeader}>
+                  <Icon name="ArrowRightLeft" size={14} color="#53E3A6" />
+                  <Text style={s.preTxHeaderText}>
+                    Settlement preview — {preTransactions.length} transfer{preTransactions.length > 1 ? 's' : ''}
+                  </Text>
+                </View>
+
+                {preTransactions.map((ptx, i) => (
+                  <View key={i} style={s.preTxRow}>
+                    <Text style={s.preTxFrom}>{nameFor(ptx.fromParticipantId)}</Text>
+                    <Icon name="ArrowRight" size={14} color="#64748B" />
+                    <Text style={s.preTxTo}>{nameFor(ptx.toParticipantId)}</Text>
+                    <Text style={s.preTxAmount}>{ptx.amount.toFixed(2)}</Text>
+                  </View>
+                ))}
+
+                <View style={s.preTxActions}>
+                  <TouchableOpacity style={s.discardButton} onPress={handleDiscard}>
+                    <Icon name="X" size={14} color="#f87171" />
+                    <Text style={s.discardButtonText}>Discard</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={s.commitButton}
+                    onPress={() => void handleCommit()}
+                    disabled={committing}
+                  >
+                    {committing
+                      ? <ActivityIndicator color="#060A14" size="small" />
+                      : <Icon name="Check" size={14} color="#060A14" />
+                    }
+                    <Text style={s.commitButtonText}>
+                      {committing ? 'Committing…' : 'Commit & close pool'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
+                <Text style={s.preTxHint}>
+                  Committing will create {preTransactions.length} pending debt{preTransactions.length > 1 ? 's' : ''} and close the pool.
+                </Text>
+              </>
+            )}
           </>
         )}
 
-        {/* ═══════════════ SECTION 3: DEBTS ═══════════════ */}
+        {/* ═══════════════ DEBTS ═══════════════ */}
         <View style={s.divider} />
         <View style={s.sectionHeader}>
           <Text style={s.sectionTitle}>Debts</Text>
@@ -350,106 +372,8 @@ export default function SettlementsScreen({ navigation }: { navigation: any }) {
             ))}
           </>
         )}
+
       </ScrollView>
-
-      {/* ═══════════════ MODALS ═══════════════ */}
-
-      {/* Create pool modal */}
-      <Modal visible={showCreateModal} transparent animationType="none" onRequestClose={() => setShowCreateModal(false)}>
-        <Pressable style={s.modalBackdrop} onPress={() => setShowCreateModal(false)}>
-          <Pressable style={s.modalCard} onPress={(e) => e.stopPropagation()}>
-            <Text style={s.modalTitle}>Create pool</Text>
-            <TextInput
-              placeholder="Pool name"
-              placeholderTextColor="#64748B"
-              value={newName}
-              onChangeText={setNewName}
-              style={s.input}
-            />
-            <Text style={s.label}>Type</Text>
-            <View style={s.typeRow}>
-              <TouchableOpacity
-                style={[s.typeButton, newType === 'event' && s.typeButtonActive]}
-                onPress={() => setNewType('event')}
-              >
-                <Text style={s.typeButtonText}>Event</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[s.typeButton, newType === 'continuous' && s.typeButtonActive]}
-                onPress={() => setNewType('continuous')}
-              >
-                <Text style={s.typeButtonText}>Continuous</Text>
-              </TouchableOpacity>
-            </View>
-            <View style={s.modalActions}>
-              <TouchableOpacity style={s.modalSecondary} onPress={() => setShowCreateModal(false)}>
-                <Text style={s.modalSecondaryText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={s.modalPrimary} onPress={() => void handleCreatePool()}>
-                <Text style={s.modalPrimaryText}>Create</Text>
-              </TouchableOpacity>
-            </View>
-          </Pressable>
-        </Pressable>
-      </Modal>
-
-      {/* Add transaction modal */}
-      <Modal visible={showAddTxModal} transparent animationType="none" onRequestClose={() => setShowAddTxModal(false)}>
-        <Pressable style={s.modalBackdrop} onPress={() => setShowAddTxModal(false)}>
-          <Pressable style={s.modalCard} onPress={(e) => e.stopPropagation()}>
-            <Text style={s.modalTitle}>Add expense</Text>
-            <TextInput
-              placeholder="Amount"
-              placeholderTextColor="#64748B"
-              value={txAmount}
-              onChangeText={setTxAmount}
-              keyboardType="numeric"
-              style={s.input}
-            />
-            <TextInput
-              placeholder="Description (optional)"
-              placeholderTextColor="#64748B"
-              value={txDescription}
-              onChangeText={setTxDescription}
-              style={s.input}
-            />
-            <View style={s.modalActions}>
-              <TouchableOpacity style={s.modalSecondary} onPress={() => setShowAddTxModal(false)}>
-                <Text style={s.modalSecondaryText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={s.modalPrimary} onPress={() => void handleAddTransaction()}>
-                <Text style={s.modalPrimaryText}>Add</Text>
-              </TouchableOpacity>
-            </View>
-          </Pressable>
-        </Pressable>
-      </Modal>
-
-      {/* Add member modal */}
-      <Modal visible={showAddMemberModal} transparent animationType="none" onRequestClose={() => setShowAddMemberModal(false)}>
-        <Pressable style={s.modalBackdrop} onPress={() => setShowAddMemberModal(false)}>
-          <Pressable style={s.modalCard} onPress={(e) => e.stopPropagation()}>
-            <Text style={s.modalTitle}>Add member</Text>
-            <Text style={s.hintText}>Paste the user ID of the person to add</Text>
-            <TextInput
-              placeholder="User ID"
-              placeholderTextColor="#64748B"
-              value={memberUserId}
-              onChangeText={setMemberUserId}
-              style={s.input}
-              autoCapitalize="none"
-            />
-            <View style={s.modalActions}>
-              <TouchableOpacity style={s.modalSecondary} onPress={() => setShowAddMemberModal(false)}>
-                <Text style={s.modalSecondaryText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={s.modalPrimary} onPress={() => void handleAddMember()}>
-                <Text style={s.modalPrimaryText}>Add</Text>
-              </TouchableOpacity>
-            </View>
-          </Pressable>
-        </Pressable>
-      </Modal>
     </View>
   );
 }
@@ -484,7 +408,7 @@ function DebtRow({ debt, userId, onConfirm, onMarkPaid }: {
       </View>
       <View style={{ flex: 1 }}>
         <Text style={s.debtText}>
-          {iOwe ? `You owe ${shortId}...` : `${shortId}... owes you`}
+          {iOwe ? `You owe ${shortId}…` : `${shortId}… owes you`}
         </Text>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3 }}>
           <View style={[s.statusBadge, { backgroundColor: statusColor + '22', borderColor: statusColor }]}>
@@ -530,7 +454,7 @@ const s = StyleSheet.create({
     gap: 12,
     backgroundColor: '#000',
   },
-  backButton: {
+  iconBtn: {
     padding: 6,
   },
   headerTitle: {
@@ -540,7 +464,6 @@ const s = StyleSheet.create({
     fontWeight: '700',
   },
 
-  // Section headers
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -556,15 +479,10 @@ const s = StyleSheet.create({
     letterSpacing: 1,
     flex: 1,
   },
-  sectionAction: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  sectionActionText: {
-    color: '#53E3A6',
-    fontSize: 12,
-    fontWeight: '600',
+  sectionHint: {
+    color: '#334155',
+    fontSize: 11,
+    fontStyle: 'italic',
   },
   subSectionTitle: {
     color: '#64748B',
@@ -576,7 +494,6 @@ const s = StyleSheet.create({
     marginTop: 20,
     marginBottom: 6,
   },
-
   divider: {
     height: 1,
     backgroundColor: '#1F3A59',
@@ -593,6 +510,9 @@ const s = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#1F3A59',
     padding: 14,
+  },
+  poolCardActive: {
+    borderColor: '#53E3A6',
   },
   poolIcon: {
     width: 36,
@@ -618,7 +538,7 @@ const s = StyleSheet.create({
     marginTop: 2,
   },
 
-  // Empty state
+  // Empty states
   emptyContainer: {
     alignItems: 'center',
     marginTop: 24,
@@ -643,7 +563,7 @@ const s = StyleSheet.create({
     marginHorizontal: 16,
   },
 
-  // Summary card
+  // Summary
   summaryCard: {
     marginHorizontal: 16,
     marginTop: 10,
@@ -668,52 +588,29 @@ const s = StyleSheet.create({
     fontWeight: '600',
   },
 
-  // Actions
-  actionsRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginHorizontal: 16,
+  // Member chips
+  chipsRow: {
     marginTop: 10,
   },
-  actionButton: {
-    flex: 1,
+  chip: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    backgroundColor: '#53E3A6',
-    borderRadius: 10,
-    paddingVertical: 10,
-  },
-  actionButtonSecondary: {
     backgroundColor: '#1F3A59',
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
   },
-  actionButtonText: {
-    color: '#060A14',
-    fontSize: 13,
-    fontWeight: '600',
+  chipExternal: {
+    backgroundColor: '#2D1A40',
   },
-  settleButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    backgroundColor: '#53E3A6',
-    borderRadius: 10,
-    paddingVertical: 10,
+  chipText: {
+    color: '#EAF3FF',
+    fontSize: 12,
+    fontWeight: '500',
   },
-  closeButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    backgroundColor: '#0E1A2B',
-    borderRadius: 10,
-    paddingVertical: 10,
-    borderWidth: 1,
-    borderColor: '#f8717133',
+  chipExt: {
+    color: '#a855f7',
+    fontSize: 10,
   },
 
   // Transactions
@@ -740,8 +637,110 @@ const s = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
   },
-  txDelete: {
-    padding: 6,
+
+  // Calculate button
+  calcButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginHorizontal: 16,
+    marginTop: 16,
+    backgroundColor: '#53E3A6',
+    borderRadius: 10,
+    paddingVertical: 12,
+  },
+  calcButtonText: {
+    color: '#060A14',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+
+  // Pre-transaction preview
+  preTxHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginHorizontal: 16,
+    marginTop: 20,
+    marginBottom: 8,
+  },
+  preTxHeaderText: {
+    color: '#53E3A6',
+    fontSize: 12,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+  },
+  preTxRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginHorizontal: 16,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#101A2A',
+  },
+  preTxFrom: {
+    color: '#f87171',
+    fontSize: 13,
+    fontWeight: '600',
+    flex: 1,
+  },
+  preTxTo: {
+    color: '#4ade80',
+    fontSize: 13,
+    fontWeight: '600',
+    flex: 1,
+  },
+  preTxAmount: {
+    color: '#EAF3FF',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  preTxActions: {
+    flexDirection: 'row',
+    gap: 10,
+    marginHorizontal: 16,
+    marginTop: 14,
+  },
+  discardButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    borderRadius: 10,
+    paddingVertical: 11,
+    borderWidth: 1,
+    borderColor: '#f8717133',
+  },
+  discardButtonText: {
+    color: '#f87171',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  commitButton: {
+    flex: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#53E3A6',
+    borderRadius: 10,
+    paddingVertical: 11,
+  },
+  commitButtonText: {
+    color: '#060A14',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  preTxHint: {
+    color: '#334155',
+    fontSize: 11,
+    textAlign: 'center',
+    marginHorizontal: 16,
+    marginTop: 8,
   },
 
   // Balance card
@@ -806,8 +805,6 @@ const s = StyleSheet.create({
     flexDirection: 'row',
     gap: 6,
   },
-
-  // Status badge
   statusBadge: {
     paddingHorizontal: 6,
     paddingVertical: 1,
@@ -818,8 +815,6 @@ const s = StyleSheet.create({
     fontSize: 10,
     fontWeight: '600',
   },
-
-  // Buttons
   confirmBtn: {
     backgroundColor: '#53E3A6',
     borderRadius: 6,
@@ -835,101 +830,5 @@ const s = StyleSheet.create({
     color: '#EAF3FF',
     fontSize: 12,
     fontWeight: '600',
-  },
-
-  // Modal
-  modalBackdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  modalCard: {
-    backgroundColor: '#0E1A2B',
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#1F3A59',
-    padding: 20,
-    width: '90%',
-    maxWidth: 380,
-  },
-  modalTitle: {
-    color: '#EAF3FF',
-    fontSize: 17,
-    fontWeight: '700',
-    marginBottom: 14,
-  },
-  modalActions: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    gap: 10,
-    marginTop: 16,
-  },
-  modalSecondary: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#1F3A59',
-  },
-  modalSecondaryText: {
-    color: '#9BB0C9',
-    fontSize: 14,
-  },
-  modalPrimary: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
-    backgroundColor: '#53E3A6',
-  },
-  modalPrimaryText: {
-    color: '#060A14',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-
-  // Form
-  input: {
-    backgroundColor: '#060A14',
-    borderWidth: 1,
-    borderColor: '#1F3A59',
-    borderRadius: 10,
-    color: '#EAF3FF',
-    fontSize: 14,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    marginBottom: 10,
-  },
-  label: {
-    color: '#64748B',
-    fontSize: 12,
-    fontWeight: '600',
-    marginBottom: 6,
-  },
-  hintText: {
-    color: '#475569',
-    fontSize: 12,
-    marginBottom: 10,
-  },
-  typeRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginBottom: 4,
-  },
-  typeButton: {
-    flex: 1,
-    paddingVertical: 8,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#1F3A59',
-    alignItems: 'center',
-  },
-  typeButtonActive: {
-    borderColor: '#53E3A6',
-    backgroundColor: '#0D2818',
-  },
-  typeButtonText: {
-    color: '#EAF3FF',
-    fontSize: 13,
   },
 });

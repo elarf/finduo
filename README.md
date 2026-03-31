@@ -4,6 +4,26 @@ Financial tracking app for couples. Track income, expenses, and transfers across
 
 ## Patch Notes
 
+### v0.9.1 — Fixed shared account access
+
+**Bug Fixes**
+- **Shared account access:** Fixed critical issue where account creators couldn't access their own transactions/data after creation. Root cause: missing `account_members` rows for creators under current RLS architecture.
+  - Client fixes: `saveAccount` auto-inserts creator membership, `joinByToken`/`addFriendToAccount` use upsert (prevents 409 conflicts)
+  - Database fixes: Backfilled missing creator memberships, added auto-member trigger, cleaned RLS policies
+- Full list: [PATCHNOTES.md](./PATCHNOTES.md)
+
+---
+
+### v0.9.0 — Cache-first data loading, pull-to-refresh (TanStack Query)
+
+**Architecture**
+- Cache-first data loading with `@tanstack/react-query` v5; five query hooks (`useAccountsQuery`, `useTransactionsQuery`, etc.) with stable keys and targeted invalidation
+- App reopen behavior: renders instantly from cache if data < 5min old; silent background refetch
+- `DashboardContext` now proxies mutations to `queryClient.setQueryData`; all existing callbacks unchanged
+- Pull-to-refresh added to main dashboard scroll view with haptic feedback
+
+---
+
 ### v0.8.0 — Pool architecture, external members, settlement preview
 
 **Architecture**

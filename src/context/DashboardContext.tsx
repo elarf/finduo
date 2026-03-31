@@ -155,6 +155,12 @@ export type DashboardContextValue = {
   setCustomStart: React.Dispatch<React.SetStateAction<string>>;
   customEnd: string;
   setCustomEnd: React.Dispatch<React.SetStateAction<string>>;
+  timeCursorOffset: number;
+  setTimeCursorOffset: React.Dispatch<React.SetStateAction<number>>;
+  intervalVisibility: Record<IntervalKey, boolean>;
+  setIntervalVisibility: React.Dispatch<React.SetStateAction<Record<IntervalKey, boolean>>>;
+  intervalLabel: string;
+  navigateInterval: (dir: 'prev' | 'next') => void;
   menuOpen: boolean;
   setMenuOpen: React.Dispatch<React.SetStateAction<boolean>>;
   showEntryModal: boolean;
@@ -678,6 +684,10 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
   const [interval, setInterval] = useState<IntervalKey>('month');
   const [customStart, setCustomStart] = useState(todayIso());
   const [customEnd, setCustomEnd] = useState(todayIso());
+  const [timeCursorOffset, setTimeCursorOffset] = useState(0);
+  const [intervalVisibility, setIntervalVisibility] = useState<Record<IntervalKey, boolean>>({
+    day: true, week: true, month: true, year: true, all: true, custom: true,
+  });
 
   // ── Modal visibility ──
   const [menuOpen, setMenuOpen] = useState(false);
@@ -911,31 +921,77 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
 
   // ── Computed: interval ──
   const intervalBounds = useMemo(() => {
-    const now = new Date();
-    const end = now.toISOString().slice(0, 10);
-    const dayMs = 24 * 60 * 60 * 1000;
-
     if (interval === 'all') return { start: '', end: '' };
     if (interval === 'custom') return { start: customStart, end: customEnd };
-    if (interval === 'day') return { start: end, end };
-    if (interval === 'week') {
-      return { start: new Date(now.getTime() - 6 * dayMs).toISOString().slice(0, 10), end };
-    }
-    if (interval === 'month') {
+
+    const now = new Date();
+    // Use local date components (not toISOString) to avoid UTC timezone shift:
+    // new Date(year, month, day) constructs local midnight; toISOString() would
+    // produce the previous day's UTC date for timezones ahead of UTC (UTC+N).
+    const isoDate = (d: Date) =>
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+    if (interval === 'day') {
       const d = new Date(now);
-      d.setDate(1);
-      return { start: d.toISOString().slice(0, 10), end };
+      d.setDate(d.getDate() + timeCursorOffset);
+      const ds = isoDate(d);
+      return { start: ds, end: ds };
     }
 
-    const y = new Date(now.getFullYear(), 0, 1).toISOString().slice(0, 10);
-    return { start: y, end };
-  }, [customEnd, customStart, interval]);
+    if (interval === 'week') {
+      const dayOfWeek = now.getDay(); // 0=Sun
+      const daysToMon = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+      const monday = new Date(now);
+      monday.setDate(now.getDate() + daysToMon + timeCursorOffset * 7);
+      const sunday = new Date(monday);
+      sunday.setDate(monday.getDate() + 6);
+      return { start: isoDate(monday), end: isoDate(sunday) };
+    }
+
+    if (interval === 'month') {
+      const target = new Date(now.getFullYear(), now.getMonth() + timeCursorOffset, 1);
+      const lastDay = new Date(target.getFullYear(), target.getMonth() + 1, 0);
+      return { start: isoDate(target), end: isoDate(lastDay) };
+    }
+
+    // year
+    const targetYear = now.getFullYear() + timeCursorOffset;
+    return { start: `${targetYear}-01-01`, end: `${targetYear}-12-31` };
+  }, [customEnd, customStart, interval, timeCursorOffset]);
 
   const inInterval = useCallback((date: string) => {
     if (interval === 'all') return true;
     if (!intervalBounds.start || !intervalBounds.end) return true;
     return date >= intervalBounds.start && date <= intervalBounds.end;
   }, [interval, intervalBounds.end, intervalBounds.start]);
+
+  const intervalLabel = useMemo(() => {
+    if (interval === 'all') return 'All Time';
+    if (interval === 'custom') return `${customStart} – ${customEnd}`;
+    const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+    const short = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    if (interval === 'day') {
+      if (timeCursorOffset === 0) return 'Today';
+      if (timeCursorOffset === -1) return 'Yesterday';
+      return intervalBounds.start;
+    }
+    if (interval === 'week') {
+      const [sy, sm, sd] = intervalBounds.start.split('-').map(Number);
+      const [ey, em, ed] = intervalBounds.end.split('-').map(Number);
+      const yearSuffix = sy !== ey ? ` ${ey}` : ` ${ey}`;
+      return `${short[sm-1]} ${sd} – ${short[em-1]} ${ed}${yearSuffix}`;
+    }
+    if (interval === 'month') {
+      const [y, m] = intervalBounds.start.split('-').map(Number);
+      return `${monthNames[m-1]} ${y}`;
+    }
+    return intervalBounds.start.slice(0, 4);
+  }, [interval, timeCursorOffset, intervalBounds, customStart, customEnd]);
+
+  const navigateInterval = useCallback((dir: 'prev' | 'next') => {
+    if (interval === 'all' || interval === 'custom') return;
+    setTimeCursorOffset((prev) => prev + (dir === 'prev' ? -1 : 1));
+  }, [interval]);
 
   const filteredSelectedTxs = useMemo(
     () => selectedTxs.filter((t) => {
@@ -1127,8 +1183,7 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
         const color = cat?.color ?? null;
         return { id, name, total, color };
       })
-      .sort((a, b) => b.total - a.total)
-      .slice(0, 7);
+      .sort((a, b) => b.total - a.total);
 
     const max = rows[0]?.total ?? 0;
     return rows.map((r) => ({
@@ -1155,8 +1210,7 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
           total,
         };
       })
-      .sort((a, b) => b.total - a.total)
-      .slice(0, 7);
+      .sort((a, b) => b.total - a.total);
     const max = rows[0]?.total ?? 0;
     return rows.map((r) => ({
       ...r,
@@ -1253,6 +1307,9 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     setVisibleTransactionsCount(12);
   }, [selectedAccountId, interval, customStart, customEnd, transactions.length, selectedCategoryFilter]);
+
+  // Reset navigation cursor when interval type changes
+  useEffect(() => { setTimeCursorOffset(0); }, [interval]);
 
   // ── Scroll / numpad callbacks ──
   const handleDashboardScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -1874,6 +1931,14 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
           .single();
         if (error) throw error;
         accountId = data?.id ?? null;
+
+        // Ensure the creator is a member of their own account (required by RLS)
+        if (accountId) {
+          await supabase.from('account_members').upsert(
+            { account_id: accountId, user_id: user.id, role: 'owner' },
+            { onConflict: 'account_id,user_id', ignoreDuplicates: true },
+          );
+        }
       }
 
       if (!accountId) {
@@ -2272,11 +2337,10 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      const { error: memberError } = await supabase.from('account_members').insert({
-        account_id: invite.account_id,
-        user_id: user.id,
-        role: 'member',
-      });
+      const { error: memberError } = await supabase.from('account_members').upsert(
+        { account_id: invite.account_id, user_id: user.id, role: 'member' },
+        { onConflict: 'account_id,user_id', ignoreDuplicates: true },
+      );
       if (memberError) throw memberError;
 
       const { error: usedError } = await supabase
@@ -2338,6 +2402,10 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
     interval, setInterval,
     customStart, setCustomStart,
     customEnd, setCustomEnd,
+    timeCursorOffset, setTimeCursorOffset,
+    intervalVisibility, setIntervalVisibility,
+    intervalLabel,
+    navigateInterval,
     menuOpen, setMenuOpen,
     showEntryModal, setShowEntryModal,
     showCategoryModal, setShowCategoryModal,

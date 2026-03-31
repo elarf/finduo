@@ -271,11 +271,10 @@ export function useFriends(user: User | null) {
   const addFriendToAccount = useCallback(
     async (friendUserId: string, accountId: string): Promise<boolean> => {
       try {
-        const { error } = await supabase.from('account_members').insert({
-          account_id: accountId,
-          user_id: friendUserId,
-          role: 'member',
-        });
+        const { error } = await supabase.from('account_members').upsert(
+          { account_id: accountId, user_id: friendUserId, role: 'member' },
+          { onConflict: 'account_id,user_id', ignoreDuplicates: true },
+        );
         if (error) throw error;
         // Update local map
         setFriendAccountMap((prev) => ({

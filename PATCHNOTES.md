@@ -2,6 +2,22 @@
 
 ---
 
+## [0.9.1] — 2026-03-31
+
+### 🐛 Bug Fixes
+
+#### Shared Account Access (Sharing with friends doesn't work anymore)
+- **Root cause:** `saveAccount` was creating `accounts` rows but not inserting `account_members` rows for creators. Under the current flat RLS architecture, all child tables (`transactions`, `tags`, `account_settings`) require `EXISTS(account_members WHERE ...)` with no fallback to `created_by`. This meant creators could see accounts but not their transactions/data, and sharing was incomplete.
+- **Fixed in client:**
+  - `saveAccount` now upserts creator as `'owner'` member after account creation
+  - `joinByToken` and `addFriendToAccount` now use upsert instead of insert (prevents 409 conflicts on re-join/re-add)
+- **Fixed with migration `20260401b_fix_shared_account_access.sql`:**
+  - Backfilled missing creator membership rows for all existing accounts (`ON CONFLICT DO NOTHING`)
+  - Added `trg_auto_add_creator_member` trigger to auto-insert creator as `'owner'` member on every new account (belt-and-suspenders DB guarantee)
+  - Re-applied clean account_members RLS policies (terminal SELECT, permissive INSERT, self-only DELETE)
+
+---
+
 ## [0.9.0] — 2026-03-31
 
 ### 🏗 Architecture

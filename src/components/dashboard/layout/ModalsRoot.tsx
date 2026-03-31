@@ -115,9 +115,7 @@ export default function ModalsRoot() {
     menuTagsEditMode, setMenuTagsEditMode,
     selectedTags,
     // Filter
-    interval, setInterval,
-    customStart, setCustomStart,
-    customEnd, setCustomEnd,
+    intervalVisibility, setIntervalVisibility,
     selectedTagFilter, setSelectedTagFilter,
     setSelectedAccountId,
     desktopView,
@@ -201,12 +199,8 @@ export default function ModalsRoot() {
         openCreateTag={openCreateTag}
         openEditTag={openEditTag}
         deleteTag={deleteTag}
-        interval={interval}
-        setInterval={setInterval}
-        customStart={customStart}
-        setCustomStart={setCustomStart}
-        customEnd={customEnd}
-        setCustomEnd={setCustomEnd}
+        intervalVisibility={intervalVisibility}
+        setIntervalVisibility={setIntervalVisibility}
         pendingDebtCount={pendingDebtCount}
         setShowFriendsModal={setShowFriendsModal}
         openInvitationsModal={openInvitationsModal}

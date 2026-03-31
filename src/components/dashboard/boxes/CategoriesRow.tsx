@@ -29,17 +29,6 @@ export default function CategoriesRow() {
             </TouchableOpacity>
           )}
         </View>
-        <TouchableOpacity onPress={() => {
-          setEditingCategoryId(null);
-          setCategoryName('');
-          setCategoryType('expense');
-          setCategoryColor(null);
-          setCategoryIcon(null);
-          setCategoryTagIds([]);
-          setShowCategoryModal(true);
-        }}>
-          <Icon name={"add_circle" as any} size={22} color="#6ED8A5" />
-        </TouchableOpacity>
       </View>
 
       {(!desktopView || !categoriesCollapsed) && (

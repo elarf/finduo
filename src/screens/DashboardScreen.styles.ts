@@ -988,6 +988,40 @@ export const styles = StyleSheet.create({
     marginTop: 8,
     marginBottom: 4,
   },
+  // Interval navigation row (arrows + label)
+  intervalNavRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+    marginBottom: 2,
+  },
+  intervalNavArrow: {
+    width: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 4,
+  },
+  intervalNavArrowText: {
+    color: '#7EB8F7',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  intervalNavCenter: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 4,
+  },
+  intervalNavLabel: {
+    color: '#EAF3FF',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  intervalNavType: {
+    color: '#7EB8F7',
+    fontSize: 11,
+    fontWeight: '600',
+    marginTop: 1,
+  },
   // Section header left cluster
   sectionHeaderLeft: {
     flexDirection: 'row',

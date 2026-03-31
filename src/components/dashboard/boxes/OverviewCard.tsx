@@ -4,6 +4,8 @@ import { useDashboard } from '../../../context/DashboardContext';
 import { type IntervalKey } from '../../../types/dashboard';
 import { styles } from '../../../screens/DashboardScreen.styles';
 
+const ALL_INTERVALS: IntervalKey[] = ['day', 'week', 'month', 'year', 'all', 'custom'];
+
 export default function OverviewCard() {
   const {
     desktopView,
@@ -17,10 +19,17 @@ export default function OverviewCard() {
     showIntervalPicker, setShowIntervalPicker,
     customStart, setCustomStart,
     customEnd, setCustomEnd,
+    setTimeCursorOffset,
+    intervalVisibility,
+    intervalLabel,
+    navigateInterval,
     totalIncludedBalance,
     includedAccountSummaries,
     selectedAccountId, setSelectedAccountId,
   } = useDashboard();
+
+  const visibleIntervals = ALL_INTERVALS.filter((k) => intervalVisibility[k]);
+  const canNavigate = interval !== 'all' && interval !== 'custom';
 
   return (
     <>
@@ -49,23 +58,52 @@ export default function OverviewCard() {
             <Text style={styles.summaryText}>
               Account: {showAccountOverviewPicker ? 'All Included Accounts' : (selectedAccount?.name ?? 'No account selected')}
             </Text>
-            {/* Interval pill inline selector */}
-            <View style={styles.intervalPillRow}>
+
+            {/* Interval navigation row */}
+            <View style={styles.intervalNavRow}>
+              {canNavigate ? (
+                <TouchableOpacity style={styles.intervalNavArrow} onPress={() => navigateInterval('prev')}>
+                  <Text style={styles.intervalNavArrowText}>◀</Text>
+                </TouchableOpacity>
+              ) : (
+                <View style={styles.intervalNavArrow} />
+              )}
+
               <TouchableOpacity
-                style={styles.intervalPill}
+                style={styles.intervalNavCenter}
                 onPress={() => setShowIntervalPicker((p) => !p)}
               >
-                <Text style={styles.intervalPillText}>{interval.toUpperCase()} {showIntervalPicker ? '▾' : '▸'}</Text>
+                <Text style={styles.intervalNavLabel}>{intervalLabel}</Text>
+                <Text style={styles.intervalNavType}>{interval.toUpperCase()} {showIntervalPicker ? '▾' : '▸'}</Text>
               </TouchableOpacity>
+
+              {canNavigate ? (
+                <TouchableOpacity style={styles.intervalNavArrow} onPress={() => navigateInterval('next')}>
+                  <Text style={styles.intervalNavArrowText}>▶</Text>
+                </TouchableOpacity>
+              ) : (
+                <View style={styles.intervalNavArrow} />
+              )}
             </View>
+
+            {/* Filter chip selector */}
             {showIntervalPicker && (
               <View style={styles.intervalPickerWrap}>
                 <View style={styles.menuChipWrap}>
-                  {(['day', 'week', 'month', 'year', 'all', 'custom'] as IntervalKey[]).map((key) => (
+                  {visibleIntervals.map((key) => (
                     <TouchableOpacity
                       key={key}
                       style={[styles.menuChip, interval === key && styles.menuChipActive]}
-                      onPress={() => { setInterval(key); if (key !== 'custom') setShowIntervalPicker(false); }}
+                      onPress={() => {
+                        if (key === interval) {
+                          // Re-select same: reset to current period
+                          setTimeCursorOffset(0);
+                        } else {
+                          setInterval(key);
+                          setTimeCursorOffset(0);
+                        }
+                        if (key !== 'custom') setShowIntervalPicker(false);
+                      }}
                     >
                       <Text style={styles.menuChipText}>{key.toUpperCase()}</Text>
                     </TouchableOpacity>
@@ -91,6 +129,7 @@ export default function OverviewCard() {
                 )}
               </View>
             )}
+
             <Text style={styles.summaryText}>Opening: <Text style={overviewSummary.openingBalance >= 0 ? styles.positive : styles.negative}>{formatCurrency(overviewSummary.openingBalance)}</Text></Text>
             <View style={styles.summaryRow}>
               <Text style={[styles.summaryText, styles.positive]}>Income {formatCurrency(overviewSummary.income)}</Text>
@@ -107,11 +146,6 @@ export default function OverviewCard() {
               </View>
             )}
             <Text style={styles.summaryText}>Total Included Balance: <Text style={totalIncludedBalance >= 0 ? styles.positive : styles.negative}>{formatCurrency(totalIncludedBalance)}</Text></Text>
-            {!desktopView && includedAccountSummaries.length > 1 && (
-              <Text style={styles.summaryText}>
-                Tap to {showAccountOverviewPicker ? 'hide accounts' : 'change account'}
-              </Text>
-            )}
           </>
         )}
       </View>

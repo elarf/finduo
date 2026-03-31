@@ -6,7 +6,6 @@ import {
   Pressable,
   ScrollView,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -85,13 +84,9 @@ type QuickNavigationProps = {
   selectedTagFilter: string | null;
   onFilterTag: (id: string) => void;
 
-  // Interval
-  interval: IntervalKey;
-  setInterval: (v: IntervalKey) => void;
-  customStart: string;
-  setCustomStart: (v: string) => void;
-  customEnd: string;
-  setCustomEnd: (v: string) => void;
+  // Interval visibility (Quick Nav only controls which options are visible)
+  intervalVisibility: Record<IntervalKey, boolean>;
+  setIntervalVisibility: (v: Record<IntervalKey, boolean>) => void;
 
   // Debts badge
   pendingDebtCount: number;
@@ -126,13 +121,14 @@ function QuickNavigation({
   menuTagsEditMode, setMenuTagsEditMode,
   openCreateTag, openEditTag, deleteTag,
   selectedTagFilter, onFilterTag,
-  interval, setInterval, customStart, setCustomStart, customEnd, setCustomEnd,
+  intervalVisibility, setIntervalVisibility,
   pendingDebtCount,
   setShowFriendsModal, openInvitationsModal, reloadDashboard,
   onFilterTransfers,
 }: QuickNavigationProps) {
   const [deletingCategoryIds, setDeletingCategoryIds] = useState<Set<string>>(new Set());
   const [showExperimental, setShowExperimental] = useState(false);
+  const [showIntervalVisibility, setShowIntervalVisibility] = useState(false);
 
   const handleDeleteCategory = useCallback((categoryId: string) => {
     setDeletingCategoryIds((prev) => new Set([...prev, categoryId]));
@@ -168,12 +164,14 @@ function QuickNavigation({
                     <Text style={styles.manageIconText}>✎</Text>
                   </TouchableOpacity>
                 )}
-                <TouchableOpacity style={styles.menuIconAction} onPress={() => {
-                  onClose();
-                  openCreateAccount();
-                }}>
-                  <Text style={styles.menuIconActionText}>＋</Text>
-                </TouchableOpacity>
+                {(menuAccountsExpanded || accounts.length === 0) && (
+                  <TouchableOpacity style={styles.menuIconAction} onPress={() => {
+                    onClose();
+                    openCreateAccount();
+                  }}>
+                    <Text style={styles.menuIconActionText}>＋</Text>
+                  </TouchableOpacity>
+                )}
               </View>
             </View>
             {menuAccountsExpanded && accounts.map((account, accountIdx) => {
@@ -293,18 +291,20 @@ function QuickNavigation({
                     <Text style={styles.manageIconText}>✎</Text>
                   </TouchableOpacity>
                 )}
-                <TouchableOpacity style={styles.menuIconAction} onPress={() => {
-                  onClose();
-                  setEditingCategoryId(null);
-                  setCategoryName('');
-                  setCategoryType('income');
-                  setCategoryColor(null);
-                  setCategoryIcon(null);
-                  setCategoryTagIds([]);
-                  setShowCategoryModal(true);
-                }}>
-                  <Text style={styles.menuIconActionText}>＋</Text>
-                </TouchableOpacity>
+                {(menuIncomeCatExpanded || !categories.some((c) => c.type === 'income' && c.name !== 'Transfer')) && (
+                  <TouchableOpacity style={styles.menuIconAction} onPress={() => {
+                    onClose();
+                    setEditingCategoryId(null);
+                    setCategoryName('');
+                    setCategoryType('income');
+                    setCategoryColor(null);
+                    setCategoryIcon(null);
+                    setCategoryTagIds([]);
+                    setShowCategoryModal(true);
+                  }}>
+                    <Text style={styles.menuIconActionText}>＋</Text>
+                  </TouchableOpacity>
+                )}
               </View>
             </View>
             {menuIncomeCatExpanded && (menuIncomeCatEditMode ? categories : selectedCategories).filter((c) => c.type === 'income' && c.name !== 'Transfer').map((category) => {
@@ -371,18 +371,20 @@ function QuickNavigation({
                     <Text style={styles.manageIconText}>✎</Text>
                   </TouchableOpacity>
                 )}
-                <TouchableOpacity style={styles.menuIconAction} onPress={() => {
-                  onClose();
-                  setEditingCategoryId(null);
-                  setCategoryName('');
-                  setCategoryType('expense');
-                  setCategoryColor(null);
-                  setCategoryIcon(null);
-                  setCategoryTagIds([]);
-                  setShowCategoryModal(true);
-                }}>
-                  <Text style={styles.menuIconActionText}>＋</Text>
-                </TouchableOpacity>
+                {(menuExpenseCatExpanded || !categories.some((c) => c.type === 'expense' && c.name !== 'Transfer')) && (
+                  <TouchableOpacity style={styles.menuIconAction} onPress={() => {
+                    onClose();
+                    setEditingCategoryId(null);
+                    setCategoryName('');
+                    setCategoryType('expense');
+                    setCategoryColor(null);
+                    setCategoryIcon(null);
+                    setCategoryTagIds([]);
+                    setShowCategoryModal(true);
+                  }}>
+                    <Text style={styles.menuIconActionText}>＋</Text>
+                  </TouchableOpacity>
+                )}
               </View>
             </View>
             {menuExpenseCatExpanded && (menuExpenseCatEditMode ? categories : selectedCategories).filter((c) => c.type === 'expense' && c.name !== 'Transfer').map((category) => {
@@ -454,12 +456,14 @@ function QuickNavigation({
                     <Text style={styles.manageIconText}>✎</Text>
                   </TouchableOpacity>
                 )}
-                <TouchableOpacity style={styles.menuIconAction} onPress={() => {
-                  onClose();
-                  openCreateTag();
-                }}>
-                  <Text style={styles.menuIconActionText}>＋</Text>
-                </TouchableOpacity>
+                {(menuTagsExpanded || selectedTags.length === 0) && (
+                  <TouchableOpacity style={styles.menuIconAction} onPress={() => {
+                    onClose();
+                    openCreateTag();
+                  }}>
+                    <Text style={styles.menuIconActionText}>＋</Text>
+                  </TouchableOpacity>
+                )}
               </View>
             </View>
             {menuTagsExpanded && selectedTags.map((tag) => {
@@ -500,37 +504,28 @@ function QuickNavigation({
               );
             })}
 
-            {/* ── Interval ── */}
-            <Text style={styles.menuSectionTitle}>Interval</Text>
-            <View style={styles.menuChipWrap}>
-              {(['day', 'week', 'month', 'year', 'all', 'custom'] as IntervalKey[]).map((key) => (
-                <TouchableOpacity
-                  key={key}
-                  style={[styles.menuChip, interval === key && styles.menuChipActive]}
-                  onPress={() => setInterval(key)}
-                >
-                  <Text style={styles.menuChipText}>{key.toUpperCase()}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-            {interval === 'custom' && (
-              <View style={styles.customRangeStack}>
-                <TextInput
-                  value={customStart}
-                  onChangeText={setCustomStart}
-                  placeholder="Start YYYY-MM-DD"
-                  placeholderTextColor="#64748B"
-                  style={styles.input}
-                />
-                <TextInput
-                  value={customEnd}
-                  onChangeText={setCustomEnd}
-                  placeholder="End YYYY-MM-DD"
-                  placeholderTextColor="#64748B"
-                  style={styles.input}
-                />
+            {/* ── Interval Visibility ── */}
+            <TouchableOpacity style={styles.menuItem} onPress={() => setShowIntervalVisibility((p) => !p)}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Text style={styles.menuItemText}>Visible Intervals</Text>
+                <Text style={{ color: '#64748B', fontSize: 11, fontWeight: '600' }}>{showIntervalVisibility ? '▾' : '▸'}</Text>
               </View>
-            )}
+            </TouchableOpacity>
+            {showIntervalVisibility && (['day', 'week', 'month', 'year', 'all', 'custom'] as IntervalKey[]).map((key) => (
+              <TouchableOpacity
+                key={key}
+                style={[styles.menuItem, { paddingVertical: 6, paddingLeft: 20 }]}
+                onPress={() => setIntervalVisibility({ ...intervalVisibility, [key]: !intervalVisibility[key] })}
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flex: 1 }}>
+                  <Text style={styles.menuItemText}>{key.toUpperCase()}</Text>
+                  <Text style={{ color: intervalVisibility[key] ? '#4ade80' : '#64748B', fontSize: 13, fontWeight: '700' }}>
+                    {intervalVisibility[key] ? '✓' : '✕'}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            ))}
+
 
             {/* ── Navigation links ── */}
             <TouchableOpacity style={styles.menuItem} onPress={() => {

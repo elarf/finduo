@@ -8,8 +8,6 @@ export default function DashboardHeader() {
   const {
     avatarUrl,
     user,
-    reloading,
-    reloadDashboard,
     isDesktopBrowser,
     desktopView,
     setViewModeOverride,
@@ -56,20 +54,14 @@ export default function DashboardHeader() {
           </View>
         )}
       </TouchableOpacity>
-      {/* Logo: absolutely centred; only the image itself is the tap target */}
+      {/* Logo: absolutely centred */}
       <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
         <View style={styles.headerLogoCenter} pointerEvents="box-none">
-          <TouchableOpacity
-            onPress={() => void reloadDashboard()}
-            activeOpacity={0.7}
-            accessibilityLabel="Reload dashboard"
-          >
-            <Image
-              source={require('../../../../assets/logo.png')}
-              style={[styles.headerLogo, reloading && { opacity: 0.5 }]}
-              resizeMode="contain"
-            />
-          </TouchableOpacity>
+          <Image
+            source={require('../../../../assets/logo.png')}
+            style={styles.headerLogo}
+            resizeMode="contain"
+          />
         </View>
       </View>
       {/* Spacer so avatar and toggle don't overlap the logo */}

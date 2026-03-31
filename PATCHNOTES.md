@@ -2,6 +2,41 @@
 
 ---
 
+## [0.9.0] — 2026-03-31
+
+### 🏗 Architecture
+
+#### Cache-First Data Loading — TanStack Query
+- Added `@tanstack/react-query` v5 as the data layer for all dashboard fetching
+- `QueryClientProvider` wraps the app in `App.tsx`; global config: `staleTime: 5 min`, `gcTime: 1 hr`, `refetchOnWindowFocus: false`
+- Five new query hooks under `src/hooks/`:
+  - `useAccountsQuery` — owned + shared accounts, user_preferences ordering
+  - `useTransactionsQuery` — up to 1000 transactions enriched with `transaction_tags`
+  - `useCategoriesQuery` — categories + `user_hidden_categories` in a single query
+  - `useTagsQuery` — tags scoped by account set
+  - `useAccountSettingsQuery` — settings with `carry_over_balance` column fallback
+- All queries use stable, scoped keys (e.g. `['transactions', sortedAccountKey]`) so invalidation is always targeted
+- `setX` wrappers in `DashboardContext` (`setAccounts`, `setTransactions`, `setCategories`, `setTags`, `setAccountSettings`) proxy to `queryClient.setQueryData` — all existing mutation callbacks work unchanged
+- `_sortedAccountKeyRef` pattern prevents stale-closure bugs in setters when the account list changes mid-session
+- `hiddenCategoryIds` local state re-syncs from the categories query on each `dataUpdatedAt` tick
+- `useDashboardData.ts` refactored from a 439-line data-fetching hook into a ~100-line UI state layer (selection, animation, saving flags, refs)
+- `reloadDashboard` now calls `queryClient.invalidateQueries` on all 5 query keys in parallel
+- `joinByToken` now calls scoped `invalidateQueries` instead of the old full `loadData()`
+- `loadData` and `hasLoadedOnceRef` removed entirely from the codebase
+- **App reopen behavior:** if data is < 5 minutes old, the dashboard renders instantly from cache with no loading spinner; a background refetch completes silently
+
+### ✨ Features
+
+#### Pull-to-Refresh
+- Pull down on the main dashboard scroll view to silently refresh all data
+- Uses `RefreshControl` on the root `ScrollView` in `MainScrollView.tsx`
+- Independent local `refreshing` state (`useState`) — spinner stays visible until `reloadDashboard()` fully resolves; `try/finally` guarantees the spinner always dismisses
+- Double-trigger prevention: pulling while already refreshing is a no-op
+- Haptic feedback (`expo-haptics` `ImpactFeedbackStyle.Medium`) fires when pull starts (native only)
+- Logo tap-to-refresh removed; `DashboardHeader` logo is now a static image
+
+---
+
 ## [0.8.0] — 2026-03-30
 
 ### 🏗 Architecture

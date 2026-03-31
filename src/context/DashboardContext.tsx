@@ -44,6 +44,14 @@ import {
 import { useDashboardData } from '../hooks/useDashboardData';
 import { useFriends } from '../hooks/useFriends';
 import { useDebts } from '../hooks/useDebts';
+import { useQueryClient } from '@tanstack/react-query';
+import { useAccountsQuery, accountsQueryKey } from '../hooks/useAccountsQuery';
+import type { AccountsQueryData } from '../hooks/useAccountsQuery';
+import { useTransactionsQuery, transactionsQueryKey, sortedKey } from '../hooks/useTransactionsQuery';
+import { useCategoriesQuery, categoriesQueryKey } from '../hooks/useCategoriesQuery';
+import type { CategoriesQueryData } from '../hooks/useCategoriesQuery';
+import { useTagsQuery, tagsQueryKey } from '../hooks/useTagsQuery';
+import { useAccountSettingsQuery, accountSettingsQueryKey } from '../hooks/useAccountSettingsQuery';
 import type { ResolvedFriend, ResolvedRequest } from '../types/friends';
 import type { AppDebt } from '../types/pools';
 
@@ -118,9 +126,7 @@ export type DashboardContextValue = {
   setSaving: React.Dispatch<React.SetStateAction<boolean>>;
   missingSchemaColumns: string[];
   pendingSelectedAccountIdRef: React.MutableRefObject<string | null>;
-  hasLoadedOnceRef: React.MutableRefObject<boolean>;
   schemaAlertSignatureRef: React.MutableRefObject<string>;
-  loadData: (opts?: { silent?: boolean }) => Promise<void>;
   reloadDashboard: () => Promise<void>;
   moveAccount: (idx: number, direction: 'up' | 'down') => void;
   setPrimary: (id: string) => void;
@@ -432,25 +438,220 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
 
   const data = useDashboardData(user);
   const {
-    accounts, setAccounts,
-    categories, setCategories,
-    tags, setTags,
-    transactions, setTransactions,
-    accountSettings, setAccountSettings,
-    hiddenCategoryIds, setHiddenCategoryIds,
     selectedAccountId, setSelectedAccountId,
-    primaryAccountId,
+    primaryAccountId, setPrimaryAccountId,
     entryAccountId, setEntryAccountId,
-    excludedAccountIds,
-    loading, reloading, animMultiplier,
+    excludedAccountIds, setExcludedAccountIds,
     saving, setSaving,
+    reloading, setReloading,
+    animMultiplier,
     missingSchemaColumns,
     pendingSelectedAccountIdRef,
-    hasLoadedOnceRef,
     schemaAlertSignatureRef,
-    loadData, reloadDashboard,
-    moveAccount, setPrimary, toggleAccountExclusion,
+    saveAccountPrefs,
+    animateIn,
+    checkRequiredSchemaColumns,
   } = data;
+
+  const queryClient = useQueryClient();
+
+  // ── Query hooks ───────────────────────────────────────────────────────────────
+  const accountsQ = useAccountsQuery(user?.id);
+  const accountsData: AccountsQueryData | undefined = accountsQ.data;
+  const accounts: AppAccount[] = accountsData?.accounts ?? [];
+  const accountIds: string[] = accounts.map((a) => a.id);
+  const _sortedAccountKey = sortedKey(accountIds);
+  // Ref so that setX wrappers below always read the latest key, even if account list changed
+  const _sortedAccountKeyRef = useRef(_sortedAccountKey);
+  useEffect(() => { _sortedAccountKeyRef.current = _sortedAccountKey; }, [_sortedAccountKey]);
+
+  const categoriesQ = useCategoriesQuery(user?.id);
+  const categories: AppCategory[] = categoriesQ.data?.categories ?? [];
+
+  const transactionsQ = useTransactionsQuery(accountIds);
+  const transactions: AppTransaction[] = transactionsQ.data ?? [];
+
+  const tagsQ = useTagsQuery(accountIds);
+  const tags: AppTag[] = tagsQ.data ?? [];
+
+  const settingsQ = useAccountSettingsQuery(accounts);
+  const accountSettings: Record<string, AccountSetting> = settingsQ.data ?? {};
+
+  // loading = true only when there is truly no cached data yet (first-ever load)
+  const loading = !accountsQ.data && (accountsQ.isPending || accountsQ.isFetching);
+
+  // ── setX wrappers: write directly to the query cache ─────────────────────────
+  // All existing mutation callbacks can continue calling setX unchanged.
+  const setAccounts: React.Dispatch<React.SetStateAction<AppAccount[]>> = useCallback(
+    (action) => {
+      queryClient.setQueryData(
+        accountsQueryKey(user?.id ?? ''),
+        (old: AccountsQueryData | undefined) => {
+          if (!old) return old;
+          const next = typeof action === 'function' ? action(old.accounts) : action;
+          return { ...old, accounts: next };
+        },
+      );
+    },
+    [queryClient, user?.id],
+  );
+
+  const setTransactions: React.Dispatch<React.SetStateAction<AppTransaction[]>> = useCallback(
+    (action) => {
+      queryClient.setQueryData(
+        transactionsQueryKey(_sortedAccountKeyRef.current),
+        (old: AppTransaction[] | undefined) => {
+          if (old === undefined) return old;
+          return typeof action === 'function' ? action(old) : action;
+        },
+      );
+    },
+    [queryClient],
+  );
+
+  const setCategories: React.Dispatch<React.SetStateAction<AppCategory[]>> = useCallback(
+    (action) => {
+      queryClient.setQueryData(
+        categoriesQueryKey(user?.id ?? ''),
+        (old: CategoriesQueryData | undefined) => {
+          if (!old) return old;
+          const next = typeof action === 'function' ? action(old.categories) : action;
+          return { ...old, categories: next };
+        },
+      );
+    },
+    [queryClient, user?.id],
+  );
+
+  const setTags: React.Dispatch<React.SetStateAction<AppTag[]>> = useCallback(
+    (action) => {
+      queryClient.setQueryData(
+        tagsQueryKey(_sortedAccountKeyRef.current),
+        (old: AppTag[] | undefined) => {
+          if (old === undefined) return old;
+          return typeof action === 'function' ? action(old) : action;
+        },
+      );
+    },
+    [queryClient],
+  );
+
+  const setAccountSettings: React.Dispatch<React.SetStateAction<Record<string, AccountSetting>>> =
+    useCallback(
+      (action) => {
+        queryClient.setQueryData(
+          accountSettingsQueryKey(_sortedAccountKeyRef.current),
+          (old: Record<string, AccountSetting> | undefined) => {
+            if (old === undefined) return old;
+            return typeof action === 'function' ? action(old) : action;
+          },
+        );
+      },
+      [queryClient],
+    );
+
+  // ── hiddenCategoryIds: local state, initialized/synced from categories query ──
+  const [hiddenCategoryIds, setHiddenCategoryIds] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    if (categoriesQ.data) {
+      setHiddenCategoryIds(categoriesQ.data.hiddenCategoryIds);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [categoriesQ.dataUpdatedAt]);
+
+  // ── Selection state init — runs when accounts query data arrives/refreshes ────
+  useEffect(() => {
+    if (!accountsData) return;
+    const { accounts: loaded, primaryAccountId: pId, excludedAccountIds: excluded } = accountsData;
+    setExcludedAccountIds(excluded);
+    const resolvedPrimary = pId ?? loaded[0]?.id ?? null;
+    setPrimaryAccountId(resolvedPrimary);
+    setSelectedAccountId((prev) => {
+      const pending = pendingSelectedAccountIdRef.current;
+      if (pending && loaded.some((a) => a.id === pending)) {
+        pendingSelectedAccountIdRef.current = null;
+        return pending;
+      }
+      return prev ?? resolvedPrimary;
+    });
+    setEntryAccountId((prev) => {
+      if (prev && loaded.some((a) => a.id === prev)) return prev;
+      return resolvedPrimary;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [accountsQ.dataUpdatedAt]);
+
+  // ── Schema column check — runs once per sign-in ───────────────────────────────
+  useEffect(() => {
+    if (user) void checkRequiredSchemaColumns();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
+
+  // ── Account management callbacks ──────────────────────────────────────────────
+  const moveAccount = useCallback(
+    (idx: number, direction: 'up' | 'down') => {
+      queryClient.setQueryData(
+        accountsQueryKey(user?.id ?? ''),
+        (old: AccountsQueryData | undefined) => {
+          if (!old) return old;
+          const next = [...old.accounts];
+          const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
+          if (swapIdx < 0 || swapIdx >= next.length) return old;
+          [next[idx], next[swapIdx]] = [next[swapIdx], next[idx]];
+          saveAccountPrefs(next, primaryAccountId);
+          return { ...old, accounts: next };
+        },
+      );
+    },
+    [queryClient, user?.id, primaryAccountId, saveAccountPrefs],
+  );
+
+  const setPrimary = useCallback(
+    (id: string) => {
+      setPrimaryAccountId(id);
+      setSelectedAccountId(id);
+      queryClient.setQueryData(
+        accountsQueryKey(user?.id ?? ''),
+        (old: AccountsQueryData | undefined) =>
+          old ? { ...old, primaryAccountId: id } : old,
+      );
+      saveAccountPrefs(accounts, id);
+    },
+    [accounts, queryClient, user?.id, saveAccountPrefs, setPrimaryAccountId],
+  );
+
+  const toggleAccountExclusion = useCallback(
+    (accountId: string) => {
+      setExcludedAccountIds((prev) => {
+        const next = prev.includes(accountId)
+          ? prev.filter((id) => id !== accountId)
+          : [...prev, accountId];
+        saveAccountPrefs(accounts, primaryAccountId, next);
+        queryClient.setQueryData(
+          accountsQueryKey(user?.id ?? ''),
+          (old: AccountsQueryData | undefined) =>
+            old ? { ...old, excludedAccountIds: next } : old,
+        );
+        return next;
+      });
+    },
+    [accounts, primaryAccountId, queryClient, user?.id, saveAccountPrefs],
+  );
+
+  /** Invalidates all dashboard queries → background refetch → count-up animation. */
+  const reloadDashboard = useCallback(async () => {
+    if (reloading || !user) return;
+    setReloading(true);
+    const key = _sortedAccountKeyRef.current;
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['accounts', user.id] }),
+      queryClient.invalidateQueries({ queryKey: ['categories', user.id] }),
+      queryClient.invalidateQueries({ queryKey: ['transactions', key] }),
+      queryClient.invalidateQueries({ queryKey: ['tags', key] }),
+      queryClient.invalidateQueries({ queryKey: ['account_settings', key] }),
+    ]);
+    animateIn();
+  }, [reloading, user, queryClient, animateIn, setReloading]);
 
   const {
     friends,
@@ -1034,12 +1235,6 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
   }, [selectedCategoryFilter, selectedTagFilter, showOnlyTransfers, filterBarAnim]);
 
   useEffect(() => { setAvatarImgError(false); }, [avatarUrl]);
-
-  useEffect(() => {
-    if (!user || hasLoadedOnceRef.current) return;
-    hasLoadedOnceRef.current = true;
-    void loadData();
-  }, [loadData, user, hasLoadedOnceRef]);
 
   useEffect(() => {
     if (!isDesktopBrowser) {
@@ -2094,14 +2289,20 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
       if (invitationAccountId) {
         await loadManagedInvites(invitationAccountId);
       }
-      await loadData();
+      await queryClient.invalidateQueries({ queryKey: ['accounts', user.id] });
+      await queryClient.invalidateQueries({ queryKey: ['categories', user.id] });
+      if (_sortedAccountKey) {
+        await queryClient.invalidateQueries({ queryKey: ['transactions', _sortedAccountKey] });
+        await queryClient.invalidateQueries({ queryKey: ['tags', _sortedAccountKey] });
+        await queryClient.invalidateQueries({ queryKey: ['account_settings', _sortedAccountKey] });
+      }
       Alert.alert('Joined', 'Shared account added.');
     } catch (err) {
       Alert.alert('Join failed', err instanceof Error ? err.message : 'Unknown error');
     } finally {
       setSaving(false);
     }
-  }, [invitationAccountId, joinToken, loadData, loadManagedInvites, user, setSaving]);
+  }, [invitationAccountId, joinToken, queryClient, _sortedAccountKey, loadManagedInvites, user, setSaving]);
 
   // ── Context value ──
   const value: DashboardContextValue = {
@@ -2124,9 +2325,8 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
     saving, setSaving,
     missingSchemaColumns,
     pendingSelectedAccountIdRef,
-    hasLoadedOnceRef,
     schemaAlertSignatureRef,
-    loadData, reloadDashboard,
+    reloadDashboard,
     moveAccount, setPrimary, toggleAccountExclusion,
     // useFriends
     friends, pendingRequests, friendsLoading, friendAccountMap, loadFriends,

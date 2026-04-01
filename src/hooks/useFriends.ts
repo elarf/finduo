@@ -99,14 +99,12 @@ export function useFriends(user: User | null) {
       setFriends(resolvedFriends);
       setPendingRequests(resolvedRequests);
 
-      // Load which accounts each friend is a member of (only accounts the current user owns)
+      // Load which accounts each friend is a member of (only accounts the current user also has access to)
       const acceptedFriendIds = resolvedFriends.map((f) => f.userId);
       if (acceptedFriendIds.length > 0) {
-        logAPI('supabase://account_members', { source: 'friends_modal.tab.friends', action: 'loadFriends' });
+        logAPI('supabase://rpc/get_friend_account_memberships', { source: 'friends_modal.tab.friends', action: 'loadFriends' });
         const { data: memberRows } = await supabase
-          .from('account_members')
-          .select('account_id, user_id')
-          .in('user_id', acceptedFriendIds);
+          .rpc('get_friend_account_memberships', { p_friend_ids: acceptedFriendIds });
 
         const map: Record<string, string[]> = {};
         for (const m of memberRows ?? []) {
@@ -285,11 +283,11 @@ export function useFriends(user: User | null) {
   const addFriendToAccount = useCallback(
     async (friendUserId: string, accountId: string): Promise<boolean> => {
       try {
-        logAPI('supabase://account_members', { source: 'friends_modal.add_to_account_button', action: 'addFriendToAccount' });
-        const { error } = await supabase.from('account_members').upsert(
-          { account_id: accountId, user_id: friendUserId, role: 'member' },
-          { onConflict: 'account_id,user_id', ignoreDuplicates: true },
-        );
+        logAPI('supabase://rpc/share_account', { source: 'friends_modal.add_to_account_button', action: 'addFriendToAccount' });
+        const { error } = await supabase.rpc('share_account', {
+          p_account_id: accountId,
+          p_user_id: friendUserId,
+        });
         if (error) throw error;
         // Update local map
         setFriendAccountMap((prev) => ({
@@ -309,12 +307,11 @@ export function useFriends(user: User | null) {
   const removeFriendFromAccount = useCallback(
     async (friendUserId: string, accountId: string): Promise<boolean> => {
       try {
-        logAPI('supabase://account_members', { source: 'friends_modal.remove_from_account_button', action: 'removeFriendFromAccount' });
-        const { error } = await supabase
-          .from('account_members')
-          .delete()
-          .eq('account_id', accountId)
-          .eq('user_id', friendUserId);
+        logAPI('supabase://rpc/unshare_account', { source: 'friends_modal.remove_from_account_button', action: 'removeFriendFromAccount' });
+        const { error } = await supabase.rpc('unshare_account', {
+          p_account_id: accountId,
+          p_user_id: friendUserId,
+        });
         if (error) throw error;
         // Update local map
         setFriendAccountMap((prev) => ({

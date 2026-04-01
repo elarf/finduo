@@ -33,9 +33,9 @@ export function useDebts(user: User | null) {
   /**
    * PURE DERIVATION — no DB writes.
    * Fetches pool members and transactions, runs the settlement algorithm across
-   * ALL participants (auth + external), and returns tagged PreTransaction[]:
-   *   kind='debt'  → both parties are auth users  → write to debts table
-   *   kind='entry' → one party is external        → auth user records as a personal entry
+   * ALL participants (auth + external), and returns tagged PreTransaction[].
+   * Each PreTransaction carries participant names, IDs, auth user IDs, and contact IDs
+   * so the commit step can write correct debt rows.
    * Throws on validation failures so the caller can surface appropriate feedback.
    */
   const computePoolSettlement = useCallback(async (poolId: string): Promise<PreTransaction[]> => {
@@ -57,6 +57,13 @@ export function useDebts(user: User | null) {
       allMembers
         .filter((m) => m.user_id != null)
         .map((m) => [m.id as string, m.user_id as string]),
+    );
+
+    // Map pool_participant.id → contact_id
+    const participantToContactId = new Map<string, string>(
+      allMembers
+        .filter((m) => m.contact_id != null)
+        .map((m) => [m.id as string, m.contact_id as string]),
     );
 
     // Reverse map: auth user_id → pool_participant.id
@@ -85,62 +92,53 @@ export function useDebts(user: User | null) {
       amount: Number(tx.amount),
     }));
 
-    const debts = calcSettlement(allParticipantIds, transactions);
+    const debtResults = calcSettlement(allParticipantIds, transactions);
 
     const preTxs: PreTransaction[] = [];
-    for (const debt of debts) {
+    for (const debt of debtResults) {
       const fromUserId = participantToUserId.get(debt.from);
       const toUserId = participantToUserId.get(debt.to);
+      const fromContactId = participantToContactId.get(debt.from);
+      const toContactId = participantToContactId.get(debt.to);
 
       // Get participant display names for debt records
-      const fromMember = allMembers.find(m => m.id === debt.from);
-      const toMember = allMembers.find(m => m.id === debt.to);
-      const fromName = fromMember?.display_name || fromMember?.external_name || 'Unknown';
-      const toName = toMember?.display_name || toMember?.external_name || 'Unknown';
+      const fromMember = allMembers.find((m: any) => m.id === debt.from);
+      const toMember = allMembers.find((m: any) => m.id === debt.to);
+      const fromName = fromMember?.contact_display_name || fromMember?.display_name || fromMember?.external_name || 'Unknown';
+      const toName = toMember?.contact_display_name || toMember?.display_name || toMember?.external_name || 'Unknown';
 
-      if (fromUserId && toUserId) {
-        // Auth ↔ Auth: create a debt record with auth user IDs
-        preTxs.push({
-          fromParticipantId: fromUserId,
-          toParticipantId: toUserId,
-          amount: debt.amount,
-          metadata: {
-            reason: 'settlement',
-            sourcePoolId: poolId,
-            kind: 'debt',
-            fromParticipantName: fromName,
-            toParticipantName: toName,
-            fromParticipantDbId: debt.from,
-            toParticipantDbId: debt.to,
-          },
-        });
-      } else {
-        // Mixed or External participants: create debt record with participant IDs
-        // This ensures ALL debts from settlement are tracked, not just auth-to-auth ones
-        preTxs.push({
-          fromParticipantId: debt.from, // participant ID (not user ID)
-          toParticipantId: debt.to,     // participant ID (not user ID)
-          amount: debt.amount,
-          metadata: {
-            reason: 'settlement',
-            sourcePoolId: poolId,
-            kind: 'debt',
-            fromParticipantName: fromName,
-            toParticipantName: toName,
-            fromUserId: fromUserId || null,
-            toUserId: toUserId || null,
-          },
-        });
-      }
+      preTxs.push({
+        // For auth-to-auth debts, use auth user IDs for RLS compat in from_user/to_user
+        // For mixed/external debts, still use auth user ID for the auth party
+        fromParticipantId: fromUserId ?? debt.from,
+        toParticipantId: toUserId ?? debt.to,
+        amount: debt.amount,
+        metadata: {
+          reason: 'settlement',
+          sourcePoolId: poolId,
+          fromParticipantName: fromName,
+          toParticipantName: toName,
+          fromParticipantDbId: debt.from,
+          toParticipantDbId: debt.to,
+          fromUserId: fromUserId || null,
+          toUserId: toUserId || null,
+          fromContactId: fromContactId || null,
+          toContactId: toContactId || null,
+        },
+      });
     }
 
     return preTxs;
   }, [user]);
 
   /**
-   * WRITE — commits debt-type pre-transactions to the debts table and closes the pool.
+   * WRITE — commits pre-transactions to the debts table and closes the pool.
    * Only called after the user explicitly confirms the settlement preview.
-   * Now handles both auth-to-auth debts and debts involving external participants.
+   *
+   * For from_user/to_user:
+   *   - Auth-to-auth: both are auth user IDs (standard RLS path)
+   *   - Mixed: auth party gets their auth UID, external party gets participant ID
+   *     (visible via pool membership RLS fallback)
    */
   const commitPoolSettlement = useCallback(async (
     poolId: string,
@@ -148,27 +146,23 @@ export function useDebts(user: User | null) {
   ): Promise<void> => {
     if (!user || preTxs.length === 0) return;
 
-    // All settlements are now debt-type records
-    const debtRows = preTxs.map((p) => {
-      const isAuthToAuth = p.metadata.fromUserId && p.metadata.toUserId;
-
-      return {
-        // For auth-to-auth debts, use auth user IDs for compatibility
-        // For mixed/external debts, use participant IDs
-        from_user: isAuthToAuth ? p.metadata.fromUserId : p.fromParticipantId,
-        to_user: isAuthToAuth ? p.metadata.toUserId : p.toParticipantId,
-        amount: p.amount,
-        pool_id: p.metadata.sourcePoolId,
-        status: 'pending' as const,
-        from_confirmed: false,
-        to_confirmed: false,
-        // New fields for participant information
-        from_participant_id: p.metadata.fromParticipantDbId || p.fromParticipantId,
-        to_participant_id: p.metadata.toParticipantDbId || p.toParticipantId,
-        from_participant_name: p.metadata.fromParticipantName,
-        to_participant_name: p.metadata.toParticipantName,
-      };
-    });
+    const debtRows = preTxs.map((p) => ({
+      // from_user/to_user: prefer auth user IDs, fall back to participant IDs
+      from_user: p.metadata.fromUserId || p.fromParticipantId,
+      to_user: p.metadata.toUserId || p.toParticipantId,
+      amount: p.amount,
+      pool_id: p.metadata.sourcePoolId,
+      status: 'pending' as const,
+      from_confirmed: false,
+      to_confirmed: false,
+      // Participant and contact information for display
+      from_participant_id: p.metadata.fromParticipantDbId || p.fromParticipantId,
+      to_participant_id: p.metadata.toParticipantDbId || p.toParticipantId,
+      from_participant_name: p.metadata.fromParticipantName,
+      to_participant_name: p.metadata.toParticipantName,
+      from_contact_id: p.metadata.fromContactId || null,
+      to_contact_id: p.metadata.toContactId || null,
+    }));
 
     if (debtRows.length > 0) {
       logAPI('supabase://debts', { source: 'settlements.pool_card.settle_button', action: 'commitPoolSettlement' });
@@ -184,11 +178,10 @@ export function useDebts(user: User | null) {
 
   /**
    * One-step settle used by PoolScreen's Settle button.
-   * Updated to handle all settlement transactions as debt records.
    * Returns a SettleResult that drives what the UI does next:
-   *   'settled' → debt records created, pool closed → navigate away
+   *   'settled'  → debt records created, pool closed → navigate away
    *   'balanced' → no debts, pool left open
-   *   'error'   → something went wrong; error already surfaced via webAlert
+   *   'error'    → something went wrong; error already surfaced via webAlert
    */
   const settlePoolDebts = useCallback(async (poolId: string): Promise<SettleResult> => {
     if (!user) return { kind: 'error' };
@@ -200,7 +193,6 @@ export function useDebts(user: User | null) {
         return { kind: 'balanced' };
       }
 
-      // All settlements are now debt records - commit them all
       await commitPoolSettlement(poolId, preTxs);
 
       webAlert('Pool settled', `${preTxs.length} debt(s) created.`);

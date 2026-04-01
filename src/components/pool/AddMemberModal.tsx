@@ -16,16 +16,19 @@ import { logUI, uiPath, uiProps } from '../../lib/devtools';
 import Icon from '../Icon';
 import { poolSharedStyles as sh } from './poolStyles';
 import type { PoolMember } from '../../types/pools';
+import type { Contact } from '../../types/contacts';
 import type { ResolvedFriend } from '../../types/friends';
 
 interface Props {
   visible: boolean;
   onClose: () => void;
   onAddFriend: (friend: ResolvedFriend) => Promise<void>;
-  onAddExternal: (name: string) => Promise<void>;
+  onAddExternal: (name: string, contactId?: string) => Promise<void>;
   poolMembers: PoolMember[];
   friends: ResolvedFriend[];
   friendsLoading: boolean;
+  contacts: Contact[];
+  contactsLoading: boolean;
 }
 
 export function AddMemberModal({
@@ -36,21 +39,27 @@ export function AddMemberModal({
   poolMembers,
   friends,
   friendsLoading,
+  contacts,
+  contactsLoading,
 }: Props) {
-  const [mode, setMode] = useState<'friends' | 'external'>('friends');
+  const [mode, setMode] = useState<'friends' | 'contacts'>('friends');
   const [search, setSearch] = useState('');
-  const [externalName, setExternalName] = useState('');
+  const [newContactName, setNewContactName] = useState('');
+  const [newContactEmail, setNewContactEmail] = useState('');
+  const [showNewContactForm, setShowNewContactForm] = useState(false);
 
   useEffect(() => {
     if (!visible) return;
     logUI(uiPath('add_member_modal', 'card', 'container'), 'opened');
     setSearch('');
-    setExternalName('');
+    setNewContactName('');
+    setNewContactEmail('');
+    setShowNewContactForm(false);
   }, [visible]);
 
   useEffect(() => {
     if (visible && !friendsLoading && friends.length === 0) {
-      setMode('external');
+      setMode('contacts');
     }
   }, [friendsLoading, friends.length, visible]);
 
@@ -64,10 +73,35 @@ export function AddMemberModal({
     });
   }, [friends, search]);
 
-  const handleAddExternal = useCallback(async () => {
-    const name = externalName.trim();
+  // Filter contacts: exclude those already in the pool (by contact_id match)
+  const filteredContacts = useMemo(() => {
+    const poolContactIds = new Set(poolMembers.map((m) => m.contact_id).filter(Boolean));
+    const poolUserIds = new Set(poolMembers.map((m) => m.user_id).filter(Boolean));
+    const q = search.toLowerCase();
+
+    return contacts.filter((c) => {
+      // Already in pool via contact_id
+      if (poolContactIds.has(c.id)) return false;
+      // Already in pool via linked user_id
+      if (c.linked_user_id && poolUserIds.has(c.linked_user_id)) return false;
+      // Search filter
+      if (q) {
+        const name = c.display_name.toLowerCase();
+        const email = (c.email ?? '').toLowerCase();
+        return name.includes(q) || email.includes(q);
+      }
+      return true;
+    });
+  }, [contacts, poolMembers, search]);
+
+  const handleAddContact = useCallback(async (contact: Contact) => {
+    await onAddExternal(contact.display_name, contact.id);
+  }, [onAddExternal]);
+
+  const handleAddNewContact = useCallback(async () => {
+    const name = newContactName.trim();
     if (!name) {
-      Alert.alert('Name required', 'Enter a name for the external member.');
+      Alert.alert('Name required', 'Enter a name for the contact.');
       return;
     }
     const alreadyAdded = poolMembers.some(
@@ -77,8 +111,9 @@ export function AddMemberModal({
       Alert.alert('Duplicate', `"${name}" is already a member of this pool.`);
       return;
     }
+    // Pass without contactId — PoolScreen will create the contact
     await onAddExternal(name);
-  }, [externalName, onAddExternal, poolMembers]);
+  }, [newContactName, onAddExternal, poolMembers]);
 
   return (
     <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
@@ -110,15 +145,15 @@ export function AddMemberModal({
               <Text style={[s.tabText, mode === 'friends' && s.tabTextActive]}>Friends</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[s.tab, mode === 'external' && s.tabActive]}
+              style={[s.tab, mode === 'contacts' && s.tabActive]}
               onPress={() => {
-                logUI(uiPath('add_member_modal', 'tabs', 'external_tab'), 'press');
-                setMode('external');
+                logUI(uiPath('add_member_modal', 'tabs', 'contacts_tab'), 'press');
+                setMode('contacts');
               }}
-              {...uiProps(uiPath('add_member_modal', 'tabs', 'external_tab'))}
+              {...uiProps(uiPath('add_member_modal', 'tabs', 'contacts_tab'))}
             >
-              <Icon name="UserPlus" size={13} color={mode === 'external' ? '#53E3A6' : '#64748B'} />
-              <Text style={[s.tabText, mode === 'external' && s.tabTextActive]}>Add manually</Text>
+              <Icon name="Contact" size={13} color={mode === 'contacts' ? '#53E3A6' : '#64748B'} />
+              <Text style={[s.tabText, mode === 'contacts' && s.tabTextActive]}>Contacts</Text>
             </TouchableOpacity>
           </View>
 
@@ -139,7 +174,7 @@ export function AddMemberModal({
                   <Icon name="Users" size={28} color="#1F3A59" />
                   <Text style={[sh.hintText, { textAlign: 'center' }]}>
                     {friends.length === 0
-                      ? 'No friends yet. Use "Add manually" to add anyone by name.'
+                      ? 'No friends yet. Use "Contacts" to add anyone by name.'
                       : 'No results for that search'}
                   </Text>
                 </View>
@@ -199,16 +234,99 @@ export function AddMemberModal({
             </View>
           ) : (
             <View style={{ marginTop: 10 }}>
-              <Text style={sh.hintText}>Add anyone — no app account needed.</Text>
               <TextInput
-                placeholder="Name (required)"
+                placeholder="Search contacts…"
                 placeholderTextColor="#64748B"
-                value={externalName}
-                onChangeText={setExternalName}
+                value={search}
+                onChangeText={setSearch}
                 style={sh.input}
-                autoCorrect={false}
-                {...uiProps(uiPath('add_member_modal', 'external', 'name_input'))}
+                {...uiProps(uiPath('add_member_modal', 'contacts', 'search_input'))}
               />
+
+              {contactsLoading ? (
+                <ActivityIndicator color="#53E3A6" style={{ marginVertical: 16 }} />
+              ) : (
+                <ScrollView
+                  style={{ maxHeight: 200 }}
+                  keyboardShouldPersistTaps="handled"
+                  {...uiProps(uiPath('add_member_modal', 'contacts', 'scroll'))}
+                >
+                  {filteredContacts.map((c) => (
+                    <TouchableOpacity
+                      key={c.id}
+                      style={s.friendRow}
+                      onPress={() => {
+                        logUI(uiPath('add_member_modal', 'contacts', 'row', c.id), 'press');
+                        void handleAddContact(c);
+                      }}
+                      {...uiProps(uiPath('add_member_modal', 'contacts', 'row', c.id))}
+                    >
+                      <View style={[s.avatar, { backgroundColor: '#2A1F3A' }]}>
+                        {c.avatar_url ? (
+                          <Image source={{ uri: c.avatar_url }} style={s.avatarImg} />
+                        ) : (
+                          <Text style={s.avatarInitial}>
+                            {c.display_name[0]?.toUpperCase() ?? '?'}
+                          </Text>
+                        )}
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={s.friendName}>{c.display_name}</Text>
+                        {c.email && <Text style={s.friendEmail}>{c.email}</Text>}
+                        {c.source === 'app_user' && (
+                          <Text style={[s.friendEmail, { color: '#53E3A6' }]}>App user</Text>
+                        )}
+                      </View>
+                    </TouchableOpacity>
+                  ))}
+
+                  {filteredContacts.length === 0 && !showNewContactForm && (
+                    <View style={{ alignItems: 'center', paddingVertical: 12, gap: 6 }}>
+                      <Icon name="Contact" size={28} color="#1F3A59" />
+                      <Text style={[sh.hintText, { textAlign: 'center' }]}>
+                        {contacts.length === 0
+                          ? 'No contacts yet. Create one below.'
+                          : 'No matching contacts'}
+                      </Text>
+                    </View>
+                  )}
+                </ScrollView>
+              )}
+
+              {/* New contact form */}
+              {!showNewContactForm ? (
+                <TouchableOpacity
+                  style={s.newContactBtn}
+                  onPress={() => setShowNewContactForm(true)}
+                  {...uiProps(uiPath('add_member_modal', 'contacts', 'new_contact_button'))}
+                >
+                  <Icon name="UserPlus" size={13} color="#53E3A6" />
+                  <Text style={s.newContactBtnText}>Create new contact</Text>
+                </TouchableOpacity>
+              ) : (
+                <View style={s.newContactForm}>
+                  <Text style={[sh.hintText, { marginBottom: 4 }]}>Add anyone — no app account needed.</Text>
+                  <TextInput
+                    placeholder="Name (required)"
+                    placeholderTextColor="#64748B"
+                    value={newContactName}
+                    onChangeText={setNewContactName}
+                    style={sh.input}
+                    autoCorrect={false}
+                    {...uiProps(uiPath('add_member_modal', 'contacts', 'new_name_input'))}
+                  />
+                  <TextInput
+                    placeholder="Email (optional)"
+                    placeholderTextColor="#64748B"
+                    value={newContactEmail}
+                    onChangeText={setNewContactEmail}
+                    style={[sh.input, { marginTop: 6 }]}
+                    autoCorrect={false}
+                    keyboardType="email-address"
+                    {...uiProps(uiPath('add_member_modal', 'contacts', 'new_email_input'))}
+                  />
+                </View>
+              )}
             </View>
           )}
 
@@ -223,13 +341,13 @@ export function AddMemberModal({
             >
               <Text style={sh.modalSecondaryText}>Cancel</Text>
             </TouchableOpacity>
-            {mode === 'external' && (
+            {mode === 'contacts' && showNewContactForm && (
               <TouchableOpacity
-                style={[sh.modalPrimary, !externalName.trim() && { opacity: 0.4 }]}
-                disabled={!externalName.trim()}
+                style={[sh.modalPrimary, !newContactName.trim() && { opacity: 0.4 }]}
+                disabled={!newContactName.trim()}
                 onPress={() => {
                   logUI(uiPath('add_member_modal', 'actions', 'add_button'), 'press');
-                  void handleAddExternal();
+                  void handleAddNewContact();
                 }}
                 {...uiProps(uiPath('add_member_modal', 'actions', 'add_button'))}
               >
@@ -309,5 +427,28 @@ const s = StyleSheet.create({
     color: '#53E3A6',
     fontSize: 13,
     fontWeight: '700',
+  },
+  newContactBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    marginTop: 10,
+    paddingVertical: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#1F3A59',
+    borderStyle: 'dashed',
+  },
+  newContactBtnText: {
+    color: '#53E3A6',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  newContactForm: {
+    marginTop: 10,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#1F3A59',
   },
 });

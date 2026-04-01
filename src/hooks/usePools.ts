@@ -91,11 +91,27 @@ export function usePools(user: User | null) {
         .rpc('get_pool_members', { p_pool_id: poolId });
       if (error) throw error;
 
-      const raw = (data ?? []) as PoolParticipant[];
+      const raw = (data ?? []) as any[];
 
-      // Enrich auth members with display_name (fallback) and avatar_url from user_profiles
-      const authIds = raw.filter((m) => m.user_id).map((m) => m.user_id as string);
-      if (authIds.length > 0) {
+      // Map RPC return (which now includes joined contact data) to PoolParticipant
+      const mapped: PoolParticipant[] = raw.map((m) => ({
+        id: m.id,
+        pool_id: m.pool_id,
+        type: m.type,
+        user_id: m.user_id,
+        external_name: m.external_name,
+        // Prefer contact display_name > participant display_name > external_name
+        display_name: m.contact_display_name ?? m.display_name ?? m.external_name,
+        // Contact avatar takes priority
+        avatar_url: m.contact_avatar_url ?? null,
+        contact_id: m.contact_id,
+        created_at: m.created_at,
+      }));
+
+      // Enrich auth members with avatar_url from user_profiles (if contact doesn't have one)
+      const authNeedingAvatar = mapped.filter((m) => m.user_id && !m.avatar_url);
+      if (authNeedingAvatar.length > 0) {
+        const authIds = authNeedingAvatar.map((m) => m.user_id as string);
         logAPI('supabase://user_profiles', { source: 'pool.member_chips.avatar', action: 'loadMemberProfiles' });
         const { data: profiles } = await supabase
           .from('user_profiles')
@@ -103,8 +119,8 @@ export function usePools(user: User | null) {
           .in('user_id', authIds);
         const profileMap: Record<string, { display_name: string | null; avatar_url: string | null }> = {};
         (profiles ?? []).forEach((p) => { profileMap[p.user_id] = { display_name: p.display_name, avatar_url: p.avatar_url }; });
-        const enriched = raw.map((m) => {
-          if (!m.user_id) return m;
+        const enriched = mapped.map((m) => {
+          if (!m.user_id || m.avatar_url) return m;
           const profile = profileMap[m.user_id];
           if (!profile) return m;
           return {
@@ -115,7 +131,7 @@ export function usePools(user: User | null) {
         });
         setMembers((prev) => ({ ...prev, [poolId]: enriched }));
       } else {
-        setMembers((prev) => ({ ...prev, [poolId]: raw }));
+        setMembers((prev) => ({ ...prev, [poolId]: mapped }));
       }
     } catch (err) {
       // non-fatal
@@ -126,6 +142,7 @@ export function usePools(user: User | null) {
     poolId: string,
     userId: string | null,
     displayName: string,
+    contactId?: string | null,
   ) => {
     try {
       logAPI('supabase://rpc/add_pool_member', { source: 'pool.member_chips.scroll_view', action: 'addPoolMember' });
@@ -133,6 +150,7 @@ export function usePools(user: User | null) {
         p_pool_id: poolId,
         p_user_id: userId,
         p_display_name: displayName,
+        p_contact_id: contactId ?? null,
       });
       if (error) throw error;
       await loadPoolMembers(poolId);

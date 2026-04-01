@@ -4,6 +4,42 @@
 
 ---
 
+## [1.0.2] — 2026-04-01
+
+### 🐛 Bug Fixes
+
+#### Production RLS — Friends, Profiles, and Shared Accounts Restored
+
+- **Root cause:** Multiple RLS policies were missing on production — 6 tables had RLS enabled with zero policies, making all queries return empty or fail silently. Additionally, the `account_members` SELECT policy was self-referential, causing `42P17 infinite recursion` errors on every account-related query after a schema cache reload.
+- **Tables restored** (0 policies → full coverage):
+  - `friends` — friends list was completely empty
+  - `user_profiles` — all user names and avatars were invisible
+  - `user_preferences` — account ordering and primary account selection lost
+  - `user_hidden_categories` — hidden categories did not persist
+  - `account_invites` — invite link system was non-functional
+  - `transaction_tags` — tags on transactions were invisible
+- **`account_members` infinite recursion fixed** — replaced self-referential SELECT policy with terminal `user_id = auth.uid()` policy; co-member visibility handled via SECURITY DEFINER RPCs
+- **Account sharing rewritten as RPCs** — `share_account` and `unshare_account` SECURITY DEFINER functions bypass cross-table RLS evaluation issues that blocked `.upsert()` on `account_members`
+- **Friend account map** — `get_friend_account_memberships` RPC replaces direct `account_members` query (which was blocked by terminal SELECT policy) to show which accounts are shared with which friends
+
+#### Schema Additions Applied to Production
+
+- `contacts` table created with full RLS (was missing from production)
+- `pool_members` columns added: `type`, `external_name`, `contact_id`, `created_at`
+- `debts` columns added: `from_participant_id`, `to_participant_id`, `from_participant_name`, `to_participant_name`, `from_contact_id`, `to_contact_id`
+- `get_pool_members` RPC updated: returns contact data via JOIN
+- `add_pool_member` RPC updated: accepts `p_contact_id` parameter
+- `account_settings` INSERT/DELETE policies added (only had SELECT/UPDATE)
+- `is_account_member` function upgraded to SECURITY DEFINER
+
+### 🔧 Technical
+
+- `useFriends.ts` — account sharing now uses `share_account`/`unshare_account` RPCs instead of direct `.upsert()`/`.delete()` on `account_members`
+- `useFriends.ts` — friend account map loading now uses `get_friend_account_memberships` RPC instead of direct `account_members` query
+- Migration: `supabase/migrations/20260401e_production_full_fix.sql`
+
+---
+
 ## [1.0.1] — 2026-04-01
 
 ### 🐛 Bug Fixes

@@ -24,8 +24,10 @@ export type PoolParticipant = {
   external_name: string | null;
   /** Denormalized display name for UI (works for both types) */
   display_name: string | null;
-  /** Enriched client-side from user_profiles; null for external members */
+  /** Enriched client-side from user_profiles or contacts; null for unlinked external members */
   avatar_url?: string | null;
+  /** FK to contacts table — set for both auth (via linked_user_id) and external members */
+  contact_id: string | null;
   created_at: string;
 };
 
@@ -44,7 +46,7 @@ export type PoolTransaction = {
 
 /**
  * In-memory settlement result — not persisted until the user explicitly commits.
- * Updated to handle both auth-to-auth debts and debts involving external participants.
+ * Handles both auth-to-auth debts and debts involving external participants (contacts).
  */
 export type PreTransaction = {
   fromParticipantId: string;
@@ -53,9 +55,6 @@ export type PreTransaction = {
   metadata: {
     reason: 'settlement';
     sourcePoolId: string;
-    kind: 'debt' | 'entry';
-    /** Only present when kind='entry'. 'income' = auth user is owed; 'expense' = auth user owes. */
-    entryType?: 'income' | 'expense';
     /** Participant display names for UI */
     fromParticipantName?: string;
     toParticipantName?: string;
@@ -65,6 +64,9 @@ export type PreTransaction = {
     /** Auth user IDs when both parties are authenticated */
     fromUserId?: string | null;
     toUserId?: string | null;
+    /** Contact IDs for both parties */
+    fromContactId?: string | null;
+    toContactId?: string | null;
   };
 };
 
@@ -74,7 +76,6 @@ export type PreTransaction = {
 export type SettleResult =
   | { kind: 'settled'; debtCount: number }
   | { kind: 'balanced' }
-  | { kind: 'entry'; amount: number; entryType: 'income' | 'expense' }
   | { kind: 'error' };
 
 export type DebtStatus = 'pending' | 'confirmed' | 'paid';
@@ -90,9 +91,12 @@ export type AppDebt = {
   to_confirmed: boolean;
   created_at: string;
   updated_at: string;
-  /** New fields for external participant support */
+  /** Participant IDs from pool_participants (for display resolution) */
   from_participant_id?: string;
   to_participant_id?: string;
   from_participant_name?: string;
   to_participant_name?: string;
+  /** Contact IDs for both parties */
+  from_contact_id?: string;
+  to_contact_id?: string;
 };

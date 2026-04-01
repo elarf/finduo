@@ -1,11 +1,12 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { View } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 import { usePools } from '../hooks/usePools';
 import { usePoolTransactions } from '../hooks/usePoolTransactions';
 import { usePool } from '../hooks/usePool';
 import { useDebts } from '../hooks/useDebts';
 import { useFriends } from '../hooks/useFriends';
+import { useContacts } from '../hooks/useContacts';
 import { poolSharedStyles as sh } from '../components/pool/poolStyles';
 import { PoolHeader } from '../components/pool/PoolHeader';
 import { PoolSummaryCard } from '../components/pool/PoolSummaryCard';
@@ -36,21 +37,10 @@ export default function PoolScreen({ navigation }: { navigation: any }) {
 
   const { settlePoolDebts } = useDebts(user);
   const { friends, loading: friendsLoading, loadFriends } = useFriends(user);
-
-  // Pending settlement entry — shown as a banner when settle produces an entry-type result
-  const [settlementEntry, setSettlementEntry] = useState<{
-    amount: number;
-    entryType: 'income' | 'expense';
-    poolName: string;
-  } | null>(null);
-
-  const handleSettleEntry = useCallback((
-    amount: number,
-    entryType: 'income' | 'expense',
-    poolName: string,
-  ) => {
-    setSettlementEntry({ amount, entryType, poolName });
-  }, []);
+  const {
+    contacts, loading: contactsLoading,
+    getContacts, createContact, findOrCreateContactForUser,
+  } = useContacts(user);
 
   const pool = usePool({
     members,
@@ -62,7 +52,6 @@ export default function PoolScreen({ navigation }: { navigation: any }) {
     getPoolTransactions,
     loadPoolMembers,
     loadFriends,
-    onSettleEntry: handleSettleEntry,
   });
 
   // Modal visibility
@@ -77,12 +66,13 @@ export default function PoolScreen({ navigation }: { navigation: any }) {
     void getUserPools();
   }, [getUserPools]);
 
-  // Pre-load friends whenever the member modal opens
+  // Pre-load friends and contacts whenever the member modal opens
   useEffect(() => {
-    if (showAddMemberModal && friends.length === 0 && !friendsLoading) {
-      void loadFriends();
+    if (showAddMemberModal) {
+      if (friends.length === 0 && !friendsLoading) void loadFriends();
+      if (contacts.length === 0 && !contactsLoading) void getContacts();
     }
-  }, [friends.length, friendsLoading, loadFriends, showAddMemberModal]);
+  }, [contacts.length, contactsLoading, friends.length, friendsLoading, getContacts, loadFriends, showAddMemberModal]);
 
   const openEditTxModal = useCallback((tx: PoolTransaction) => {
     setEditingTx(tx);
@@ -113,15 +103,29 @@ export default function PoolScreen({ navigation }: { navigation: any }) {
   const handleAddFriend = useCallback(async (friend: ResolvedFriend) => {
     if (!pool.selectedPool) return;
     const displayName = friend.profile?.display_name ?? friend.profile?.email ?? friend.userId;
-    await addPoolMember(pool.selectedPool.id, friend.userId, displayName);
+    // Auto-create contact for this friend
+    const contact = await findOrCreateContactForUser(
+      friend.userId,
+      displayName,
+      friend.profile?.email,
+      friend.profile?.avatar_url,
+    );
+    await addPoolMember(pool.selectedPool.id, friend.userId, displayName, contact?.id);
     setShowAddMemberModal(false);
-  }, [addPoolMember, pool.selectedPool]);
+  }, [addPoolMember, findOrCreateContactForUser, pool.selectedPool]);
 
-  const handleAddExternal = useCallback(async (name: string) => {
+  const handleAddExternal = useCallback(async (name: string, contactId?: string) => {
     if (!pool.selectedPool) return;
-    await addPoolMember(pool.selectedPool.id, null, name);
+    if (contactId) {
+      // Existing contact selected
+      await addPoolMember(pool.selectedPool.id, null, name, contactId);
+    } else {
+      // New contact — create it first, then add to pool
+      const contact = await createContact({ display_name: name });
+      await addPoolMember(pool.selectedPool.id, null, name, contact?.id);
+    }
     setShowAddMemberModal(false);
-  }, [addPoolMember, pool.selectedPool]);
+  }, [addPoolMember, createContact, pool.selectedPool]);
 
   const handleCreatePool = useCallback(async (name: string, type: PoolType) => {
     const created = await createPool(name, type);
@@ -166,43 +170,6 @@ export default function PoolScreen({ navigation }: { navigation: any }) {
           />
         )}
 
-        {settlementEntry && (
-          <View style={poolScreenStyles.entryBanner} {...uiProps(uiPath('pool_detail', 'settlement_banner', 'container'))}>
-            <Text style={poolScreenStyles.entryBannerLabel} {...uiProps(uiPath('pool_detail', 'settlement_banner', 'label'))}>
-              {settlementEntry.entryType === 'income' ? 'You are owed' : 'You owe'}{' '}
-              <Text style={poolScreenStyles.entryBannerAmount}>{settlementEntry.amount.toFixed(2)}</Text>
-            </Text>
-            <TouchableOpacity
-              style={poolScreenStyles.entryBannerButton}
-              onPress={() => {
-                const entry = settlementEntry;
-                setSettlementEntry(null);
-                pool.setSelectedPool(null);
-                navigation.navigate('Dashboard', {
-                  prefillEntry: {
-                    amount: entry.amount,
-                    type: entry.entryType,
-                    note: entry.poolName,
-                  },
-                });
-              }}
-              {...uiProps(uiPath('pool_detail', 'settlement_banner', 'add_button'))}
-            >
-              <Text style={poolScreenStyles.entryBannerButtonText}>Add as transaction</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={poolScreenStyles.entryBannerDismiss}
-              onPress={() => {
-                setSettlementEntry(null);
-                pool.setSelectedPool(null);
-              }}
-              {...uiProps(uiPath('pool_detail', 'settlement_banner', 'dismiss_button'))}
-            >
-              <Text style={poolScreenStyles.entryBannerDismissText}>Dismiss</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
         <TransactionList
           transactions={transactions}
           loading={txLoading}
@@ -230,6 +197,8 @@ export default function PoolScreen({ navigation }: { navigation: any }) {
           poolMembers={pool.poolMembers}
           friends={friends}
           friendsLoading={friendsLoading}
+          contacts={contacts}
+          contactsLoading={contactsLoading}
         />
       </View>
     );
@@ -260,43 +229,3 @@ export default function PoolScreen({ navigation }: { navigation: any }) {
     </View>
   );
 }
-
-const poolScreenStyles = StyleSheet.create({
-  entryBanner: {
-    marginHorizontal: 16,
-    marginTop: 12,
-    backgroundColor: '#0E2818',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#1a4a2e',
-    padding: 14,
-    gap: 10,
-  },
-  entryBannerLabel: {
-    color: '#BAD0EE',
-    fontSize: 13,
-  },
-  entryBannerAmount: {
-    color: '#53E3A6',
-    fontWeight: '700',
-  },
-  entryBannerButton: {
-    backgroundColor: '#0D3D22',
-    borderRadius: 8,
-    paddingVertical: 10,
-    alignItems: 'center',
-  },
-  entryBannerButtonText: {
-    color: '#53E3A6',
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  entryBannerDismiss: {
-    alignItems: 'center',
-    paddingVertical: 4,
-  },
-  entryBannerDismissText: {
-    color: '#475569',
-    fontSize: 12,
-  },
-});

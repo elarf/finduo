@@ -37,8 +37,6 @@ interface UsePoolOptions {
   getPoolTransactions: (id: string) => Promise<void>;
   loadPoolMembers: (id: string) => Promise<void>;
   loadFriends: () => Promise<void>;
-  /** Called when settle produces an entry-type result that should open the EntryModal */
-  onSettleEntry: (amount: number, entryType: 'income' | 'expense', poolName: string) => void;
 }
 
 export function usePool({
@@ -51,7 +49,6 @@ export function usePool({
   getPoolTransactions,
   loadPoolMembers,
   loadFriends,
-  onSettleEntry,
 }: UsePoolOptions) {
   const [selectedPool, setSelectedPool] = useState<Pool | null>(null);
 
@@ -100,16 +97,11 @@ export function usePool({
         if (result.kind === 'settled') {
           await getUserPools();
           setSelectedPool(null);
-        } else if (result.kind === 'entry') {
-          // Pool is now closed in DB; update local state + surface the entry prompt
-          setSelectedPool((prev) => prev ? { ...prev, status: 'closed' as const } : null);
-          await getUserPools();
-          onSettleEntry(result.amount, result.entryType, selectedPool.name);
         }
         // 'balanced' and 'error': stay on screen, feedback already shown
       },
     );
-  }, [getUserPools, onSettleEntry, selectedPool, settlePoolDebts]);
+  }, [getUserPools, selectedPool, settlePoolDebts]);
 
   const handleDeletePool = useCallback(async () => {
     if (!selectedPool) return;

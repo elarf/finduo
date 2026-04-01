@@ -116,11 +116,12 @@ export default function SettlementsScreen({ navigation }: { navigation: any }) {
   const memberCount = poolMembers.length || 1;
   const perPerson = poolTotal / memberCount;
 
-  // Resolve a user_id to a display name using the loaded pool members
-  const nameFor = useCallback((userId: string) => {
-    if (userId === user?.id) return 'You';
-    const m = poolMembers.find((pm) => pm.user_id === userId);
-    return m?.display_name ?? userId.slice(0, 8) + '…';
+  // Resolve a user_id or participant_id to a display name using the loaded pool members
+  const nameFor = useCallback((id: string) => {
+    if (id === user?.id) return 'You';
+    // Match by auth user_id first, then by participant id
+    const m = poolMembers.find((pm) => pm.user_id === id || pm.id === id);
+    return m?.display_name ?? id.slice(0, 8) + '…';
   }, [poolMembers, user?.id]);
 
   // Debt groupings
@@ -262,11 +263,11 @@ export default function SettlementsScreen({ navigation }: { navigation: any }) {
             {poolMembers.length > 0 && (
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.chipsRow} contentContainerStyle={{ gap: 8, paddingHorizontal: 16 }}>
                 {poolMembers.map((m) => (
-                  <View key={m.id} style={[s.chip, m.type === 'external' && s.chipExternal]}>
+                  <View key={m.id} style={[s.chip, !m.user_id && s.chipExternal]}>
                     <Text style={s.chipText}>
                       {m.user_id === user.id ? 'You' : (m.display_name ?? m.id.slice(0, 8))}
                     </Text>
-                    {m.type === 'external' && <Text style={s.chipExt}> ext</Text>}
+                    {!m.user_id && <Text style={s.chipExt}> ext</Text>}
                   </View>
                 ))}
               </ScrollView>
@@ -441,7 +442,10 @@ function DebtRow({ debt, userId, onConfirm, onMarkPaid }: {
   const myConfirmed = iOwe ? debt.from_confirmed : debt.to_confirmed;
   const otherConfirmed = iOwe ? debt.to_confirmed : debt.from_confirmed;
   const otherUserId = iOwe ? debt.to_user : debt.from_user;
-  const shortId = otherUserId.slice(0, 8);
+  // Prefer participant name from settlement, fall back to truncated UUID
+  const otherName = iOwe
+    ? (debt.to_participant_name ?? otherUserId.slice(0, 8))
+    : (debt.from_participant_name ?? otherUserId.slice(0, 8));
 
   const statusColor =
     debt.status === 'paid' ? '#4ade80' :
@@ -459,7 +463,7 @@ function DebtRow({ debt, userId, onConfirm, onMarkPaid }: {
       </View>
       <View style={{ flex: 1 }}>
         <Text style={s.debtText} {...uiProps(uiPath('settlements', 'debt_row', 'text', debt.id))}>
-          {iOwe ? `You owe ${shortId}…` : `${shortId}… owes you`}
+          {iOwe ? `You owe ${otherName}` : `${otherName} owes you`}
         </Text>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3 }}>
           <View

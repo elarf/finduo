@@ -1,12 +1,39 @@
 # Finduo
 
+<!-- markdownlint-disable MD013 MD024 -->
+
 Financial tracking app for couples. Track income, expenses, and transfers across shared accounts with real-time sync, category-based spending insights, and cross-currency support.
 
 ## Patch Notes
 
+### v1.0.0 — DevTools tracing, pool deletion, numpad enhancements, changelog modal
+
+#### Architecture
+
+- Full DevTools tracing: every UI element has a stable `testID`/`data-ui` attribute; `logUI`/`logAPI` emit scoped console messages; `EXPO_PUBLIC_DEBUG_UI=true` highlights instrumented elements on web
+- `src/lib/devtools.ts` — `uiPath`, `uiProps`, `logUI`, `logAPI`, `webAlert` utilities
+
+#### Features
+
+- Pool deletion: creator-only, behind edit toggle in pool header, confirmed by dialog
+- Pool settle works with 1-member pools and auth + external member combinations; net amount shown as a banner with "Add as transaction" button
+- Numpad: decimal dot, `00`, and `000` keys added; new bottom rows: `. 0 00` / `C 000 ←`
+- Pools promoted to main Quick Navigation (above Friends); no longer in Experimental
+- Changelogs modal (Experimental): shows PATCHNOTES.md with toggle to README; scroll-to-top FAB
+
+#### Bug Fixes
+
+- `Alert.alert` is a no-op on react-native-web — replaced with `webAlert` / `window.confirm` throughout
+- Pool transaction FK violation (code 23503) when external member is payer — fixed in app and DB
+- `closePool` returns `Promise<boolean>`; navigation only triggers on confirmed success
+- Full list: [PATCHNOTES.md](./PATCHNOTES.md)
+
+---
+
 ### v0.9.1 — Fixed shared account access
 
-**Bug Fixes**
+#### Bug Fixes
+
 - **Shared account access:** Fixed critical issue where account creators couldn't access their own transactions/data after creation. Root cause: missing `account_members` rows for creators under current RLS architecture.
   - Client fixes: `saveAccount` auto-inserts creator membership, `joinByToken`/`addFriendToAccount` use upsert (prevents 409 conflicts)
   - Database fixes: Backfilled missing creator memberships, added auto-member trigger, cleaned RLS policies
@@ -16,9 +43,10 @@ Financial tracking app for couples. Track income, expenses, and transfers across
 
 ### v0.9.0 — Cache-first data loading, pull-to-refresh (TanStack Query)
 
-**Architecture**
+#### Architecture
+
 - Cache-first data loading with `@tanstack/react-query` v5; five query hooks (`useAccountsQuery`, `useTransactionsQuery`, etc.) with stable keys and targeted invalidation
-- App reopen behavior: renders instantly from cache if data < 5min old; silent background refetch
+- App reopen behavior: renders instantly from cache if data < 5 min old; silent background refetch
 - `DashboardContext` now proxies mutations to `queryClient.setQueryData`; all existing callbacks unchanged
 - Pull-to-refresh added to main dashboard scroll view with haptic feedback
 
@@ -26,18 +54,23 @@ Financial tracking app for couples. Track income, expenses, and transfers across
 
 ### v0.8.0 — Pool architecture, external members, settlement preview
 
-**Architecture**
+#### Architecture
+
 - `PoolScreen.tsx` refactored from 1024 lines to a ~120-line orchestration shell; all pool UI split into `src/components/pool/` components and a dedicated `usePool.ts` hook
 - `SettlementsScreen` is now a pure read-only derivation view — settlement uses a **compute → preview → commit** flow; nothing writes to DB until the user explicitly confirms
 - New `PreTransaction` type: settlement results are held in memory and previewed before being committed as debt records
 
-**Features**
+#### Features
+
 - External pool members: add participants who are not app users (by name); they can be selected as payer on expenses
 - Unified `pool_participants` table replaces `pool_members`; `pool_transactions.paid_by` now references participant UUIDs (supports external payers)
 
-**Bug fixes**
+#### Bug Fixes
+
 - Payer selector now renders with any number of members (previously required 2+)
 - Full list: [PATCHNOTES.md](./PATCHNOTES.md)
+
+---
 
 ## Tech Stack
 
@@ -46,10 +79,12 @@ Financial tracking app for couples. Track income, expenses, and transfers across
 - **Backend:** Supabase (PostgreSQL, Auth, Row Level Security)
 - **Auth:** Google OAuth (PKCE flow)
 - **Icons:** lucide-react-native (Material Symbol names mapped to Lucide components)
+- **DevTools:** `src/lib/devtools.ts` — stable `testID`/`data-ui` attributes, console tracing, debug overlay
 
 ## Features
 
 ### Accounts
+
 - Create multiple financial accounts with different currencies (USD, EUR, GBP, CAD, AUD, JPY, HUF)
 - Per-account settings: include/exclude from balance overview, carry-over balance between intervals, initial balance with date
 - Reorder accounts (persisted to Supabase per user)
@@ -58,8 +93,10 @@ Financial tracking app for couples. Track income, expenses, and transfers across
 - Account icons shown in quick navigation menu
 
 ### Transactions
+
 - Add income and expense transactions with amount, date, category, note, and tags
 - Display-only amount field with custom numpad (avoids keyboard on mobile)
+- Numpad layout: `7 8 9` / `4 5 6` / `1 2 3` / `. 0 00` / `C 000 ←` — supports fast large-number and precise decimal entry
 - Currency symbol shown inline with the amount (e.g. $123, €123, 123 Ft); no separate currency row
 - Custom calendar date picker for transaction date selection
 - Transactions sorted by user-chosen date (database `created_at` is hidden)
@@ -70,6 +107,7 @@ Financial tracking app for couples. Track income, expenses, and transfers across
 - If no note is provided, tag names are shown as the title; if neither, shows fallback text
 
 ### Transfers
+
 - Dedicated transfer flow between accounts with currency conversion support
 - Exchange rate or destination amount input for cross-currency transfers
 - Transfer transactions use a "Transfer" category and are excluded from income/expense totals
@@ -77,6 +115,7 @@ Financial tracking app for couples. Track income, expenses, and transfers across
 - Transfer transactions display with a `↔` indicator
 
 ### Categories
+
 - User-global categories shared across all accounts (not per-account)
 - Categories are owned by users, not accounts — survive account deletion
 - Connected users (sharing any account) see each other's categories automatically
@@ -91,6 +130,7 @@ Financial tracking app for couples. Track income, expenses, and transfers across
 - Enables cross-user spending comparison within the same category
 
 ### Tags
+
 - Global tags with optional color and icon
 - Tag chips in transaction entry modal show each tag's icon and color; selected state uses background contrast
 - Attach tags to transactions, categories, and accounts
@@ -98,6 +138,7 @@ Financial tracking app for couples. Track income, expenses, and transfers across
 - Tag delete from Quick Navigation menu keeps menu open (no disruptive close)
 
 ### Friends System
+
 - Add other users as friends by email
 - Mutual friend requests (send, accept, reject)
 - Block users to prevent future requests
@@ -107,6 +148,7 @@ Financial tracking app for couples. Track income, expenses, and transfers across
 - Expand a friend to manage which accounts they have access to
 
 ### Sharing & Invitations
+
 - Share accounts with other users via invite tokens
 - Token-based invite system: generate a token, share it, recipient pastes to join
 - Configurable expiration (default 7 days)
@@ -114,21 +156,25 @@ Financial tracking app for couples. Track income, expenses, and transfers across
 - Shared accounts appear alongside owned accounts
 
 ### Pools
+
 - Shared expense pools for splitting costs with friends
 - Two pool types: Event (one-time trip, dinner) or Continuous (roommates, recurring)
 - Pool creator can add registered app users (friends) or external participants by display name
 - External members shown with purple chip styling; can be selected as payer on any expense
 - All members can add and edit expenses; payer selector shows every participant (auth + external)
 - Per-person split shown automatically (total / member count)
-- Pool can be settled or closed; settlement excludes external participants from the debt graph (their payments still count toward the total)
+- Pool creator can delete the pool (confirmation required); accessible via edit toggle in pool header
+- Pool can be settled or closed; settle works with 1-member pools and auth + external combinations
+- Settlement excludes external participants from the debt graph (their payments still count toward the total)
 - Unified `pool_participants` table — `pool_transactions.paid_by` references participant UUIDs, not user UUIDs directly
 - RLS ensures users can only see pools they are members of; member list exposed via SECURITY DEFINER RPC to bypass terminal SELECT policy
 
 ### Settlements & Lending
+
 - Unified Settlements screen accessible from Quick Navigation menu (Experimental section)
 - Two sections: read-only pool browser, Debts list
 - Settlement uses a **compute → preview → commit** flow: tap Calculate Settlement, review each transfer (debtor → creditor, amount) as a `PreTransaction`, then Commit (persists debts + closes pool) or Discard (no DB write)
-- `SettlementsScreen` is read-only — pool management (create, add expense, add member, close) is done exclusively in PoolScreen
+- `SettlementsScreen` is read-only — pool management (create, add expense, add member, close, delete) is done exclusively in PoolScreen
 - Settlement algorithm: greedy debtor-creditor matching (equal split, minimum transfers)
 - External pool members are excluded from the debt graph (debts are between auth users only)
 - Debts require dual confirmation (from_user and to_user each confirm independently)
@@ -137,6 +183,7 @@ Financial tracking app for couples. Track income, expenses, and transfers across
 - Confirm and Mark Paid buttons contextually shown per debt
 
 ### Overview Mode
+
 - Tap the balance card header to toggle between single-account and included-accounts overview
 - Overview mode shows combined balance across all included accounts
 - Categories section and bottom action buttons are hidden in overview mode
@@ -144,17 +191,20 @@ Financial tracking app for couples. Track income, expenses, and transfers across
 - Spending chart aggregates across all included accounts
 
 ### Date Filtering
+
 - Interval options: Day, Week, Month, Year, All, Custom
 - Custom range with start/end date inputs
 - Balance carry-over respects interval boundaries
 - Opening balance computed from pre-interval transactions when carry-over is enabled
 
 ### Balance Card
+
 - Income colored green, expenses colored red
 - Opening balance and total included balance colored by sign (green if positive, red if negative)
 - Net balance with negative indicator
 
 ### Mobile UX
+
 - Full-screen slide-up transaction modal layout: date → amount (with inline currency symbol) → note → tags → numpad → category → save/cancel
 - Income/Expense type toggle moved into the modal header — tap the button to switch type; color updates live (green/red)
 - No redundant close button — Cancel in the bottom bar is the only way to dismiss
@@ -171,6 +221,7 @@ Financial tracking app for couples. Track income, expenses, and transfers across
 - Logo shown on full-width loading screen
 
 ### Desktop UX
+
 - Two-column layout at viewport width >= 1024px
 - Framed mobile preview mode (430px max-width with borders)
 - Card-style modals with backdrop dismiss
@@ -180,28 +231,32 @@ Financial tracking app for couples. Track income, expenses, and transfers across
 - Sidebar filter updates transaction list title and filters transactions by selected category
 
 ### Quick Navigation Menu
+
 - Account management with icons (large when not editing, hidden in edit mode)
 - Income and Expense category sections with icons and colors
 - Edit/delete buttons hidden behind edit mode toggle per section (accounts, categories, tags)
-- Friends modal access
-- **Experimental** section (collapsed by default, toggled by tapping): Lending, Settlements, Pools, Invitations
+- **Pools** link (top-level, navigates to PoolScreen)
+- **Friends** modal access
+- **Experimental** section (collapsed by default, toggled by tapping): Lending, Settlements, Invitations, Changelogs
   - Lending link with pending debt badge (navigates to LendingScreen)
   - Settlements link (navigates to unified Settlements screen)
-  - Pools link (navigates to PoolScreen)
   - Invitations access
+  - Changelogs modal — PATCHNOTES.md and README.md viewer with scroll-to-top FAB
 - Full app reload (web: page reload, native: dashboard reload)
 - Interval selection
 - Sign out
 - Mobile: swipe from left edge to open
-- Menu order: Friends, Experimental (collapsed), Reload app, Sign out
+- Menu order: Pools, Friends, Experimental (collapsed), Reload app, Sign out
 
 ### Header
-- Logo click refreshes dashboard data (profile button is not blocked)
+
+- Logo is a static image (tap-to-refresh was replaced by pull-to-refresh)
 - Profile/avatar button opens quick navigation sidebar
 - Avatar shows Google profile picture or email initial fallback
 - View mode toggle button (desktop/mobile)
 
 ### PWA (Progressive Web App)
+
 - Installable on Android and iOS via browser "Add to Home Screen"
 - Service worker with stale-while-revalidate caching strategy
 - Web manifest with standalone display mode, dark theme, portrait orientation
@@ -215,7 +270,7 @@ Financial tracking app for couples. Track income, expenses, and transfers across
 ### Tables
 
 | Table | Purpose |
-|-------|---------|
+| ------- | ------- |
 | `accounts` | Financial accounts (name, currency, icon, created_by, tag_ids) |
 | `account_members` | User-account relationships for sharing (user_id, account_id, role) |
 | `account_settings` | Per-account config (included_in_balance, carry_over_balance, initial_balance, initial_balance_date) |
@@ -234,6 +289,7 @@ Financial tracking app for couples. Track income, expenses, and transfers across
 | `debts` | Settlement debts (from_user, to_user, amount, pool_id, status, from_confirmed, to_confirmed) |
 
 ### Key Design Decisions
+
 - Categories are user-owned (`user_id` FK) and shared across all accounts — no per-account scoping
 - Connected users (sharing at least one account) automatically see each other's categories via RLS
 - Users can hide unwanted categories per-user without affecting others (`user_hidden_categories` table)
@@ -246,7 +302,7 @@ Financial tracking app for couples. Track income, expenses, and transfers across
 
 ## Project Structure
 
-```
+```text
 finduo/
   App.tsx                          Entry point: SafeAreaProvider > AuthProvider > RootNavigator
   index.ts                         registerRootComponent(App)
@@ -266,11 +322,13 @@ finduo/
         AccountModal.tsx           Create/edit account modal
         AccountPickerSheet.tsx     Full-screen account picker (mobile)
         CategoryModal.tsx          Create/edit category modal
+        ChangelogModal.tsx         Changelog viewer modal (PATCHNOTES + README, scroll-to-top FAB)
         DatePickerModal.tsx        Custom calendar date picker
         EntryModal.tsx             Transaction entry modal (desktop card + mobile fullscreen)
         FriendsModal.tsx           Friends management (list, requests, add, account sharing)
         IconPickerSheet.tsx        Lucide icon grid picker
         InvitationsModal.tsx       Token-based invite management
+        QuickNavigation.tsx        Side-panel nav menu (accounts, categories, tags, pools, friends, experimental)
         TagModal.tsx               Create/edit tag modal
         TransferModal.tsx          Cross-account transfer modal
         boxes/
@@ -286,9 +344,9 @@ finduo/
           DesktopSidebar.tsx       Sidebar (desktop only): totals, accounts, spending, transactions
           ScrollTopFab.tsx         Scroll-to-top FAB (visible when scrollY > 320)
           BottomActions.tsx        Filter bar + income/transfer/expense bottom buttons
-          ModalsRoot.tsx           Renders all 11 modal/sheet components from context
+          ModalsRoot.tsx           Renders all modal/sheet components from context
       pool/
-        PoolHeader.tsx             Header with back/settle/close/add action buttons
+        PoolHeader.tsx             Header with back/settle/close/delete/add action buttons
         PoolSummaryCard.tsx        Total / members / per-person summary card
         PoolMemberChips.tsx        Horizontal member chip row (purple for external)
         PoolActions.tsx            Add Expense + Add Member action buttons
@@ -299,16 +357,17 @@ finduo/
         PoolListContent.tsx        Pool list with loading and empty states
         poolStyles.ts              Shared StyleSheet for all pool components
     context/
-      AuthContext.tsx               Auth state, Google OAuth (web + native), deep link handling
-      DashboardContext.tsx          All dashboard state + actions (DashboardProvider + useDashboard())
+      AuthContext.tsx              Auth state, Google OAuth (web + native), deep link handling
+      DashboardContext.tsx         All dashboard state + actions (DashboardProvider + useDashboard())
     hooks/
-      useDashboardData.ts          Core data loading + targeted state update setters (accounts, categories, tags, transactions, settings)
+      useDashboardData.ts          Core data loading + targeted state update setters
       useFriends.ts                Friends system: requests, acceptance, blocking, account sharing
-      usePools.ts                  Pool CRUD: create, list, add participants (auth+external), close
-      usePool.ts                   Pool detail state: selectedPool, poolMembers, poolTotal, perPerson, settle/close handlers
+      usePools.ts                  Pool CRUD: create, list, add participants (auth+external), close, delete
+      usePool.ts                   Pool detail state: selectedPool, poolMembers, poolTotal, perPerson, settle/close/delete handlers
       usePoolTransactions.ts       Pool transaction CRUD: add, list, update, delete expenses
-      useDebts.ts                  Debt management: computePoolSettlement (read-only), commitPoolSettlement (write), settlePoolDebts (wrapper), confirm, mark paid
+      useDebts.ts                  Debt management: computePoolSettlement, commitPoolSettlement, settlePoolDebts, confirm, mark paid
     lib/
+      devtools.ts                  DevTools utilities: uiPath, uiProps, logUI, logAPI, webAlert
       supabase.ts                  Supabase client init (PKCE, AsyncStorage on native)
     utils/
       settlePool.ts                Pure settlement algorithm (greedy debtor-creditor matching)
@@ -318,14 +377,14 @@ finduo/
       LoginScreen.tsx              Google sign-in UI
       DashboardScreen.tsx          Composition shell: <DashboardProvider><DashboardLayout />
       DashboardScreen.styles.ts    Shared StyleSheet for dashboard components
-      PoolScreen.tsx               Orchestration shell (~120 lines): mounts pool components, owns modal state
+      PoolScreen.tsx               Orchestration shell: mounts pool components, owns modal state
       LendingScreen.tsx            Standalone lending screen: debts list, confirm, mark paid
-      SettlementsScreen.tsx        Derivation-only settlements: read-only pool browser + compute→preview→commit flow + debts
+      SettlementsScreen.tsx        Derivation-only settlements: read-only pool browser + compute→preview→commit + debts
     types/
       auth.ts                      AuthContextValue interface
       dashboard.ts                 App data types, helpers (AppAccount, AppCategory, etc.)
       friends.ts                   Friend system types (ResolvedFriend, ResolvedRequest, etc.)
-      pools.ts                     Pool and debt types (Pool, PoolParticipant, PoolMember alias, PoolTransaction, AppDebt, PreTransaction)
+      pools.ts                     Pool and debt types (Pool, PoolParticipant, PoolTransaction, AppDebt, PreTransaction, SettleResult)
   supabase/
     db/
       schema.md                    Human-readable schema reference (all tables, columns, RLS)
@@ -337,17 +396,21 @@ finduo/
 ## Getting Started
 
 ### 1. Clone & install dependencies
+
 ```bash
 npm install
 ```
 
 ### 2. Configure environment variables
+
 ```bash
 cp .env.example .env
 ```
+
 Edit `.env` with your Supabase project URL and anon key (Supabase Dashboard > Settings > API).
 
 ### 3. Set up Google OAuth in Supabase
+
 1. Go to **Authentication > Providers > Google** in your Supabase Dashboard.
 2. Enable the Google provider and add your OAuth credentials.
 3. Add `finduo://` as an authorised redirect URL (for native).
@@ -377,22 +440,26 @@ npx expo start --web    # Web only
 ## Build & Deploy
 
 ### Web (PWA)
+
 ```bash
 npm run build:web       # Exports to dist/ and patches with PWA tags
 npm run serve:web       # Serve locally for testing
 ```
 
 ### Android APK (preview)
+
 ```bash
 eas build -p android --profile preview --non-interactive
 ```
 
 ### Import Monefy Data
+
 ```bash
 node scripts/import-monefy.js --csv <path-to-export.csv> --user-id <supabase-user-id>
 ```
 
 ## Validate Before Commit
+
 ```bash
 npx tsc --noEmit
 git status --short
@@ -401,11 +468,14 @@ git status --short
 ## Areas for Improvement
 
 ### Architecture
+
 - [x] Extract dashboard logic into context (`DashboardContext`/`DashboardProvider`) and UI into Box/layout components
+- [x] Full DevTools tracing across all screens and components (`src/lib/devtools.ts`)
 - [ ] Split `DashboardContext` into finer-grained hooks (useTransactions, useAccounts, useCategories) to reduce re-renders
 - [ ] Create dedicated screens for account management, category management, settings
 
 ### Features
+
 - [ ] Recurring transactions (subscriptions, salary, etc.)
 - [ ] Budget limits per category with alerts
 - [ ] Charts: pie chart for spending breakdown, line chart for trends over time
@@ -418,16 +488,19 @@ git status --short
 - [ ] Receipt photo attachment on transactions
 - [ ] Account balance history / net worth tracking over time
 - [x] Pool settlement calculations (who owes whom)
+- [x] Pool deletion (creator-only, confirmation required)
 - [x] Lending between friends
 - [ ] Friend-to-friend spending comparison (categories are shared, UI for comparison needed)
 
 ### Technical
+
 - [ ] Add unit tests and integration tests
 - [ ] Remove legacy `loadMaterialSymbols` web/native files (dead code)
 - [ ] Remove `material-icons` package from dependencies (no longer used)
 - [ ] Add proper error boundaries
 - [x] Implement targeted state updates for mutations (no full refetch after save/delete)
 - [x] Android back button intercept (closes modals; exit confirmation dialog on dashboard)
+- [x] Cross-platform alert/confirm (`webAlert`, `window.confirm` on web; `Alert.alert` on native)
 - [ ] Add offline support with sync queue
 - [ ] Set up CI/CD pipeline (lint, typecheck, test, build)
 - [ ] Add Supabase realtime subscriptions for live updates between shared users

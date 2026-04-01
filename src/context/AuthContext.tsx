@@ -105,6 +105,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       (_event, newSession) => {
         setSession(newSession);
         setUser(newSession?.user ?? null);
+
+        // Keep the public user_profiles row in sync whenever a session is
+        // established (login) or the access token silently refreshes. This
+        // ensures display_name and avatar_url are always current so other
+        // users (pool members, friends) see up-to-date info without having
+        // to trigger the friends flow first.
+        if ((_event === 'SIGNED_IN' || _event === 'TOKEN_REFRESHED' || _event === 'INITIAL_SESSION') && newSession?.user) {
+          const u = newSession.user;
+          void supabase.from('user_profiles').upsert(
+            {
+              user_id: u.id,
+              display_name:
+                (u.user_metadata?.full_name as string | undefined) ??
+                (u.user_metadata?.name as string | undefined) ??
+                u.email?.split('@')[0] ??
+                null,
+              email: u.email?.toLowerCase() ?? null,
+              avatar_url:
+                (u.user_metadata?.avatar_url as string | undefined) ||
+                (u.user_metadata?.picture as string | undefined) ||
+                null,
+            },
+            { onConflict: 'user_id' },
+          );
+        }
       },
     );
 

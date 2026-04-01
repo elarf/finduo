@@ -2,6 +2,7 @@ import React from 'react';
 import { Text, TouchableOpacity, View } from 'react-native';
 import { useDashboard } from '../../../context/DashboardContext';
 import { styles } from '../../../screens/DashboardScreen.styles';
+import { uiPath, uiProps, logUI } from '../../../lib/devtools';
 
 export default function SpendingChart() {
   const {
@@ -15,8 +16,9 @@ export default function SpendingChart() {
 
   return (
     <>
-      <View style={[styles.cardStrong, { marginBottom: 18 }]}>
+      <View {...uiProps(uiPath('dashboard', 'spending_chart', 'container'))} style={[styles.cardStrong, { marginBottom: 18 }]}>
         <TouchableOpacity
+          {...uiProps(uiPath('dashboard', 'spending_chart', 'header'))}
           style={[styles.cardCollapseHeader, { marginBottom: spendingCollapsed ? 0 : 12 }]}
           onPress={() => setSpendingCollapsed((p) => !p)}
           activeOpacity={0.7}
@@ -24,7 +26,10 @@ export default function SpendingChart() {
           <Text style={styles.cardStrongLabel}>SPENDING BY CATEGORY</Text>
           <View style={styles.cardCollapseHeaderRight}>
             {selectedCategoryFilter && !spendingCollapsed && (
-              <TouchableOpacity onPress={(e) => { e.stopPropagation?.(); setSelectedCategoryFilter(null); }}>
+              <TouchableOpacity
+                {...uiProps(uiPath('dashboard', 'spending_chart', 'clear_filter_btn'))}
+                onPress={(e) => { e.stopPropagation?.(); setSelectedCategoryFilter(null); }}
+              >
                 <Text style={styles.linkAction}>✕ Clear</Text>
               </TouchableOpacity>
             )}
@@ -41,9 +46,13 @@ export default function SpendingChart() {
                 return (
                   <TouchableOpacity
                     key={row.id}
+                    {...uiProps(uiPath('dashboard', 'spending_chart', 'category_row', row.id))}
                     style={[styles.spendRow, isActive && styles.spendRowActive]}
                     activeOpacity={0.7}
-                    onPress={() => setSelectedCategoryFilter(isActive ? null : row.id)}
+                    onPress={() => {
+                      logUI(uiPath('dashboard', 'spending_chart', 'category_row', row.id), 'press');
+                      setSelectedCategoryFilter(isActive ? null : row.id);
+                    }}
                   >
                     <View style={styles.spendLabelRow}>
                       <Text style={[styles.spendName, isActive && styles.spendNameActive]}>{row.name}</Text>
@@ -70,7 +79,7 @@ export default function SpendingChart() {
         const transferPct = totalAvailable > 0 ? Math.min(100 - spentPct, Math.round((transferred / totalAvailable) * 100)) : 0;
         const unspentPct = 100 - spentPct - transferPct;
         return (
-          <View style={styles.batteryWrap}>
+          <View {...uiProps(uiPath('dashboard', 'spending_chart', 'battery_bar'))} style={styles.batteryWrap}>
             <View style={styles.batteryTrack}>
               {totalAvailable <= 0 ? (
                 <View style={[styles.batterySegmentUnspent, { flex: 1 }]}>
@@ -96,7 +105,7 @@ export default function SpendingChart() {
                 </>
               )}
             </View>
-            <View style={styles.batteryLegend}>
+            <View {...uiProps(uiPath('dashboard', 'spending_chart', 'battery_legend'))} style={styles.batteryLegend}>
               <View style={styles.batteryLegendItem}>
                 <View style={[styles.batteryLegendDot, { backgroundColor: '#f87171' }]} />
                 <Text style={styles.batteryLegendText}>Spent {formatCurrency(spent)} ({spentPct}%)</Text>

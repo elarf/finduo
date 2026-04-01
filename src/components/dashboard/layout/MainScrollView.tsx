@@ -7,6 +7,7 @@ import OverviewCard from '../boxes/OverviewCard';
 import SpendingChart from '../boxes/SpendingChart';
 import CategoriesRow from '../boxes/CategoriesRow';
 import TransactionSection from '../boxes/TransactionSection';
+import { uiPath, uiProps } from '../../../lib/devtools';
 
 export default function MainScrollView() {
   const {
@@ -35,6 +36,7 @@ export default function MainScrollView() {
 
   return (
     <ScrollView
+      {...uiProps(uiPath('dashboard', 'main_scroll', 'scroll_view'))}
       ref={mainScrollRef}
       showsVerticalScrollIndicator={false}
       style={{ flex: 1 }}
@@ -52,7 +54,7 @@ export default function MainScrollView() {
       }
     >
       {missingSchemaColumns.length > 0 && (
-        <View style={styles.warningBanner}>
+        <View {...uiProps(uiPath('dashboard', 'main_scroll', 'schema_warning_banner'))} style={styles.warningBanner}>
           <Text style={styles.warningBannerTitle}>Database update needed</Text>
           <Text style={styles.warningBannerText}>
             Missing columns: {missingSchemaColumns.join(', ')}

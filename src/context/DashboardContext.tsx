@@ -400,6 +400,7 @@ export type DashboardContextValue = {
   closeIconPickerSheet: () => void;
   shareInvite: (token: string) => Promise<void>;
   openEntryModal: (type: TransactionType, categoryId?: string | null) => void;
+  openEntryModalWithAmount: (type: TransactionType, amount: number, note?: string) => void;
   openEditTransaction: (tx: AppTransaction) => void;
   openCreateAccount: () => void;
   openEditAccount: (account: AppAccount) => void;
@@ -437,7 +438,13 @@ export function useDashboard(): DashboardContextValue {
 
 // ─── Provider ─────────────────────────────────────────────────────────────────
 
-export function DashboardProvider({ children }: { children: React.ReactNode }) {
+export function DashboardProvider({
+  children,
+  prefillEntry,
+}: {
+  children: React.ReactNode;
+  prefillEntry?: { amount: number; type: 'income' | 'expense'; note?: string } | null;
+}) {
   const { user, avatarUrl, signOut } = useAuth();
   const navigation = useNavigation<any>();
   const { width, height } = useWindowDimensions();
@@ -1344,6 +1351,8 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
         if (prev.includes('.')) return prev;
         return prev ? `${prev}.` : '0.';
       }
+      if (char === '00') return `${prev}00`;
+      if (char === '000') return `${prev}000`;
       return `${prev}${char}`;
     });
   }, []);
@@ -1485,6 +1494,35 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
     catPickerAnim.setValue(0);
     setShowEntryModal(true);
   }, [catPickerAnim, selectedAccountId, setEntryAccountId]);
+
+  const openEntryModalWithAmount = useCallback((
+    type: TransactionType,
+    amount: number,
+    note?: string,
+  ) => {
+    setEditingTransactionId(null);
+    setEntryType(type);
+    setEntryAmount(String(Math.round(amount * 100) / 100));
+    setEntryDate(todayIso());
+    setEntryCategoryId(null);
+    setEntryNote(note ?? '');
+    setEntryTagIds([]);
+    setNewTagName('');
+    setEntryAccountId(selectedAccountId);
+    isCatPickerOpenRef.current = false;
+    setIsCatPickerOpen(false);
+    catPickerAnim.setValue(0);
+    setShowEntryModal(true);
+  }, [catPickerAnim, selectedAccountId, setEntryAccountId]);
+
+  // Open the entry modal pre-filled when the Dashboard is navigated to with prefill params
+  useEffect(() => {
+    if (prefillEntry) {
+      openEntryModalWithAmount(prefillEntry.type, prefillEntry.amount, prefillEntry.note);
+    }
+    // Intentionally run only once on mount — prefillEntry comes from navigation params
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const openEditTransaction = useCallback((tx: AppTransaction) => {
     setEditingTransactionId(tx.id);
@@ -2562,6 +2600,7 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
     closeIconPickerSheet,
     shareInvite,
     openEntryModal,
+    openEntryModalWithAmount,
     openEditTransaction,
     openCreateAccount,
     openEditAccount,

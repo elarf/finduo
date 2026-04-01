@@ -3,6 +3,7 @@ import { Alert, Modal, Platform, Pressable, Text, TextInput, TouchableOpacity, V
 import Icon from '../Icon';
 import { styles } from '../../screens/DashboardScreen.styles';
 import { AppTag, TransactionType, COLOR_PRESETS, suggestIcon } from '../../types/dashboard';
+import { uiPath, uiProps, logUI } from '../../lib/devtools';
 
 type CategoryModalProps = {
   visible: boolean;
@@ -41,9 +42,17 @@ function CategoryModal({
   const readOnly = editingCategoryId !== null && !isOwnedByUser;
   return (
     <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
-      <Pressable style={styles.modalBackdrop} onPress={onClose}>
-        <Pressable style={styles.modalCard} onPress={(event) => event.stopPropagation()}>
-          <Text style={styles.modalTitle}>
+      <Pressable
+        style={styles.modalBackdrop}
+        onPress={() => { logUI(uiPath('category_modal', 'modal', 'backdrop'), 'press'); onClose(); }}
+        {...uiProps(uiPath('category_modal', 'modal', 'backdrop'))}
+      >
+        <Pressable
+          style={styles.modalCard}
+          onPress={(event) => { logUI(uiPath('category_modal', 'modal', 'card'), 'press'); event.stopPropagation(); }}
+          {...uiProps(uiPath('category_modal', 'modal', 'card'))}
+        >
+          <Text style={styles.modalTitle} {...uiProps(uiPath('category_modal', 'modal', 'title'))}>
             {readOnly ? 'Category' : editingCategoryId ? 'Edit category' : 'Create category'}
           </Text>
           {readOnly && (
@@ -56,18 +65,21 @@ function CategoryModal({
             onChangeText={setCategoryName}
             style={[styles.input, readOnly && { opacity: 0.5 }]}
             editable={!readOnly}
+            {...uiProps(uiPath('category_modal', 'form', 'name_input'))}
           />
           <View style={[styles.entryTypeRow, readOnly && { opacity: 0.5, pointerEvents: 'none' as const }]}>
             <TouchableOpacity
               style={[styles.toggleButton, categoryType === 'income' && styles.toggleButtonActive]}
-              onPress={() => setCategoryType('income')}
+              onPress={() => { logUI(uiPath('category_modal', 'type_toggle', 'income'), 'press'); setCategoryType('income'); }}
               disabled={readOnly}
+              {...uiProps(uiPath('category_modal', 'type_toggle', 'income'))}
             >
               <Text style={styles.toggleButtonText}>Income</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.toggleButton, categoryType === 'expense' && styles.toggleButtonActive]}
-              onPress={() => setCategoryType('expense')}
+              onPress={() => { logUI(uiPath('category_modal', 'type_toggle', 'expense'), 'press'); setCategoryType('expense'); }}
+              {...uiProps(uiPath('category_modal', 'type_toggle', 'expense'))}
             >
               <Text style={styles.toggleButtonText}>Expense</Text>
             </TouchableOpacity>
@@ -78,7 +90,8 @@ function CategoryModal({
           <View style={styles.iconPickerRow}>
             <TouchableOpacity
               style={[styles.iconPickerPreview, categoryIcon && { borderColor: categoryColor ?? '#53E3A6' }]}
-              onPress={() => openIconPickerSheet('category')}
+              onPress={() => { logUI(uiPath('category_modal', 'form', 'icon_picker_button'), 'press'); openIconPickerSheet('category'); }}
+              {...uiProps(uiPath('category_modal', 'form', 'icon_picker_button'))}
             >
               {categoryIcon ? (
                 <Icon name={categoryIcon as any} size={24} color={categoryColor ?? '#EAF3FF'} />
@@ -102,11 +115,12 @@ function CategoryModal({
           {/* Color picker */}
           <Text style={styles.modalLabel}>Color</Text>
           <View style={styles.colorPresetRow}>
-            {COLOR_PRESETS.map((preset) => (
+            {COLOR_PRESETS.map((preset, index) => (
               <TouchableOpacity
                 key={preset}
                 style={[styles.colorPresetDot, { backgroundColor: preset }, categoryColor === preset && styles.colorPresetDotActive]}
-                onPress={() => setCategoryColor(categoryColor === preset ? null : preset)}
+                onPress={() => { logUI(uiPath('category_modal', 'form', 'color_dot', String(index)), 'press'); setCategoryColor(categoryColor === preset ? null : preset); }}
+                {...uiProps(uiPath('category_modal', 'form', 'color_dot', String(index)))}
               />
             ))}
           </View>
@@ -124,9 +138,13 @@ function CategoryModal({
                       categoryTagIds.includes(tag.id) && styles.modalChipActive,
                       tag.color ? { borderColor: tag.color } : undefined,
                     ]}
-                    onPress={() => setCategoryTagIds((prev) =>
-                      prev.includes(tag.id) ? prev.filter((x) => x !== tag.id) : [...prev, tag.id]
-                    )}
+                    onPress={() => {
+                      logUI(uiPath('category_modal', 'form', 'tag_chip', tag.id), 'press');
+                      setCategoryTagIds((prev) =>
+                        prev.includes(tag.id) ? prev.filter((x) => x !== tag.id) : [...prev, tag.id]
+                      );
+                    }}
+                    {...uiProps(uiPath('category_modal', 'form', 'tag_chip', tag.id))}
                   >
                     <Text style={[styles.modalChipText, tag.color && categoryTagIds.includes(tag.id) ? { color: tag.color } : undefined]}>
                       #{tag.name}
@@ -142,6 +160,7 @@ function CategoryModal({
               <TouchableOpacity
                 style={[styles.modalDanger, !isOwnedByUser && { opacity: 0.5 }]}
                 onPress={() => {
+                  logUI(uiPath('category_modal', 'actions', 'remove_button'), 'press');
                   if (readOnly) return;
                   if (Platform.OS === 'web') {
                     if ((window as any).confirm('Delete this category?')) {
@@ -155,6 +174,7 @@ function CategoryModal({
                   }
                 }}
                 disabled={readOnly}
+                {...uiProps(uiPath('category_modal', 'actions', 'remove_button'))}
               >
                 <Text style={styles.modalDangerText}>Remove</Text>
               </TouchableOpacity>
@@ -162,16 +182,26 @@ function CategoryModal({
             {editingCategoryId && (
               <TouchableOpacity
                 style={styles.modalSecondary}
-                onPress={() => onToggleHidden(editingCategoryId)}
+                onPress={() => { logUI(uiPath('category_modal', 'actions', 'hide_button'), 'press'); onToggleHidden(editingCategoryId); }}
+                {...uiProps(uiPath('category_modal', 'actions', 'hide_button'))}
               >
                 <Text style={styles.modalSecondaryText}>{isHidden ? 'Unhide' : 'Hide'}</Text>
               </TouchableOpacity>
             )}
-            <TouchableOpacity style={styles.modalSecondary} onPress={onClose}>
+            <TouchableOpacity
+              style={styles.modalSecondary}
+              onPress={() => { logUI(uiPath('category_modal', 'actions', 'cancel_button'), 'press'); onClose(); }}
+              {...uiProps(uiPath('category_modal', 'actions', 'cancel_button'))}
+            >
               <Text style={styles.modalSecondaryText}>Cancel</Text>
             </TouchableOpacity>
             {!readOnly && (
-              <TouchableOpacity style={styles.modalPrimary} onPress={onSave} disabled={saving}>
+              <TouchableOpacity
+                style={styles.modalPrimary}
+                onPress={() => { logUI(uiPath('category_modal', 'actions', 'save_button'), 'press'); onSave(); }}
+                disabled={saving}
+                {...uiProps(uiPath('category_modal', 'actions', 'save_button'))}
+              >
                 <Text style={styles.modalPrimaryText}>{editingCategoryId ? 'Update' : 'Create'}</Text>
               </TouchableOpacity>
             )}

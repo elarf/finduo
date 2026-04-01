@@ -12,6 +12,7 @@ import {
 import Icon from '../Icon';
 import { styles } from '../../screens/DashboardScreen.styles';
 import type { AppAccount } from '../../types/dashboard';
+import { uiPath, uiProps, logUI } from '../../lib/devtools';
 
 type TransferModalProps = {
   visible: boolean;
@@ -70,7 +71,8 @@ const TransferModal = React.memo(function TransferModal(props: TransferModalProp
       <View style={[styles.entryTypeRow, !desktopView && { marginHorizontal: 16 }]}>
         <TouchableOpacity
           style={[styles.toggleButton, transferFromId && styles.toggleButtonActiveExpense]}
-          onPress={() => openAcctPickerSheet('transfer-from')}
+          onPress={() => { logUI(uiPath('transfer_modal', 'form', 'from_account_button'), 'press'); openAcctPickerSheet('transfer-from'); }}
+          {...uiProps(uiPath('transfer_modal', 'form', 'from_account_button'))}
         >
           <Text style={transferFromId ? styles.toggleButtonTextExpense : styles.toggleButtonText}>
             From: {fromAccount?.name ?? 'Select'}
@@ -78,7 +80,8 @@ const TransferModal = React.memo(function TransferModal(props: TransferModalProp
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.toggleButton, transferToId && styles.toggleButtonActiveIncome]}
-          onPress={() => openAcctPickerSheet('transfer-to')}
+          onPress={() => { logUI(uiPath('transfer_modal', 'form', 'to_account_button'), 'press'); openAcctPickerSheet('transfer-to'); }}
+          {...uiProps(uiPath('transfer_modal', 'form', 'to_account_button'))}
         >
           <Text style={transferToId ? styles.toggleButtonTextIncome : styles.toggleButtonText}>
             To: {toAccount?.name ?? 'Select'}
@@ -92,14 +95,18 @@ const TransferModal = React.memo(function TransferModal(props: TransferModalProp
         contentContainerStyle={[styles.entryModalScrollContent, { flexGrow: 1 }]}
       >
         {/* Date picker */}
-        <TouchableOpacity style={styles.datePressable} onPress={openDatePicker}>
+        <TouchableOpacity
+          style={styles.datePressable}
+          onPress={() => { logUI(uiPath('transfer_modal', 'form', 'date_button'), 'press'); openDatePicker(); }}
+          {...uiProps(uiPath('transfer_modal', 'form', 'date_button'))}
+        >
           <Icon name="calendar" size={18} color="#8FA8C9" />
           <Text style={styles.datePressableText}>{transferDate || 'Select date'}</Text>
         </TouchableOpacity>
 
         {/* Amount display */}
-        <View style={styles.entryAmountDisplay}>
-          <Text style={[styles.entryAmountDisplayText, { color: '#a855f7' }]}>
+        <View style={styles.entryAmountDisplay} {...uiProps(uiPath('transfer_modal', 'form', 'amount_display'))}>
+          <Text style={[styles.entryAmountDisplayText, { color: '#a855f7' }]} {...uiProps(uiPath('transfer_modal', 'form', 'amount_text'))}>
             {transferSourceAmount || '0'}
           </Text>
         </View>
@@ -115,6 +122,7 @@ const TransferModal = React.memo(function TransferModal(props: TransferModalProp
               value={transferRate}
               onChangeText={setTransferRate}
               style={styles.input}
+              {...uiProps(uiPath('transfer_modal', 'form', 'exchange_rate_input'))}
             />
             <TextInput
               placeholder={`Destination amount (${toAccount?.currency})`}
@@ -123,6 +131,7 @@ const TransferModal = React.memo(function TransferModal(props: TransferModalProp
               value={transferTargetAmount}
               onChangeText={setTransferTargetAmount}
               style={styles.input}
+              {...uiProps(uiPath('transfer_modal', 'form', 'destination_input'))}
             />
           </View>
         )}
@@ -135,15 +144,21 @@ const TransferModal = React.memo(function TransferModal(props: TransferModalProp
           placeholderTextColor="#64748B"
           style={styles.input}
           returnKeyType="done"
+          {...uiProps(uiPath('transfer_modal', 'form', 'note_input'))}
         />
 
         {/* Spacer to push numpad to bottom */}
         <View style={{ flex: 1, minHeight: 8 }} />
 
         {/* Numpad */}
-        <View style={styles.numpadGrid}>
+        <View style={styles.numpadGrid} {...uiProps(uiPath('transfer_modal', 'numpad', 'container'))}>
           {['7', '8', '9', '4', '5', '6', '1', '2', '3', 'C', '0', '<'].map((k) => (
-            <TouchableOpacity key={k} style={styles.numpadKey} onPress={() => appendNumpad(k)}>
+            <TouchableOpacity
+              key={k}
+              style={styles.numpadKey}
+              onPress={() => { logUI(uiPath('transfer_modal', 'numpad', 'key', k), 'press'); appendNumpad(k); }}
+              {...uiProps(uiPath('transfer_modal', 'numpad', 'key', k))}
+            >
               <Text style={styles.numpadKeyText}>{k}</Text>
             </TouchableOpacity>
           ))}
@@ -156,8 +171,16 @@ const TransferModal = React.memo(function TransferModal(props: TransferModalProp
     <Modal visible={visible} transparent animationType={desktopView ? 'none' : 'slide'} onRequestClose={onClose}>
       {desktopView ? (
         /* Desktop: card modal */
-        <Pressable style={styles.modalBackdrop} onPress={onClose}>
-          <Pressable style={[styles.modalCard, styles.entryModalCard]} onPress={(e) => e.stopPropagation()}>
+        <Pressable
+          style={styles.modalBackdrop}
+          onPress={() => { logUI(uiPath('transfer_modal', 'modal', 'backdrop'), 'press'); onClose(); }}
+          {...uiProps(uiPath('transfer_modal', 'modal', 'backdrop'))}
+        >
+          <Pressable
+            style={[styles.modalCard, styles.entryModalCard]}
+            onPress={(e) => { logUI(uiPath('transfer_modal', 'modal', 'card'), 'press'); e.stopPropagation(); }}
+            {...uiProps(uiPath('transfer_modal', 'modal', 'card'))}
+          >
             <View style={{ alignItems: 'center', marginBottom: 12 }}>
               <View style={[styles.toggleButton, { flex: 0, minWidth: 110, paddingHorizontal: 20, borderColor: '#a855f7', backgroundColor: '#1e0e2a' }]}>
                 <Text style={[styles.toggleButtonText, { color: '#a855f7' }]}>Transfer</Text>
@@ -165,10 +188,19 @@ const TransferModal = React.memo(function TransferModal(props: TransferModalProp
             </View>
             {content}
             <View style={styles.modalActions}>
-              <TouchableOpacity style={styles.modalSecondary} onPress={onClose}>
+              <TouchableOpacity
+                style={styles.modalSecondary}
+                onPress={() => { logUI(uiPath('transfer_modal', 'actions', 'cancel_button'), 'press'); onClose(); }}
+                {...uiProps(uiPath('transfer_modal', 'actions', 'cancel_button'))}
+              >
                 <Text style={styles.modalSecondaryText}>Cancel</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={[styles.modalPrimary, { backgroundColor: '#a855f7' }]} onPress={onSave} disabled={saving}>
+              <TouchableOpacity
+                style={[styles.modalPrimary, { backgroundColor: '#a855f7' }]}
+                onPress={() => { logUI(uiPath('transfer_modal', 'actions', 'transfer_button'), 'press'); onSave(); }}
+                disabled={saving}
+                {...uiProps(uiPath('transfer_modal', 'actions', 'transfer_button'))}
+              >
                 <Text style={styles.modalPrimaryText}>Transfer</Text>
               </TouchableOpacity>
             </View>
@@ -186,10 +218,19 @@ const TransferModal = React.memo(function TransferModal(props: TransferModalProp
           {content}
           {/* Bottom bar */}
           <View style={transferStyles.bottomBar}>
-            <TouchableOpacity style={transferStyles.cancelBtn} onPress={onClose}>
+            <TouchableOpacity
+              style={transferStyles.cancelBtn}
+              onPress={() => { logUI(uiPath('transfer_modal', 'actions', 'cancel_button'), 'press'); onClose(); }}
+              {...uiProps(uiPath('transfer_modal', 'actions', 'cancel_button'))}
+            >
               <Text style={transferStyles.cancelText}>Cancel</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={transferStyles.saveBtn} onPress={onSave} disabled={saving}>
+            <TouchableOpacity
+              style={transferStyles.saveBtn}
+              onPress={() => { logUI(uiPath('transfer_modal', 'actions', 'transfer_button'), 'press'); onSave(); }}
+              disabled={saving}
+              {...uiProps(uiPath('transfer_modal', 'actions', 'transfer_button'))}
+            >
               <Text style={transferStyles.saveText}>{saving ? 'Saving...' : 'Transfer'}</Text>
             </TouchableOpacity>
           </View>

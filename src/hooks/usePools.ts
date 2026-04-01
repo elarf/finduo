@@ -1,24 +1,43 @@
 import { useCallback, useState } from 'react';
 import { Alert } from 'react-native';
 import { supabase } from '../lib/supabase';
+import { logAPI, webAlert } from '../lib/devtools';
 import type { User } from '@supabase/supabase-js';
 import type { Pool, PoolType, PoolParticipant } from '../types/pools';
+
+type CreatorProfile = { display_name: string | null; avatar_url: string | null };
 
 export function usePools(user: User | null) {
   const [pools, setPools] = useState<Pool[]>([]);
   const [members, setMembers] = useState<Record<string, PoolParticipant[]>>({});
+  const [creatorProfiles, setCreatorProfiles] = useState<Record<string, CreatorProfile>>({});
   const [loading, setLoading] = useState(false);
 
   const getUserPools = useCallback(async () => {
     if (!user) return;
     setLoading(true);
     try {
+      logAPI('supabase://pools', { source: 'pool_list.scroll_view.root', action: 'getUserPools' });
       const { data, error } = await supabase
         .from('pools')
         .select('*')
         .order('created_at', { ascending: false });
       if (error) throw error;
-      setPools((data ?? []) as Pool[]);
+      const poolList = (data ?? []) as Pool[];
+      setPools(poolList);
+
+      // Fetch profile data for all pool creators in one query
+      const creatorIds = [...new Set(poolList.map((p) => p.created_by))];
+      if (creatorIds.length > 0) {
+        logAPI('supabase://user_profiles', { source: 'pool_list.pool_card.creator_avatar', action: 'getCreatorProfiles' });
+        const { data: profiles } = await supabase
+          .from('user_profiles')
+          .select('user_id, display_name, avatar_url')
+          .in('user_id', creatorIds);
+        const map: Record<string, CreatorProfile> = {};
+        (profiles ?? []).forEach((p) => { map[p.user_id] = { display_name: p.display_name, avatar_url: p.avatar_url }; });
+        setCreatorProfiles(map);
+      }
     } catch (err) {
       Alert.alert('Error', err instanceof Error ? err.message : 'Failed to load pools');
     } finally {
@@ -34,6 +53,7 @@ export function usePools(user: User | null) {
   ) => {
     if (!user) return null;
     try {
+      logAPI('supabase://pools', { source: 'pool_list.scroll_view.root', action: 'createPool' });
       const { data: pool, error: poolError } = await supabase
         .from('pools')
         .insert({
@@ -48,6 +68,7 @@ export function usePools(user: User | null) {
       if (poolError) throw poolError;
 
       // Auto-add creator as a participant via RPC (keeps ownership check + type='auth' consistent)
+      logAPI('supabase://rpc/add_pool_member', { source: 'pool_list.scroll_view.root', action: 'createPool.addCreator' });
       const { error: memberError } = await supabase.rpc('add_pool_member', {
         p_pool_id: pool.id,
         p_user_id: user.id,
@@ -65,10 +86,37 @@ export function usePools(user: User | null) {
 
   const loadPoolMembers = useCallback(async (poolId: string) => {
     try {
+      logAPI('supabase://rpc/get_pool_members', { source: 'pool.member_chips.scroll_view', action: 'loadPoolMembers' });
       const { data, error } = await supabase
         .rpc('get_pool_members', { p_pool_id: poolId });
       if (error) throw error;
-      setMembers((prev) => ({ ...prev, [poolId]: (data ?? []) as PoolParticipant[] }));
+
+      const raw = (data ?? []) as PoolParticipant[];
+
+      // Enrich auth members with display_name (fallback) and avatar_url from user_profiles
+      const authIds = raw.filter((m) => m.user_id).map((m) => m.user_id as string);
+      if (authIds.length > 0) {
+        logAPI('supabase://user_profiles', { source: 'pool.member_chips.avatar', action: 'loadMemberProfiles' });
+        const { data: profiles } = await supabase
+          .from('user_profiles')
+          .select('user_id, display_name, avatar_url')
+          .in('user_id', authIds);
+        const profileMap: Record<string, { display_name: string | null; avatar_url: string | null }> = {};
+        (profiles ?? []).forEach((p) => { profileMap[p.user_id] = { display_name: p.display_name, avatar_url: p.avatar_url }; });
+        const enriched = raw.map((m) => {
+          if (!m.user_id) return m;
+          const profile = profileMap[m.user_id];
+          if (!profile) return m;
+          return {
+            ...m,
+            display_name: m.display_name ?? profile.display_name,
+            avatar_url: profile.avatar_url ?? null,
+          };
+        });
+        setMembers((prev) => ({ ...prev, [poolId]: enriched }));
+      } else {
+        setMembers((prev) => ({ ...prev, [poolId]: raw }));
+      }
     } catch (err) {
       // non-fatal
     }
@@ -80,6 +128,7 @@ export function usePools(user: User | null) {
     displayName: string,
   ) => {
     try {
+      logAPI('supabase://rpc/add_pool_member', { source: 'pool.member_chips.scroll_view', action: 'addPoolMember' });
       const { error } = await supabase.rpc('add_pool_member', {
         p_pool_id: poolId,
         p_user_id: userId,
@@ -92,27 +141,46 @@ export function usePools(user: User | null) {
     }
   }, [loadPoolMembers]);
 
-  const closePool = useCallback(async (poolId: string) => {
+  const closePool = useCallback(async (poolId: string): Promise<boolean> => {
     try {
+      logAPI('supabase://pools', { source: 'pool.summary_card.card', action: 'closePool' });
       const { error } = await supabase
         .from('pools')
         .update({ status: 'closed' })
         .eq('id', poolId);
       if (error) throw error;
       await getUserPools();
+      return true;
     } catch (err) {
-      Alert.alert('Error', err instanceof Error ? err.message : 'Failed to close pool');
+      webAlert('Error', err instanceof Error ? err.message : 'Failed to close pool');
+      return false;
+    }
+  }, [getUserPools]);
+
+  const deletePool = useCallback(async (poolId: string) => {
+    try {
+      logAPI('supabase://pools', { source: 'pool.header.delete_button', action: 'deletePool' });
+      const { error } = await supabase
+        .from('pools')
+        .delete()
+        .eq('id', poolId);
+      if (error) throw error;
+      await getUserPools();
+    } catch (err) {
+      Alert.alert('Error', err instanceof Error ? err.message : 'Failed to delete pool');
     }
   }, [getUserPools]);
 
   return {
     pools,
     members,
+    creatorProfiles,
     loading,
     getUserPools,
     createPool,
     addPoolMember,
     loadPoolMembers,
     closePool,
+    deletePool,
   };
 }

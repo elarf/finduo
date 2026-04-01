@@ -3,6 +3,7 @@ import { Alert, Modal, Pressable, Text, TextInput, TouchableOpacity, View } from
 import { styles } from '../../screens/DashboardScreen.styles';
 import { COLOR_PRESETS } from '../../types/dashboard';
 import Icon from '../Icon';
+import { uiPath, uiProps, logUI } from '../../lib/devtools';
 
 type TagModalProps = {
   visible: boolean;
@@ -36,25 +37,37 @@ const TagModal: React.FC<TagModalProps> = ({
   saving,
 }) => (
   <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
-    <Pressable style={styles.modalBackdrop} onPress={onClose}>
-      <Pressable style={styles.modalCard} onPress={(event) => event.stopPropagation()}>
-        <Text style={styles.modalTitle}>{editingTagId ? 'Edit tag' : 'Create tag'}</Text>
+    <Pressable
+      style={styles.modalBackdrop}
+      onPress={() => { logUI(uiPath('tag_modal', 'modal', 'backdrop'), 'press'); onClose(); }}
+      {...uiProps(uiPath('tag_modal', 'modal', 'backdrop'))}
+    >
+      <Pressable
+        style={styles.modalCard}
+        onPress={(event) => { logUI(uiPath('tag_modal', 'modal', 'card'), 'press'); event.stopPropagation(); }}
+        {...uiProps(uiPath('tag_modal', 'modal', 'card'))}
+      >
+        <Text style={styles.modalTitle} {...uiProps(uiPath('tag_modal', 'modal', 'title'))}>
+          {editingTagId ? 'Edit tag' : 'Create tag'}
+        </Text>
         <TextInput
           placeholder="Tag name"
           placeholderTextColor="#64748B"
           value={tagName}
           onChangeText={setTagName}
           style={styles.input}
+          {...uiProps(uiPath('tag_modal', 'form', 'name_input'))}
         />
 
         {/* Color picker */}
         <Text style={styles.modalLabel}>Color</Text>
         <View style={styles.colorPresetRow}>
-          {COLOR_PRESETS.map((preset) => (
+          {COLOR_PRESETS.map((preset, index) => (
             <TouchableOpacity
               key={preset}
               style={[styles.colorPresetDot, { backgroundColor: preset }, tagColor === preset && styles.colorPresetDotActive]}
-              onPress={() => setTagColor(tagColor === preset ? null : preset)}
+              onPress={() => { logUI(uiPath('tag_modal', 'form', 'color_dot', String(index)), 'press'); setTagColor(tagColor === preset ? null : preset); }}
+              {...uiProps(uiPath('tag_modal', 'form', 'color_dot', String(index)))}
             />
           ))}
         </View>
@@ -64,7 +77,8 @@ const TagModal: React.FC<TagModalProps> = ({
         <View style={styles.iconPickerRow}>
           <TouchableOpacity
             style={[styles.iconPickerPreview, tagIcon ? { borderColor: tagColor ?? '#53E3A6' } : undefined]}
-            onPress={() => openIconPickerSheet('tag')}
+            onPress={() => { logUI(uiPath('tag_modal', 'form', 'icon_picker_button'), 'press'); openIconPickerSheet('tag'); }}
+            {...uiProps(uiPath('tag_modal', 'form', 'icon_picker_button'))}
           >
             {tagIcon ? (
               <Icon name={tagIcon} size={24} color={tagColor ?? '#EAF3FF'} />
@@ -85,6 +99,7 @@ const TagModal: React.FC<TagModalProps> = ({
             <TouchableOpacity
               style={styles.modalDanger}
               onPress={() => {
+                logUI(uiPath('tag_modal', 'actions', 'remove_button'), 'press');
                 const idToDelete = editingTagId;
                 Alert.alert('Remove tag', 'Delete this tag?', [
                   { text: 'Cancel', style: 'cancel' },
@@ -97,14 +112,24 @@ const TagModal: React.FC<TagModalProps> = ({
                   },
                 ]);
               }}
+              {...uiProps(uiPath('tag_modal', 'actions', 'remove_button'))}
             >
               <Text style={styles.modalDangerText}>Remove</Text>
             </TouchableOpacity>
           )}
-          <TouchableOpacity style={styles.modalSecondary} onPress={onClose}>
+          <TouchableOpacity
+            style={styles.modalSecondary}
+            onPress={() => { logUI(uiPath('tag_modal', 'actions', 'cancel_button'), 'press'); onClose(); }}
+            {...uiProps(uiPath('tag_modal', 'actions', 'cancel_button'))}
+          >
             <Text style={styles.modalSecondaryText}>Cancel</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.modalPrimary} onPress={onSave} disabled={saving}>
+          <TouchableOpacity
+            style={styles.modalPrimary}
+            onPress={() => { logUI(uiPath('tag_modal', 'actions', 'save_button'), 'press'); onSave(); }}
+            disabled={saving}
+            {...uiProps(uiPath('tag_modal', 'actions', 'save_button'))}
+          >
             <Text style={styles.modalPrimaryText}>{editingTagId ? 'Save' : 'Create'}</Text>
           </TouchableOpacity>
         </View>

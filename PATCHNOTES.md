@@ -1,5 +1,71 @@
 # Finduo – Patch Notes
 
+<!-- markdownlint-disable MD013 MD024 -->
+
+---
+
+## [1.0.0] — 2026-04-01
+
+### 🔍 Architecture
+
+#### Full DevTools Tracing
+
+- Added `src/lib/devtools.ts` with `uiPath`, `uiProps`, `logUI`, `logAPI`, and `webAlert` utilities
+- Every meaningful UI element across all screens, modals, and components has a stable `testID` / `data-ui` attribute using the `screen.component.element[#id]` naming scheme
+- `logUI(path, event?)` and `logAPI(url, meta)` emit `[UI]` / `[API]` prefixed `console.debug` messages for all interactions and network calls
+- `EXPO_PUBLIC_DEBUG_UI=true` renders green dashed outlines on all instrumented elements (web only)
+- All 11 dashboard modals, all layout components, all pool components, and all screens instrumented
+
+### ✨ Features
+
+#### Pool Deletion
+
+- Pool creators can now delete a pool via an edit toggle (pencil icon) in the pool header
+- Deletion requires confirmation dialog (cross-platform: `window.confirm` on web, `Alert.alert` on native)
+- Edit mode reveals the delete button; settle and close buttons are hidden while in edit mode
+
+#### Pool Settle — Single-Member & External-Member Support
+
+- Settle now works with 1-member pools and with auth + external member combinations
+- In these cases, all spendings are aggregated into a net `PreTransaction` shown as a banner with an "Add as transaction" button that opens the entry modal pre-filled with the amount
+- `SettleResult` union type discriminates `settled`, `balanced`, `entry`, and `error` outcomes to drive post-confirm navigation
+
+#### Numpad Enhancements
+
+- Added decimal dot (`.`), double-zero (`00`), and triple-zero (`000`) keys to the entry modal numpad
+- New bottom two rows: `. 0 00` / `C 000 ←`
+- Enables fast large-number entry (e.g. `1000` in two taps) and precise decimal amounts
+
+#### Changelogs (Experimental)
+
+- New **Changelogs** item in the Experimental section of Quick Navigation
+- Opens a full-screen modal displaying PATCHNOTES.md content with a toggle to switch to README.md view
+- Scroll-to-top FAB appears when scrolled past 200 px; view toggle resets scroll position
+
+### 🗂 Navigation
+
+#### Pools Promoted from Experimental
+
+- Pools link moved from the collapsible Experimental section to the main Quick Navigation menu
+- Positioned above the Friends link for quick access
+
+### 🐛 Bug Fixes
+
+#### `Alert.alert` No-Op on Web
+
+- All user-facing feedback that relied on `Alert.alert` now uses cross-platform `webAlert` (`window.alert` on web, `Alert.alert` on native)
+- `confirmDialog` inside `usePool` now uses `window.confirm` on web for all destructive actions (pool delete, pool close, pool settle)
+
+#### Pool Transaction FK Violation (External Payer)
+
+- Adding a pool transaction with an external (non-auth) pool member as payer no longer throws a `23503` FK constraint error
+- `TransactionModal` always uses `pool_member.id` (participant UUID) instead of `user_id` as the `paid_by` value
+- DB migration: drop `pool_transactions_paid_by_fkey`, migrate existing rows, re-add FK referencing `pool_members(id)`
+
+#### Pool Close Navigation
+
+- `closePool` returns `Promise<boolean>`; navigation away from the pool only triggers on confirmed success (no silent no-op on error)
+
 ---
 
 ## [0.9.1] — 2026-03-31
@@ -7,6 +73,7 @@
 ### 🐛 Bug Fixes
 
 #### Shared Account Access (Sharing with friends doesn't work anymore)
+
 - **Root cause:** `saveAccount` was creating `accounts` rows but not inserting `account_members` rows for creators. Under the current flat RLS architecture, all child tables (`transactions`, `tags`, `account_settings`) require `EXISTS(account_members WHERE ...)` with no fallback to `created_by`. This meant creators could see accounts but not their transactions/data, and sharing was incomplete.
 - **Fixed in client:**
   - `saveAccount` now upserts creator as `'owner'` member after account creation
@@ -23,6 +90,7 @@
 ### 🏗 Architecture
 
 #### Cache-First Data Loading — TanStack Query
+
 - Added `@tanstack/react-query` v5 as the data layer for all dashboard fetching
 - `QueryClientProvider` wraps the app in `App.tsx`; global config: `staleTime: 5 min`, `gcTime: 1 hr`, `refetchOnWindowFocus: false`
 - Five new query hooks under `src/hooks/`:
@@ -44,6 +112,7 @@
 ### ✨ Features
 
 #### Pull-to-Refresh
+
 - Pull down on the main dashboard scroll view to silently refresh all data
 - Uses `RefreshControl` on the root `ScrollView` in `MainScrollView.tsx`
 - Independent local `refreshing` state (`useState`) — spinner stays visible until `reloadDashboard()` fully resolves; `try/finally` guarantees the spinner always dismisses
@@ -58,12 +127,14 @@
 ### 🏗 Architecture
 
 #### PoolScreen Refactor — 1024 Lines → Component Architecture
+
 - `PoolScreen.tsx` reduced from 1024 lines to a ~120-line orchestration shell
 - All pool UI extracted into dedicated components under `src/components/pool/`: `PoolHeader`, `PoolSummaryCard`, `PoolMemberChips`, `PoolActions`, `TransactionList`, `TransactionModal`, `AddMemberModal`, `CreatePoolModal`, `PoolListContent`, `poolStyles.ts`
 - Pool state and computed values (`poolMembers`, `poolTotal`, `perPerson`, `handleClosePool`, `handleSettlePool`) extracted into `src/hooks/usePool.ts`
 - Supabase queries remain exclusively in `usePools.ts`, `usePoolTransactions.ts`, and `useDebts.ts` — no direct DB calls in the screen or components
 
 #### Settlement Domain Separation
+
 - `SettlementsScreen` is now a pure **read-only derivation** view — it never writes pool transactions or manages pool membership
 - Settlement flow changed from one-click auto-write to explicit **compute → preview → commit**:
   1. **Calculate Settlement** — reads members + transactions, runs the greedy algorithm, returns `PreTransaction[]` with no DB write
@@ -73,6 +144,7 @@
 - `computePoolSettlement()` and `commitPoolSettlement()` added to `useDebts.ts`; `settlePoolDebts()` kept as a thin wrapper for PoolScreen's one-step Settle button
 
 #### Unified Pool Participant System (DB Migration: `20260401_unified_pool_participants.sql`)
+
 - New `pool_participants` table replaces `pool_members`, unifying auth users and external (manually added) participants in a single table
 - `pool_transactions.paid_by` now references `pool_participants.id` (was `auth.users.id`) — enables external payers
 - Auth participants: `type = 'auth'`, `user_id` set; External: `type = 'external'`, `external_name` set; display_name denormalized for UI
@@ -84,6 +156,7 @@
 ### ✨ Features
 
 #### External Pool Members
+
 - Pool owners can now add participants who are not registered app users (by display name only)
 - External members appear with purple chip styling in the member list
 - External members can be selected as payer when adding or editing an expense
@@ -92,9 +165,11 @@
 ### 🐛 Bug Fixes
 
 #### Payer Selector Not Rendering
+
 - The "paid by" chip row in the expense modal now renders with 1+ pool member (previously required 2+ registered members, hiding it in single-member test pools)
 
 #### Transaction List Payer Lookup
+
 - Payer display name in the transaction list now correctly resolves for both auth and external members (lookup matches `m.user_id === paid_by` OR `m.id === paid_by`)
 
 ---
@@ -104,14 +179,17 @@
 ### 🐛 Bug Fixes
 
 #### Account Creation — No More Default Categories
+
 - Creating a new account no longer seeds default categories. Categories are user-global and should only be created explicitly by the user. Any database trigger that auto-seeded categories on account insert has been dropped.
 
 #### Account Settings RLS — Owners Can Now Save Settings
+
 - Saving account settings (carry-over, initial balance, include in balance) immediately after creating a new account no longer returns `403 Forbidden`. The RLS policy on `account_settings` previously only allowed access for users already in `account_members`, but the creator may not have a membership row yet. Policy updated to allow the account owner (`accounts.created_by`) as well as members.
 
 ### 🔧 Technical
 
 #### Database Cleanup — Baseline Migration
+
 - All 26 incremental migration files consolidated into a single `supabase/migrations/0000_baseline.sql` that recreates the full schema from scratch (16 tables, indexes, RLS policies, SECURITY DEFINER functions, grants).
 - Old migration files archived to `supabase/migrations/archive/` (history preserved).
 - New `supabase/db/schema.md` documents the final schema in human-readable form (tables, columns, types, constraints, relationships, RLS summaries).
@@ -123,6 +201,7 @@
 ### 🏗 Architecture
 
 #### DashboardScreen Refactor
+
 - `DashboardScreen.tsx` reduced from ~2710 lines to a 10-line composition shell (`<DashboardProvider><DashboardLayout /></DashboardProvider>`)
 - All state, effects, and callbacks extracted into `src/context/DashboardContext.tsx` (`DashboardProvider` + `useDashboard()` hook)
 - UI sections extracted into independent Box components (`OverviewCard`, `SpendingChart`, `CategoriesRow`, `TransactionSection`) under `src/components/dashboard/boxes/`
@@ -133,12 +212,14 @@
 ### ✨ UI / UX Improvements
 
 #### Quick Navigation — Experimental Section
+
 - Lending, Settlements, Pools, and Invitations are now grouped under a collapsible **Experimental** section
 - The section is collapsed by default; tap "Experimental ⚗" to expand/collapse
 - Friends remains a direct top-level link
 - New menu order: Friends → Experimental → Reload app → Sign out
 
 #### Transaction Modal (Entry)
+
 - **Inline currency** — Currency symbol now sits beside the amount (e.g. `$123`, `€123`, `123 Ft`). The separate currency line below the amount is gone.
 - **Smarter header** — Income/Expense toggle is now a single button in the modal header. Tap it to switch type. The button color updates live: green for Income, red for Expense.
 - **No duplicate close button** — The ✕ icon in the top-left corner has been removed. The Cancel button in the bottom bar is the only way to dismiss (consistent, less clutter).
@@ -147,29 +228,37 @@
 - **Denser layout** — Reduced padding on suggestion chips, tag chips, and the category button. More content fits on screen without feeling cramped.
 
 #### Transfer Modal
+
 - **Consistent header** — The Transfer modal now uses the same header style as the Entry modal: a single "Transfer" badge with purple accent, no close button, same button shape and size as Income/Expense.
 
 #### Category & Account Pickers
+
 - **Instant transitions** — The category picker overlay and account picker sheet now appear and disappear instantly (no slide animation delay).
 
 #### Loading Screen
+
 - Logo now fills the full width of the screen instead of being constrained to 80%.
 
 ### 🐛 Bug Fixes
 
 #### Account Deletion
+
 - Deleting an account now correctly removes the account row itself, not just its transactions. Previously the account record would stay in the database due to a Row Level Security conflict. Fixed with a server-side function that bypasses RLS for the account owner.
 
 #### Category Delete (Web)
+
 - Category delete in the modal and Quick Navigation now shows a confirmation dialog on web (previously no confirmation appeared and the delete silently failed).
 
 #### Tag Delete (Quick Navigation)
+
 - Deleting a tag from the Quick Navigation menu no longer closes the menu. The tag disappears from the list once deletion completes — the menu stays open.
 
 #### Pool Creation & Loading (500 Error)
+
 - Creating a new pool or loading pool members no longer returns a 500 Internal Server Error. Root cause: circular Row Level Security policies on the `pool_members` table caused infinite recursion. Fixed by restructuring all pool-related RLS policies to eliminate the cycle.
 
 #### Android Back Button
+
 - The Android hardware back button now closes the topmost open modal or sheet. Previously it would navigate back or exit the app entirely. If no modal is open, the back button is absorbed — the dashboard stays visible.
 
 ### 🔧 Technical
@@ -183,6 +272,7 @@
 ## [0.6.0] — 2026-03-27
 
 ### Features
+
 - User-global categories (shared across all accounts, survive account deletion)
 - Pools: shared expense pools with event/continuous types
 - Settlements: unified screen for pools, debts, and balance
@@ -195,6 +285,7 @@
 ## [0.5.0] — 2026-03-26
 
 ### Features
+
 - Friends system: add by email, accept/reject/block requests, share accounts directly
 - Avatar support (Google profile picture or initial fallback)
 - Account sharing via friends (non-expiring, revocable)
@@ -208,6 +299,7 @@
 ## [0.4.0] — 2026-03-25
 
 ### Features
+
 - Invite token system for sharing accounts
 - Lending screen with debt confirmation and mark-paid flow
 - Settlement algorithm (greedy debtor-creditor matching)
@@ -219,6 +311,7 @@
 ## [0.3.0] — 2026-03-24
 
 ### Features
+
 - Transfer transactions with purple styling and ↔ indicator
 - Category-based spending bar chart with tap-to-filter
 - Overview mode: combined balance across all included accounts
@@ -230,6 +323,7 @@
 ## [0.2.0] — 2026-03-23
 
 ### Features
+
 - Multi-account support with currency selector
 - Tag system with color support
 - Numpad-based amount entry (avoids mobile keyboard)
@@ -240,6 +334,7 @@
 ## [0.1.0] — 2026-03-22
 
 ### Initial release
+
 - Google OAuth sign-in
 - Income and expense transactions
 - Category management

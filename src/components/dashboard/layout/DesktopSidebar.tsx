@@ -3,6 +3,7 @@ import { ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { useDashboard } from '../../../context/DashboardContext';
 import Icon from '../../Icon';
 import { styles } from '../../../screens/DashboardScreen.styles';
+import { uiPath, uiProps, logUI } from '../../../lib/devtools';
 
 export default function DesktopSidebar() {
   const {
@@ -25,10 +26,10 @@ export default function DesktopSidebar() {
   } = useDashboard();
 
   return (
-    <View style={styles.desktopSidebar}>
+    <View {...uiProps(uiPath('dashboard', 'desktop_sidebar', 'container'))} style={styles.desktopSidebar}>
       {/* Fixed total card */}
       <View style={{ padding: 12, paddingBottom: 0 }}>
-        <View style={styles.cardStrong}>
+        <View {...uiProps(uiPath('dashboard', 'desktop_sidebar', 'total_card'))} style={styles.cardStrong}>
           <Text style={styles.cardStrongLabel}>ALL ACCOUNTS</Text>
           <Text style={[styles.cardStrongValue, totalIncludedSummary.net < 0 && styles.negative]}>
             {formatCurrency(totalIncludedSummary.net)}
@@ -41,6 +42,7 @@ export default function DesktopSidebar() {
       </View>
       {/* Scrollable rest */}
       <ScrollView
+        {...uiProps(uiPath('dashboard', 'desktop_sidebar', 'scroll_view'))}
         contentContainerStyle={styles.desktopSidebarContent}
         showsVerticalScrollIndicator={false}
       >
@@ -51,11 +53,15 @@ export default function DesktopSidebar() {
           {includedAccountSummaries.map((item) => (
             <TouchableOpacity
               key={item.account.id}
+              {...uiProps(uiPath('dashboard', 'desktop_sidebar', 'account_card', item.account.id))}
               style={[
                 styles.accountOverviewCard,
                 selectedAccountId === item.account.id && styles.accountOverviewCardActive,
               ]}
-              onPress={() => setSelectedAccountId(item.account.id)}
+              onPress={() => {
+                logUI(uiPath('dashboard', 'desktop_sidebar', 'account_card', item.account.id), 'press');
+                setSelectedAccountId(item.account.id);
+              }}
             >
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                 {item.account.icon && <Icon name={item.account.icon} size={16} color="#8FA8C9" />}
@@ -76,7 +82,10 @@ export default function DesktopSidebar() {
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
             <Text style={styles.cardStrongLabel}>SPENDING (ALL ACCOUNTS)</Text>
             {sidebarCategoryFilter && (
-              <TouchableOpacity onPress={() => setSidebarCategoryFilter(null)}>
+              <TouchableOpacity
+                {...uiProps(uiPath('dashboard', 'desktop_sidebar', 'clear_filter_btn'))}
+                onPress={() => setSidebarCategoryFilter(null)}
+              >
                 <Text style={styles.linkAction}>✕ Clear</Text>
               </TouchableOpacity>
             )}
@@ -89,9 +98,13 @@ export default function DesktopSidebar() {
               return (
                 <TouchableOpacity
                   key={row.id}
+                  {...uiProps(uiPath('dashboard', 'desktop_sidebar', 'spend_row', row.id))}
                   style={[styles.spendRow, isActive && styles.spendRowActive]}
                   activeOpacity={0.7}
-                  onPress={() => setSidebarCategoryFilter(isActive ? null : row.id)}
+                  onPress={() => {
+                    logUI(uiPath('dashboard', 'desktop_sidebar', 'spend_row', row.id), 'press');
+                    setSidebarCategoryFilter(isActive ? null : row.id);
+                  }}
                 >
                   <View style={styles.spendLabelRow}>
                     <Text style={[styles.spendName, isActive && styles.spendNameActive]}>{row.name}</Text>
@@ -120,8 +133,12 @@ export default function DesktopSidebar() {
             return (
               <TouchableOpacity
                 key={tx.id}
+                {...uiProps(uiPath('dashboard', 'desktop_sidebar', 'tx_row', tx.id))}
                 style={styles.sidebarTxRow}
-                onPress={() => openEditTransaction(tx)}
+                onPress={() => {
+                  logUI(uiPath('dashboard', 'desktop_sidebar', 'tx_row', tx.id), 'press');
+                  openEditTransaction(tx);
+                }}
               >
                 <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 5, marginRight: 8 }}>
                   {sidebarTxCat?.icon && <Icon name={sidebarTxCat.icon} size={12} color={sidebarTitleColor ?? '#C5D9F3'} />}
@@ -136,7 +153,11 @@ export default function DesktopSidebar() {
             );
           })}
           {sidebarFilteredTxs.length > sidebarTxCount && (
-            <TouchableOpacity onPress={() => setSidebarTxCount((c) => c + 12)} style={{ paddingVertical: 8 }}>
+            <TouchableOpacity
+              {...uiProps(uiPath('dashboard', 'desktop_sidebar', 'load_more_btn'))}
+              onPress={() => setSidebarTxCount((c) => c + 12)}
+              style={{ paddingVertical: 8 }}
+            >
               <Text style={styles.linkAction}>Load more</Text>
             </TouchableOpacity>
           )}

@@ -2,6 +2,7 @@ import React from 'react';
 import { Animated, Modal, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import Icon from '../Icon';
 import { styles } from '../../screens/DashboardScreen.styles';
+import { uiPath, uiProps, logUI } from '../../lib/devtools';
 
 type IconPickerSheetProps = {
   visible: boolean;
@@ -44,10 +45,16 @@ function IconPickerSheet({
             ],
           },
         ]}
+        {...uiProps(uiPath('icon_picker', 'sheet', 'sheet'))}
       >
-        <View style={styles.catPickerHeader}>
-          <Text style={styles.catPickerTitle}>Choose Icon</Text>
-          <TouchableOpacity onPress={onClose}>
+        <View style={styles.catPickerHeader} {...uiProps(uiPath('icon_picker', 'sheet', 'backdrop'))}>
+          <Text style={styles.catPickerTitle} {...uiProps(uiPath('icon_picker', 'sheet', 'title'))}>
+            Choose Icon
+          </Text>
+          <TouchableOpacity
+            onPress={() => { logUI(uiPath('icon_picker', 'header', 'close_button'), 'press'); onClose(); }}
+            {...uiProps(uiPath('icon_picker', 'header', 'close_button'))}
+          >
             <Icon name="close" size={24} color="#8FA8C9" />
           </TouchableOpacity>
         </View>
@@ -57,6 +64,7 @@ function IconPickerSheet({
           placeholderTextColor="#64748B"
           value={iconSearchQuery}
           onChangeText={setIconSearchQuery}
+          {...uiProps(uiPath('icon_picker', 'form', 'search_input'))}
         />
         <ScrollView contentContainerStyle={styles.catPickerGrid} showsVerticalScrollIndicator={false}>
           {filteredIconNames.map((iconName) => {
@@ -68,11 +76,13 @@ function IconPickerSheet({
                 key={iconName}
                 style={[styles.catPickerItem, isActive && styles.catPickerItemActive]}
                 onPress={() => {
+                  logUI(uiPath('icon_picker', 'list', 'icon_cell', iconName), 'press');
                   if (iconPickerTarget === 'category') setCategoryIcon(iconName);
                   else if (iconPickerTarget === 'account') setNewAccountIcon(iconName);
                   else if (iconPickerTarget === 'tag') setTagIcon(iconName);
                   onClose();
                 }}
+                {...uiProps(uiPath('icon_picker', 'list', 'icon_cell', iconName))}
               >
                 <Icon name={iconName} size={28} color="#8FA8C9" />
                 <Text style={styles.catPickerItemSub}>{iconName}</Text>

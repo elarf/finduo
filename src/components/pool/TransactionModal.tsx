@@ -10,6 +10,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { logUI, uiPath, uiProps } from '../../lib/devtools';
 import { poolSharedStyles as sh } from './poolStyles';
 import type { PoolMember, PoolTransaction } from '../../types/pools';
 
@@ -32,11 +33,14 @@ export function TransactionModal({
 }: Props) {
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
-  const [paidBy, setPaidBy] = useState(currentUserId);
+  // paidBy tracks pool_participant.id (works for both auth and external members)
+  const currentParticipantId = members.find((m) => m.user_id === currentUserId)?.id ?? currentUserId;
+  const [paidBy, setPaidBy] = useState(currentParticipantId);
 
   // Seed form state when the modal opens
   useEffect(() => {
     if (!visible) return;
+    logUI(uiPath('tx_modal', 'card', 'container'), 'opened');
     if (editingTx) {
       setAmount(String(Number(editingTx.amount)));
       setDescription(editingTx.description);
@@ -44,7 +48,7 @@ export function TransactionModal({
     } else {
       setAmount('');
       setDescription('');
-      setPaidBy(currentUserId);
+      setPaidBy(currentParticipantId);
     }
     console.log('[TransactionModal] opened — members:', members, 'currentUserId:', currentUserId);
   }, [visible, editingTx, currentUserId]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -67,27 +71,42 @@ export function TransactionModal({
       Alert.alert('Invalid amount', 'Enter a positive number.');
       return;
     }
-    await onSubmit(parsed, description.trim(), paidBy || currentUserId);
+    await onSubmit(parsed, description.trim(), paidBy || currentParticipantId);
   }, [amount, currentUserId, description, onSubmit, paidBy]);
+
+  // Normalize numpad key to a safe id segment
+  const keyId = (key: string) =>
+    key === '.' ? 'dot' : key === '⌫' ? 'backspace' : key;
 
   return (
     <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
-      <Pressable style={sh.modalBackdrop} onPress={onClose}>
-        <Pressable style={sh.modalCard} onPress={(e) => e.stopPropagation()}>
-          <Text style={sh.modalTitle}>{editingTx ? 'Edit expense' : 'Add expense'}</Text>
+      <Pressable
+        style={sh.modalBackdrop}
+        onPress={onClose}
+        {...uiProps(uiPath('tx_modal', 'backdrop', 'container'))}
+      >
+        <Pressable
+          style={sh.modalCard}
+          onPress={(e) => e.stopPropagation()}
+          {...uiProps(uiPath('tx_modal', 'card', 'container'))}
+        >
+          <Text style={sh.modalTitle} {...uiProps(uiPath('tx_modal', 'card', 'title'))}>
+            {editingTx ? 'Edit expense' : 'Add expense'}
+          </Text>
 
-          {/* Payer selector — shown for any member (registered or external) */}
+          {/* Payer selector */}
           {members.length >= 1 && (
             <View style={{ marginBottom: 12 }}>
-              <Text style={sh.label}>Who paid?</Text>
+              <Text style={sh.label} {...uiProps(uiPath('tx_modal', 'payer', 'label'))}>Who paid?</Text>
               <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={{ gap: 6 }}
+                {...uiProps(uiPath('tx_modal', 'payer', 'scroll'))}
               >
                 {members.map((m) => {
-                  // Registered members identified by user_id; external by pool_member row id
-                  const payerKey = m.user_id ?? m.id;
+                  // Always use pool_participant.id — the only ID that exists for external members
+                  const payerKey = m.id;
                   const label =
                     m.display_name ??
                     (m.user_id === currentUserId ? 'You' : (m.user_id?.slice(0, 8) ?? m.id.slice(0, 8)));
@@ -96,7 +115,11 @@ export function TransactionModal({
                     <TouchableOpacity
                       key={m.id}
                       style={[s.payerChip, active && s.payerChipActive]}
-                      onPress={() => setPaidBy(payerKey)}
+                      onPress={() => {
+                        logUI(uiPath('tx_modal', 'payer', 'chip', m.id), 'press');
+                        setPaidBy(payerKey);
+                      }}
+                      {...uiProps(uiPath('tx_modal', 'payer', 'chip', m.id))}
                     >
                       <Text style={[s.payerChipText, active && s.payerChipTextActive]}>
                         {label}
@@ -109,8 +132,10 @@ export function TransactionModal({
           )}
 
           {/* Amount display */}
-          <View style={s.amountDisplay}>
-            <Text style={s.amountText}>{amount || '0'}</Text>
+          <View style={s.amountDisplay} {...uiProps(uiPath('tx_modal', 'amount', 'display'))}>
+            <Text style={s.amountText} {...uiProps(uiPath('tx_modal', 'amount', 'text'))}>
+              {amount || '0'}
+            </Text>
           </View>
 
           {/* Description */}
@@ -120,16 +145,21 @@ export function TransactionModal({
             value={description}
             onChangeText={setDescription}
             style={[sh.input, { marginTop: 8 }]}
+            {...uiProps(uiPath('tx_modal', 'form', 'description_input'))}
           />
 
           {/* Numpad */}
-          <View style={s.numpad}>
+          <View style={s.numpad} {...uiProps(uiPath('tx_modal', 'numpad', 'container'))}>
             {(['7', '8', '9', '4', '5', '6', '1', '2', '3', '.', '0', '⌫'] as const).map(
               (key) => (
                 <TouchableOpacity
                   key={key}
                   style={s.numpadKey}
-                  onPress={() => appendNumpad(key)}
+                  onPress={() => {
+                    logUI(uiPath('tx_modal', 'numpad', 'key', keyId(key)), 'press');
+                    appendNumpad(key);
+                  }}
+                  {...uiProps(uiPath('tx_modal', 'numpad', 'key', keyId(key)))}
                 >
                   <Text style={s.numpadKeyText}>{key}</Text>
                 </TouchableOpacity>
@@ -138,10 +168,24 @@ export function TransactionModal({
           </View>
 
           <View style={sh.modalActions}>
-            <TouchableOpacity style={sh.modalSecondary} onPress={onClose}>
+            <TouchableOpacity
+              style={sh.modalSecondary}
+              onPress={() => {
+                logUI(uiPath('tx_modal', 'actions', 'cancel_button'), 'press');
+                onClose();
+              }}
+              {...uiProps(uiPath('tx_modal', 'actions', 'cancel_button'))}
+            >
               <Text style={sh.modalSecondaryText}>Cancel</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={sh.modalPrimary} onPress={() => void handleSubmit()}>
+            <TouchableOpacity
+              style={sh.modalPrimary}
+              onPress={() => {
+                logUI(uiPath('tx_modal', 'actions', 'submit_button'), 'press');
+                void handleSubmit();
+              }}
+              {...uiProps(uiPath('tx_modal', 'actions', 'submit_button'))}
+            >
               <Text style={sh.modalPrimaryText}>{editingTx ? 'Save' : 'Add'}</Text>
             </TouchableOpacity>
           </View>

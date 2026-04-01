@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react';
 import { Alert } from 'react-native';
 import { supabase } from '../lib/supabase';
+import { logAPI } from '../lib/devtools';
 import type { User } from '@supabase/supabase-js';
 import type { PoolTransaction } from '../types/pools';
 
@@ -11,6 +12,7 @@ export function usePoolTransactions(user: User | null) {
   const getPoolTransactions = useCallback(async (poolId: string) => {
     setLoading(true);
     try {
+      logAPI('supabase://pool_transactions', { source: 'pool.tx_list.scroll_view', action: 'getPoolTransactions' });
       const { data, error } = await supabase
         .from('pool_transactions')
         .select('*')
@@ -34,6 +36,7 @@ export function usePoolTransactions(user: User | null) {
   ) => {
     if (!user) return null;
     try {
+      logAPI('supabase://pool_transactions', { source: 'tx_modal.submit_button', action: 'addPoolTransaction' });
       const { data, error } = await supabase
         .from('pool_transactions')
         .insert({
@@ -63,6 +66,7 @@ export function usePoolTransactions(user: User | null) {
   ) => {
     if (!user) return null;
     try {
+      logAPI('supabase://pool_transactions', { source: 'tx_modal.submit_button', action: 'updatePoolTransaction' });
       const { data, error } = await supabase
         .from('pool_transactions')
         .update({
@@ -84,6 +88,7 @@ export function usePoolTransactions(user: User | null) {
 
   const deletePoolTransaction = useCallback(async (txId: string, poolId: string) => {
     try {
+      logAPI('supabase://pool_transactions', { source: 'pool.tx_list.delete_button', action: 'deletePoolTransaction' });
       const { error } = await supabase
         .from('pool_transactions')
         .delete()

@@ -1,5 +1,6 @@
 import React from 'react';
 import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { logUI, uiPath, uiProps } from '../../../lib/devtools';
 import { useDashboard } from '../../../context/DashboardContext';
 import Icon from '../../Icon';
 import { styles } from '../../../screens/DashboardScreen.styles';
@@ -25,10 +26,11 @@ export default function DashboardHeader() {
   } = useDashboard();
 
   return (
-    <View style={styles.headerRow}>
+    <View style={styles.headerRow} {...uiProps(uiPath('dashboard', 'header', 'container'))}>
       <TouchableOpacity
         style={styles.avatarBtn}
         onPress={() => {
+          logUI(uiPath('dashboard', 'header', 'avatar_button'), 'press');
           setMenuAccountsExpanded(false);
           setMenuIncomeCatExpanded(false);
           setMenuExpenseCatExpanded(false);
@@ -39,16 +41,21 @@ export default function DashboardHeader() {
           setMenuTagsEditMode(false);
           setMenuOpen(true);
         }}
+        {...uiProps(uiPath('dashboard', 'header', 'avatar_button'))}
       >
         {avatarUrl && !avatarImgError ? (
           <Image
             source={{ uri: avatarUrl }}
             style={styles.avatarImg}
-            onError={() => setAvatarImgError(true)}
+            onError={() => {
+              logUI(uiPath('dashboard', 'header', 'avatar_image'), 'avatar_error');
+              setAvatarImgError(true);
+            }}
+            {...uiProps(uiPath('dashboard', 'header', 'avatar_image'))}
           />
         ) : (
-          <View style={styles.avatarFallback}>
-            <Text style={styles.avatarFallbackText}>
+          <View style={styles.avatarFallback} {...uiProps(uiPath('dashboard', 'header', 'avatar_fallback'))}>
+            <Text style={styles.avatarFallbackText} {...uiProps(uiPath('dashboard', 'header', 'avatar_initial'))}>
               {(user?.email?.[0] ?? '?').toUpperCase()}
             </Text>
           </View>
@@ -61,6 +68,7 @@ export default function DashboardHeader() {
             source={require('../../../../assets/logo.png')}
             style={styles.headerLogo}
             resizeMode="contain"
+            {...uiProps(uiPath('dashboard', 'header', 'logo'))}
           />
         </View>
       </View>
@@ -69,8 +77,12 @@ export default function DashboardHeader() {
       {isDesktopBrowser && (
         <TouchableOpacity
           style={styles.viewToggleButton}
-          onPress={() => setViewModeOverride(desktopView ? 'mobile' : 'desktop')}
+          onPress={() => {
+            logUI(uiPath('dashboard', 'header', 'view_toggle_button'), 'press');
+            setViewModeOverride(desktopView ? 'mobile' : 'desktop');
+          }}
           accessibilityLabel={desktopView ? 'Switch to mobile view' : 'Switch to desktop view'}
+          {...uiProps(uiPath('dashboard', 'header', 'view_toggle_button'))}
         >
           <Icon
             name={desktopView ? 'smartphone' : 'laptop'}

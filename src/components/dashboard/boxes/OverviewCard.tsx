@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Pressable, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useDashboard } from '../../../context/DashboardContext';
 import { type IntervalKey } from '../../../types/dashboard';
 import { styles } from '../../../screens/DashboardScreen.styles';
+import { uiPath, uiProps, logUI } from '../../../lib/devtools';
 
 const ALL_INTERVALS: IntervalKey[] = ['day', 'week', 'month', 'year', 'all', 'custom'];
 
@@ -31,25 +32,33 @@ export default function OverviewCard() {
   const visibleIntervals = ALL_INTERVALS.filter((k) => intervalVisibility[k]);
   const canNavigate = interval !== 'all' && interval !== 'custom';
 
+  useEffect(() => {
+    logUI(uiPath('dashboard', 'overview_card', 'container'), 'mounted');
+  }, []);
+
   return (
     <>
-      <View style={styles.cardStrong}>
+      <View {...uiProps(uiPath('dashboard', 'overview_card', 'container'))} style={styles.cardStrong}>
         <Pressable
+          {...uiProps(uiPath('dashboard', 'overview_card', 'balance_toggle'))}
           disabled={desktopView}
           onPress={() => {
             setShowAccountOverviewPicker((prev) => !prev);
             setSelectedCategoryFilter(null);
           }}
         >
-          <View style={styles.cardCollapseHeader}>
+          <View {...uiProps(uiPath('dashboard', 'overview_card', 'header'))} style={styles.cardCollapseHeader}>
             <Text style={styles.cardStrongLabel}>
               {showAccountOverviewPicker ? 'Included Accounts Total' : 'Selected Account Balance'}
             </Text>
-            <TouchableOpacity onPress={() => setOverviewCollapsed((p) => !p)}>
+            <TouchableOpacity
+              {...uiProps(uiPath('dashboard', 'overview_card', 'collapse_btn'))}
+              onPress={() => setOverviewCollapsed((p) => !p)}
+            >
               <Text style={styles.collapseChevron}>{overviewCollapsed ? '▸' : '▾'}</Text>
             </TouchableOpacity>
           </View>
-          <Text style={[styles.cardStrongValue, overviewSummary.net < 0 && styles.negative]}>
+          <Text {...uiProps(uiPath('dashboard', 'overview_card', 'net_value'))} style={[styles.cardStrongValue, overviewSummary.net < 0 && styles.negative]}>
             {formatCurrency(overviewSummary.net)}
           </Text>
         </Pressable>
@@ -60,9 +69,16 @@ export default function OverviewCard() {
             </Text>
 
             {/* Interval navigation row */}
-            <View style={styles.intervalNavRow}>
+            <View {...uiProps(uiPath('dashboard', 'overview_card', 'interval_nav'))} style={styles.intervalNavRow}>
               {canNavigate ? (
-                <TouchableOpacity style={styles.intervalNavArrow} onPress={() => navigateInterval('prev')}>
+                <TouchableOpacity
+                  {...uiProps(uiPath('dashboard', 'overview_card', 'interval_prev'))}
+                  style={styles.intervalNavArrow}
+                  onPress={() => {
+                    logUI(uiPath('dashboard', 'overview_card', 'interval_prev'), 'press');
+                    navigateInterval('prev');
+                  }}
+                >
                   <Text style={styles.intervalNavArrowText}>◀</Text>
                 </TouchableOpacity>
               ) : (
@@ -70,6 +86,7 @@ export default function OverviewCard() {
               )}
 
               <TouchableOpacity
+                {...uiProps(uiPath('dashboard', 'overview_card', 'interval_label'))}
                 style={styles.intervalNavCenter}
                 onPress={() => setShowIntervalPicker((p) => !p)}
               >
@@ -78,7 +95,14 @@ export default function OverviewCard() {
               </TouchableOpacity>
 
               {canNavigate ? (
-                <TouchableOpacity style={styles.intervalNavArrow} onPress={() => navigateInterval('next')}>
+                <TouchableOpacity
+                  {...uiProps(uiPath('dashboard', 'overview_card', 'interval_next'))}
+                  style={styles.intervalNavArrow}
+                  onPress={() => {
+                    logUI(uiPath('dashboard', 'overview_card', 'interval_next'), 'press');
+                    navigateInterval('next');
+                  }}
+                >
                   <Text style={styles.intervalNavArrowText}>▶</Text>
                 </TouchableOpacity>
               ) : (
@@ -88,11 +112,12 @@ export default function OverviewCard() {
 
             {/* Filter chip selector */}
             {showIntervalPicker && (
-              <View style={styles.intervalPickerWrap}>
+              <View {...uiProps(uiPath('dashboard', 'overview_card', 'interval_picker'))} style={styles.intervalPickerWrap}>
                 <View style={styles.menuChipWrap}>
                   {visibleIntervals.map((key) => (
                     <TouchableOpacity
                       key={key}
+                      {...uiProps(uiPath('dashboard', 'overview_card', 'interval_chip', key))}
                       style={[styles.menuChip, interval === key && styles.menuChipActive]}
                       onPress={() => {
                         if (key === interval) {
@@ -132,8 +157,8 @@ export default function OverviewCard() {
 
             <Text style={styles.summaryText}>Opening: <Text style={overviewSummary.openingBalance >= 0 ? styles.positive : styles.negative}>{formatCurrency(overviewSummary.openingBalance)}</Text></Text>
             <View style={styles.summaryRow}>
-              <Text style={[styles.summaryText, styles.positive]}>Income {formatCurrency(overviewSummary.income)}</Text>
-              <Text style={[styles.summaryText, styles.negative]}>Expenses {formatCurrency(overviewSummary.expense)}</Text>
+              <Text {...uiProps(uiPath('dashboard', 'overview_card', 'income_label'))} style={[styles.summaryText, styles.positive]}>Income {formatCurrency(overviewSummary.income)}</Text>
+              <Text {...uiProps(uiPath('dashboard', 'overview_card', 'expense_label'))} style={[styles.summaryText, styles.negative]}>Expenses {formatCurrency(overviewSummary.expense)}</Text>
             </View>
             {(overviewSummary.transferIn > 0 || overviewSummary.transferOut > 0) && (
               <View style={styles.summaryRow}>
@@ -156,15 +181,17 @@ export default function OverviewCard() {
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Included Accounts Overview</Text>
           </View>
-          <View style={styles.accountOverviewGrid}>
+          <View {...uiProps(uiPath('dashboard', 'overview_card', 'account_grid'))} style={styles.accountOverviewGrid}>
             {includedAccountSummaries.map((item) => (
               <TouchableOpacity
                 key={item.account.id}
+                {...uiProps(uiPath('dashboard', 'overview_card', 'account_card', item.account.id))}
                 style={[
                   styles.accountOverviewCard,
                   selectedAccountId === item.account.id && styles.accountOverviewCardActive,
                 ]}
                 onPress={() => {
+                  logUI(uiPath('dashboard', 'overview_card', 'account_card', item.account.id), 'press');
                   setSelectedAccountId(item.account.id);
                   setShowAccountOverviewPicker(false);
                 }}

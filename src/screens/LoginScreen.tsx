@@ -10,7 +10,7 @@
  *  - Desktop (web ≥ 600 px): a centred 430 px column with black side fillers,
  *    so it looks like a phone on a dark desk
  */
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -22,6 +22,7 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
+import { logUI, uiPath, uiProps } from '../lib/devtools';
 import { useAuth } from '../context/AuthContext';
 
 const MOBILE_MAX_WIDTH = 430;
@@ -33,7 +34,12 @@ export default function LoginScreen() {
   const { width } = useWindowDimensions();
   const isDesktop = Platform.OS === 'web' && width >= DESKTOP_BREAKPOINT;
 
+  useEffect(() => {
+    logUI(uiPath('login', 'screen', 'container'), 'mounted');
+  }, []);
+
   const handleGoogleSignIn = async () => {
+    logUI(uiPath('login', 'footer', 'google_button'), 'press');
     try {
       setLoading(true);
       await signInWithGoogle();
@@ -46,31 +52,38 @@ export default function LoginScreen() {
 
   return (
     /* Outer: full screen black — acts as side filler on desktop */
-    <View style={styles.outer}>
+    <View style={styles.outer} {...uiProps(uiPath('login', 'screen', 'outer'))}>
       {/* Phone column — centred and capped at MOBILE_MAX_WIDTH on desktop */}
-      <View style={[styles.phone, isDesktop && styles.phoneDesktop]}>
+      <View
+        style={[styles.phone, isDesktop && styles.phoneDesktop]}
+        {...uiProps(uiPath('login', 'screen', 'container'))}
+      >
 
         {/* Logo area: takes all vertical space above the footer */}
-        <View style={styles.logoArea}>
+        <View style={styles.logoArea} {...uiProps(uiPath('login', 'logo', 'container'))}>
           <Image
             source={require('../../assets/logo.png')}
             style={styles.logoImage}
             resizeMode="contain"
+            {...uiProps(uiPath('login', 'logo', 'image'))}
           />
         </View>
 
         {/* Footer strip with the CTA button */}
-        <View style={styles.footer}>
+        <View style={styles.footer} {...uiProps(uiPath('login', 'footer', 'container'))}>
           <TouchableOpacity
             style={styles.googleButton}
             onPress={handleGoogleSignIn}
             disabled={loading}
             accessibilityLabel="Sign in with Google"
+            {...uiProps(uiPath('login', 'footer', 'google_button'))}
           >
             {loading ? (
               <ActivityIndicator color="#060A14" />
             ) : (
-              <Text style={styles.googleButtonText}>Sign in with Google</Text>
+              <Text style={styles.googleButtonText} {...uiProps(uiPath('login', 'footer', 'google_button_label'))}>
+                Sign in with Google
+              </Text>
             )}
           </TouchableOpacity>
         </View>

@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   Alert,
   Modal,
@@ -20,6 +20,8 @@ import type {
   IntervalKey,
   TransactionType,
 } from '../../types/dashboard';
+import { uiPath, uiProps, logUI } from '../../lib/devtools';
+import ChangelogModal from './ChangelogModal';
 
 type QuickNavigationProps = {
   visible: boolean;
@@ -129,6 +131,11 @@ function QuickNavigation({
   const [deletingCategoryIds, setDeletingCategoryIds] = useState<Set<string>>(new Set());
   const [showExperimental, setShowExperimental] = useState(false);
   const [showIntervalVisibility, setShowIntervalVisibility] = useState(false);
+  const [showChangelog, setShowChangelog] = useState(false);
+
+  useEffect(() => {
+    logUI(uiPath('quick_nav', 'panel', 'container'), 'mount');
+  }, []);
 
   const handleDeleteCategory = useCallback((categoryId: string) => {
     setDeletingCategoryIds((prev) => new Set([...prev, categoryId]));
@@ -146,29 +153,53 @@ function QuickNavigation({
   }, [deleteCategory]);
 
   return (
-    <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
-      <View style={styles.menuOverlay}>
-        <Pressable style={styles.menuOverlayTapArea} onPress={onClose} />
+    <>
+      <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
+      <View {...uiProps(uiPath('quick_nav', 'panel', 'container'))} style={styles.menuOverlay}>
+        <Pressable
+          {...uiProps(uiPath('quick_nav', 'panel', 'close_area'))}
+          style={styles.menuOverlayTapArea}
+          onPress={() => {
+            logUI(uiPath('quick_nav', 'panel', 'close_area'), 'press');
+            onClose();
+          }}
+        />
         <View style={styles.menuPanel}>
           <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.menuScrollContent}>
             <Text style={styles.menuTitle}>Quick Navigation</Text>
 
             {/* ── Accounts ── */}
-            <View style={styles.menuSectionHeader}>
-              <TouchableOpacity onPress={() => setMenuAccountsExpanded((prev) => !prev)}>
+            <View {...uiProps(uiPath('quick_nav', 'accounts', 'section_header'))} style={styles.menuSectionHeader}>
+              <TouchableOpacity
+                onPress={() => {
+                  logUI(uiPath('quick_nav', 'accounts', 'section_header'), 'press');
+                  setMenuAccountsExpanded((prev) => !prev);
+                }}
+              >
                 <Text style={styles.menuSectionTitle}>Accounts {menuAccountsExpanded ? '▾' : '▸'}</Text>
               </TouchableOpacity>
               <View style={{ flexDirection: 'row', gap: 6 }}>
                 {menuAccountsExpanded && (
-                  <TouchableOpacity style={[styles.menuIconAction, menuAccountsEditMode && { backgroundColor: '#2C4669' }]} onPress={() => setMenuAccountsEditMode((p) => !p)}>
+                  <TouchableOpacity
+                    style={[styles.menuIconAction, menuAccountsEditMode && { backgroundColor: '#2C4669' }]}
+                    onPress={() => {
+                      logUI(uiPath('quick_nav', 'accounts', 'edit_mode_toggle'), 'press');
+                      setMenuAccountsEditMode((p) => !p);
+                    }}
+                  >
                     <Text style={styles.manageIconText}>✎</Text>
                   </TouchableOpacity>
                 )}
                 {(menuAccountsExpanded || accounts.length === 0) && (
-                  <TouchableOpacity style={styles.menuIconAction} onPress={() => {
-                    onClose();
-                    openCreateAccount();
-                  }}>
+                  <TouchableOpacity
+                    {...uiProps(uiPath('quick_nav', 'accounts', 'add_button'))}
+                    style={styles.menuIconAction}
+                    onPress={() => {
+                      logUI(uiPath('quick_nav', 'accounts', 'add_button'), 'press');
+                      onClose();
+                      openCreateAccount();
+                    }}
+                  >
                     <Text style={styles.menuIconActionText}>＋</Text>
                   </TouchableOpacity>
                 )}
@@ -178,13 +209,18 @@ function QuickNavigation({
               const isOwned = account.created_by === user?.id;
               const isPrimary = account.id === primaryAccountId;
               return (
-                <View key={account.id} style={styles.manageRow}>
+                <View
+                  {...uiProps(uiPath('quick_nav', 'accounts', 'row', account.id))}
+                  key={account.id}
+                  style={styles.manageRow}
+                >
                   {!menuAccountsEditMode && account.icon && (
                     <Icon name={account.icon as any} size={36} color="#8FA8C9" />
                   )}
                   <TouchableOpacity
                     style={styles.managePrimary}
                     onPress={() => {
+                      logUI(uiPath('quick_nav', 'accounts', 'row', account.id), 'press');
                       setSelectedAccountId(account.id);
                       onClose();
                     }}
@@ -207,7 +243,10 @@ function QuickNavigation({
                       {/* Reorder up */}
                       <TouchableOpacity
                         style={[styles.manageSmallButton, accountIdx === 0 && styles.manageSmallButtonDisabled]}
-                        onPress={() => moveAccount(accountIdx, 'up')}
+                        onPress={() => {
+                          logUI(uiPath('quick_nav', 'accounts', 'move_up_button', account.id), 'press');
+                          moveAccount(accountIdx, 'up');
+                        }}
                         disabled={accountIdx === 0}
                       >
                         <Text style={styles.manageSmallText}>↑</Text>
@@ -216,7 +255,10 @@ function QuickNavigation({
                       {/* Reorder down */}
                       <TouchableOpacity
                         style={[styles.manageSmallButton, accountIdx === accounts.length - 1 && styles.manageSmallButtonDisabled]}
-                        onPress={() => moveAccount(accountIdx, 'down')}
+                        onPress={() => {
+                          logUI(uiPath('quick_nav', 'accounts', 'move_down_button', account.id), 'press');
+                          moveAccount(accountIdx, 'down');
+                        }}
                         disabled={accountIdx === accounts.length - 1}
                       >
                         <Text style={styles.manageSmallText}>↓</Text>
@@ -224,16 +266,24 @@ function QuickNavigation({
 
                       {/* Set as primary */}
                       <TouchableOpacity
+                        {...uiProps(uiPath('quick_nav', 'accounts', 'primary_button', account.id))}
                         style={[styles.manageSmallButton, isPrimary && styles.manageSmallButtonActive]}
-                        onPress={() => setPrimary(account.id)}
+                        onPress={() => {
+                          logUI(uiPath('quick_nav', 'accounts', 'primary_button', account.id), 'press');
+                          setPrimary(account.id);
+                        }}
                       >
                         <Text style={[styles.manageSmallText, isPrimary && styles.manageSmallTextActive]}>★</Text>
                       </TouchableOpacity>
 
                       {/* Include/exclude from overview */}
                       <TouchableOpacity
+                        {...uiProps(uiPath('quick_nav', 'accounts', 'include_toggle', account.id))}
                         style={[styles.manageSmallButton, excludedAccountIds.includes(account.id) && styles.manageSmallButtonActive]}
-                        onPress={() => toggleAccountExclusion(account.id)}
+                        onPress={() => {
+                          logUI(uiPath('quick_nav', 'accounts', 'include_toggle', account.id), 'press');
+                          toggleAccountExclusion(account.id);
+                        }}
                       >
                         <Text style={[styles.manageSmallText, excludedAccountIds.includes(account.id) && { color: '#f87171' }]}>
                           {excludedAccountIds.includes(account.id) ? '⊘' : '◉'}
@@ -242,32 +292,42 @@ function QuickNavigation({
 
                       {isOwned ? (
                         <>
-                          <TouchableOpacity style={styles.manageIconButton} onPress={() => {
-                            onClose();
-                            openEditAccount(account);
-                          }}>
+                          <TouchableOpacity
+                            {...uiProps(uiPath('quick_nav', 'accounts', 'edit_button', account.id))}
+                            style={styles.manageIconButton}
+                            onPress={() => {
+                              logUI(uiPath('quick_nav', 'accounts', 'edit_button', account.id), 'press');
+                              onClose();
+                              openEditAccount(account);
+                            }}
+                          >
                             <Text style={styles.manageIconText}>✎</Text>
                           </TouchableOpacity>
-                          <TouchableOpacity style={styles.manageIconButtonDanger} onPress={() => {
-                            if (Platform.OS === 'web') {
-                              if (window.confirm(`Remove ${account.name}? This will delete all transactions, categories, and tags for this account.`)) {
-                                onClose();
-                                void deleteAccount(account);
-                              }
-                            } else {
-                              Alert.alert('Remove account', `Remove ${account.name}?`, [
-                                { text: 'Cancel', style: 'cancel' },
-                                {
-                                  text: 'Remove',
-                                  style: 'destructive',
-                                  onPress: () => {
-                                    onClose();
-                                    void deleteAccount(account);
+                          <TouchableOpacity
+                            {...uiProps(uiPath('quick_nav', 'accounts', 'delete_button', account.id))}
+                            style={styles.manageIconButtonDanger}
+                            onPress={() => {
+                              logUI(uiPath('quick_nav', 'accounts', 'delete_button', account.id), 'press');
+                              if (Platform.OS === 'web') {
+                                if (window.confirm(`Remove ${account.name}? This will delete all transactions, categories, and tags for this account.`)) {
+                                  onClose();
+                                  void deleteAccount(account);
+                                }
+                              } else {
+                                Alert.alert('Remove account', `Remove ${account.name}?`, [
+                                  { text: 'Cancel', style: 'cancel' },
+                                  {
+                                    text: 'Remove',
+                                    style: 'destructive',
+                                    onPress: () => {
+                                      onClose();
+                                      void deleteAccount(account);
+                                    },
                                   },
-                                },
-                              ]);
-                            }
-                          }}>
+                                ]);
+                              }
+                            }}
+                          >
                             <Text style={styles.manageIconText}>✕</Text>
                           </TouchableOpacity>
                         </>
@@ -281,27 +341,43 @@ function QuickNavigation({
             })}
 
             {/* ── Income Categories ── */}
-            <View style={styles.menuSectionHeader}>
-              <TouchableOpacity onPress={() => setMenuIncomeCatExpanded((prev) => !prev)}>
+            <View {...uiProps(uiPath('quick_nav', 'income_cats', 'section_header'))} style={styles.menuSectionHeader}>
+              <TouchableOpacity
+                onPress={() => {
+                  logUI(uiPath('quick_nav', 'income_cats', 'section_header'), 'press');
+                  setMenuIncomeCatExpanded((prev) => !prev);
+                }}
+              >
                 <Text style={[styles.menuSectionTitle, { color: '#4ade80' }]}>Income {menuIncomeCatExpanded ? '▾' : '▸'}</Text>
               </TouchableOpacity>
               <View style={{ flexDirection: 'row', gap: 6 }}>
                 {menuIncomeCatExpanded && (
-                  <TouchableOpacity style={[styles.menuIconAction, menuIncomeCatEditMode && { backgroundColor: '#2C4669' }]} onPress={() => setMenuIncomeCatEditMode((p) => !p)}>
+                  <TouchableOpacity
+                    style={[styles.menuIconAction, menuIncomeCatEditMode && { backgroundColor: '#2C4669' }]}
+                    onPress={() => {
+                      logUI(uiPath('quick_nav', 'income_cats', 'edit_mode_toggle'), 'press');
+                      setMenuIncomeCatEditMode((p) => !p);
+                    }}
+                  >
                     <Text style={styles.manageIconText}>✎</Text>
                   </TouchableOpacity>
                 )}
                 {(menuIncomeCatExpanded || !categories.some((c) => c.type === 'income' && c.name !== 'Transfer')) && (
-                  <TouchableOpacity style={styles.menuIconAction} onPress={() => {
-                    onClose();
-                    setEditingCategoryId(null);
-                    setCategoryName('');
-                    setCategoryType('income');
-                    setCategoryColor(null);
-                    setCategoryIcon(null);
-                    setCategoryTagIds([]);
-                    setShowCategoryModal(true);
-                  }}>
+                  <TouchableOpacity
+                    {...uiProps(uiPath('quick_nav', 'income_cats', 'add_button'))}
+                    style={styles.menuIconAction}
+                    onPress={() => {
+                      logUI(uiPath('quick_nav', 'income_cats', 'add_button'), 'press');
+                      onClose();
+                      setEditingCategoryId(null);
+                      setCategoryName('');
+                      setCategoryType('income');
+                      setCategoryColor(null);
+                      setCategoryIcon(null);
+                      setCategoryTagIds([]);
+                      setShowCategoryModal(true);
+                    }}
+                  >
                     <Text style={styles.menuIconActionText}>＋</Text>
                   </TouchableOpacity>
                 )}
@@ -313,8 +389,20 @@ function QuickNavigation({
               const isMine = category.user_id === user?.id;
               const isDeleting = deletingCategoryIds.has(category.id);
               return (
-                <View key={category.id} style={[styles.manageRow, isDeleting && { opacity: 0.4 }]} pointerEvents={isDeleting ? 'none' : 'auto'}>
-                  <TouchableOpacity style={styles.managePrimary} onPress={() => { onClose(); openEntryModal(category.type, category.id); }}>
+                <View
+                  {...uiProps(uiPath('quick_nav', 'income_cats', 'row', category.id))}
+                  key={category.id}
+                  style={[styles.manageRow, isDeleting && { opacity: 0.4 }]}
+                  pointerEvents={isDeleting ? 'none' : 'auto'}
+                >
+                  <TouchableOpacity
+                    style={styles.managePrimary}
+                    onPress={() => {
+                      logUI(uiPath('quick_nav', 'income_cats', 'row', category.id), 'press');
+                      onClose();
+                      openEntryModal(category.type, category.id);
+                    }}
+                  >
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                       {category.icon ? <Icon name={category.icon as any} size={16} color={catColor} /> : null}
                       <Text style={[styles.manageTitle, { color: catColor }]}>{category.name}</Text>
@@ -323,34 +411,48 @@ function QuickNavigation({
                   </TouchableOpacity>
                   {menuIncomeCatEditMode && (
                     <>
-                      <TouchableOpacity style={styles.manageIconButton} onPress={() => void toggleCategoryHidden(category.id)}>
+                      <TouchableOpacity
+                        style={styles.manageIconButton}
+                        onPress={() => {
+                          logUI(uiPath('quick_nav', 'income_cats', 'visibility_toggle', category.id), 'press');
+                          void toggleCategoryHidden(category.id);
+                        }}
+                      >
                         <Icon name={hiddenCategoryIds.has(category.id) ? 'EyeOff' : 'Eye'} size={14} color="#94a3b8" />
                       </TouchableOpacity>
                       {isMine && (
-                        <TouchableOpacity style={styles.manageIconButton} onPress={() => {
-                          onClose();
-                          setEditingCategoryId(category.id);
-                          setCategoryName(category.name);
-                          setCategoryType(category.type);
-                          setCategoryColor(category.color ?? null);
-                          setCategoryIcon(category.icon ?? null);
-                          setCategoryTagIds((category.tag_ids ?? []) as string[]);
-                          setShowCategoryModal(true);
-                        }}>
+                        <TouchableOpacity
+                          style={styles.manageIconButton}
+                          onPress={() => {
+                            logUI(uiPath('quick_nav', 'income_cats', 'edit_button', category.id), 'press');
+                            onClose();
+                            setEditingCategoryId(category.id);
+                            setCategoryName(category.name);
+                            setCategoryType(category.type);
+                            setCategoryColor(category.color ?? null);
+                            setCategoryIcon(category.icon ?? null);
+                            setCategoryTagIds((category.tag_ids ?? []) as string[]);
+                            setShowCategoryModal(true);
+                          }}
+                        >
                           <Text style={styles.manageIconText}>✎</Text>
                         </TouchableOpacity>
                       )}
                       {isMine && (
-                        <TouchableOpacity style={styles.manageIconButtonDanger} onPress={() => {
-                          if (Platform.OS === 'web') {
-                            if (window.confirm(`Remove ${category.name}?`)) { handleDeleteCategory(category.id); }
-                          } else {
-                            Alert.alert('Remove category', `Remove ${category.name}?`, [
-                              { text: 'Cancel', style: 'cancel' },
-                              { text: 'Remove', style: 'destructive', onPress: () => { handleDeleteCategory(category.id); } },
-                            ]);
-                          }
-                        }}>
+                        <TouchableOpacity
+                          style={styles.manageIconButtonDanger}
+                          onPress={() => {
+                            logUI(uiPath('quick_nav', 'income_cats', 'delete_button', category.id), 'press');
+                            if (Platform.OS === 'web') {
+                              if (window.confirm(`Remove ${category.name}?`)) { handleDeleteCategory(category.id); }
+                            } else {
+                              Alert.alert('Remove category', `Remove ${category.name}?`, [
+                                { text: 'Cancel', style: 'cancel' },
+                                { text: 'Remove', style: 'destructive', onPress: () => { handleDeleteCategory(category.id); } },
+                              ]);
+                            }
+                          }}
+                        >
                           <Text style={styles.manageIconText}>✕</Text>
                         </TouchableOpacity>
                       )}
@@ -361,27 +463,43 @@ function QuickNavigation({
             })}
 
             {/* ── Expense Categories ── */}
-            <View style={styles.menuSectionHeader}>
-              <TouchableOpacity onPress={() => setMenuExpenseCatExpanded((prev) => !prev)}>
+            <View {...uiProps(uiPath('quick_nav', 'expense_cats', 'section_header'))} style={styles.menuSectionHeader}>
+              <TouchableOpacity
+                onPress={() => {
+                  logUI(uiPath('quick_nav', 'expense_cats', 'section_header'), 'press');
+                  setMenuExpenseCatExpanded((prev) => !prev);
+                }}
+              >
                 <Text style={[styles.menuSectionTitle, { color: '#f87171' }]}>Expense {menuExpenseCatExpanded ? '▾' : '▸'}</Text>
               </TouchableOpacity>
               <View style={{ flexDirection: 'row', gap: 6 }}>
                 {menuExpenseCatExpanded && (
-                  <TouchableOpacity style={[styles.menuIconAction, menuExpenseCatEditMode && { backgroundColor: '#2C4669' }]} onPress={() => setMenuExpenseCatEditMode((p) => !p)}>
+                  <TouchableOpacity
+                    style={[styles.menuIconAction, menuExpenseCatEditMode && { backgroundColor: '#2C4669' }]}
+                    onPress={() => {
+                      logUI(uiPath('quick_nav', 'expense_cats', 'edit_mode_toggle'), 'press');
+                      setMenuExpenseCatEditMode((p) => !p);
+                    }}
+                  >
                     <Text style={styles.manageIconText}>✎</Text>
                   </TouchableOpacity>
                 )}
                 {(menuExpenseCatExpanded || !categories.some((c) => c.type === 'expense' && c.name !== 'Transfer')) && (
-                  <TouchableOpacity style={styles.menuIconAction} onPress={() => {
-                    onClose();
-                    setEditingCategoryId(null);
-                    setCategoryName('');
-                    setCategoryType('expense');
-                    setCategoryColor(null);
-                    setCategoryIcon(null);
-                    setCategoryTagIds([]);
-                    setShowCategoryModal(true);
-                  }}>
+                  <TouchableOpacity
+                    {...uiProps(uiPath('quick_nav', 'expense_cats', 'add_button'))}
+                    style={styles.menuIconAction}
+                    onPress={() => {
+                      logUI(uiPath('quick_nav', 'expense_cats', 'add_button'), 'press');
+                      onClose();
+                      setEditingCategoryId(null);
+                      setCategoryName('');
+                      setCategoryType('expense');
+                      setCategoryColor(null);
+                      setCategoryIcon(null);
+                      setCategoryTagIds([]);
+                      setShowCategoryModal(true);
+                    }}
+                  >
                     <Text style={styles.menuIconActionText}>＋</Text>
                   </TouchableOpacity>
                 )}
@@ -393,8 +511,20 @@ function QuickNavigation({
               const isMine = category.user_id === user?.id;
               const isDeleting = deletingCategoryIds.has(category.id);
               return (
-                <View key={category.id} style={[styles.manageRow, isDeleting && { opacity: 0.4 }]} pointerEvents={isDeleting ? 'none' : 'auto'}>
-                  <TouchableOpacity style={styles.managePrimary} onPress={() => { onClose(); openEntryModal(category.type, category.id); }}>
+                <View
+                  {...uiProps(uiPath('quick_nav', 'expense_cats', 'row', category.id))}
+                  key={category.id}
+                  style={[styles.manageRow, isDeleting && { opacity: 0.4 }]}
+                  pointerEvents={isDeleting ? 'none' : 'auto'}
+                >
+                  <TouchableOpacity
+                    style={styles.managePrimary}
+                    onPress={() => {
+                      logUI(uiPath('quick_nav', 'expense_cats', 'row', category.id), 'press');
+                      onClose();
+                      openEntryModal(category.type, category.id);
+                    }}
+                  >
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                       {category.icon ? <Icon name={category.icon as any} size={16} color={catColor} /> : null}
                       <Text style={[styles.manageTitle, { color: catColor }]}>{category.name}</Text>
@@ -403,34 +533,48 @@ function QuickNavigation({
                   </TouchableOpacity>
                   {menuExpenseCatEditMode && (
                     <>
-                      <TouchableOpacity style={styles.manageIconButton} onPress={() => void toggleCategoryHidden(category.id)}>
+                      <TouchableOpacity
+                        style={styles.manageIconButton}
+                        onPress={() => {
+                          logUI(uiPath('quick_nav', 'expense_cats', 'visibility_toggle', category.id), 'press');
+                          void toggleCategoryHidden(category.id);
+                        }}
+                      >
                         <Icon name={hiddenCategoryIds.has(category.id) ? 'EyeOff' : 'Eye'} size={14} color="#94a3b8" />
                       </TouchableOpacity>
                       {isMine && (
-                        <TouchableOpacity style={styles.manageIconButton} onPress={() => {
-                          onClose();
-                          setEditingCategoryId(category.id);
-                          setCategoryName(category.name);
-                          setCategoryType(category.type);
-                          setCategoryColor(category.color ?? null);
-                          setCategoryIcon(category.icon ?? null);
-                          setCategoryTagIds((category.tag_ids ?? []) as string[]);
-                          setShowCategoryModal(true);
-                        }}>
+                        <TouchableOpacity
+                          style={styles.manageIconButton}
+                          onPress={() => {
+                            logUI(uiPath('quick_nav', 'expense_cats', 'edit_button', category.id), 'press');
+                            onClose();
+                            setEditingCategoryId(category.id);
+                            setCategoryName(category.name);
+                            setCategoryType(category.type);
+                            setCategoryColor(category.color ?? null);
+                            setCategoryIcon(category.icon ?? null);
+                            setCategoryTagIds((category.tag_ids ?? []) as string[]);
+                            setShowCategoryModal(true);
+                          }}
+                        >
                           <Text style={styles.manageIconText}>✎</Text>
                         </TouchableOpacity>
                       )}
                       {isMine && (
-                        <TouchableOpacity style={styles.manageIconButtonDanger} onPress={() => {
-                          if (Platform.OS === 'web') {
-                            if (window.confirm(`Remove ${category.name}?`)) { handleDeleteCategory(category.id); }
-                          } else {
-                            Alert.alert('Remove category', `Remove ${category.name}?`, [
-                              { text: 'Cancel', style: 'cancel' },
-                              { text: 'Remove', style: 'destructive', onPress: () => { handleDeleteCategory(category.id); } },
-                            ]);
-                          }
-                        }}>
+                        <TouchableOpacity
+                          style={styles.manageIconButtonDanger}
+                          onPress={() => {
+                            logUI(uiPath('quick_nav', 'expense_cats', 'delete_button', category.id), 'press');
+                            if (Platform.OS === 'web') {
+                              if (window.confirm(`Remove ${category.name}?`)) { handleDeleteCategory(category.id); }
+                            } else {
+                              Alert.alert('Remove category', `Remove ${category.name}?`, [
+                                { text: 'Cancel', style: 'cancel' },
+                                { text: 'Remove', style: 'destructive', onPress: () => { handleDeleteCategory(category.id); } },
+                              ]);
+                            }
+                          }}
+                        >
                           <Text style={styles.manageIconText}>✕</Text>
                         </TouchableOpacity>
                       )}
@@ -441,26 +585,49 @@ function QuickNavigation({
             })}
 
             {/* ── Transfers ── */}
-            <TouchableOpacity style={styles.menuSectionHeader} onPress={onFilterTransfers}>
+            <TouchableOpacity
+              {...uiProps(uiPath('quick_nav', 'nav', 'transfers_item'))}
+              style={styles.menuSectionHeader}
+              onPress={() => {
+                logUI(uiPath('quick_nav', 'nav', 'transfers_item'), 'press');
+                onFilterTransfers();
+              }}
+            >
               <Text style={[styles.menuSectionTitle, { color: '#a855f7' }]}>↔ Transfers</Text>
             </TouchableOpacity>
 
             {/* ── Tags ── */}
-            <View style={styles.menuSectionHeader}>
-              <TouchableOpacity onPress={() => setMenuTagsExpanded((prev) => !prev)}>
+            <View {...uiProps(uiPath('quick_nav', 'tags', 'section_header'))} style={styles.menuSectionHeader}>
+              <TouchableOpacity
+                onPress={() => {
+                  logUI(uiPath('quick_nav', 'tags', 'section_header'), 'press');
+                  setMenuTagsExpanded((prev) => !prev);
+                }}
+              >
                 <Text style={styles.menuSectionTitle}>Tags {menuTagsExpanded ? '▾' : '▸'}</Text>
               </TouchableOpacity>
               <View style={{ flexDirection: 'row', gap: 6 }}>
                 {menuTagsExpanded && (
-                  <TouchableOpacity style={[styles.menuIconAction, menuTagsEditMode && { backgroundColor: '#2C4669' }]} onPress={() => setMenuTagsEditMode((p) => !p)}>
+                  <TouchableOpacity
+                    style={[styles.menuIconAction, menuTagsEditMode && { backgroundColor: '#2C4669' }]}
+                    onPress={() => {
+                      logUI(uiPath('quick_nav', 'tags', 'edit_mode_toggle'), 'press');
+                      setMenuTagsEditMode((p) => !p);
+                    }}
+                  >
                     <Text style={styles.manageIconText}>✎</Text>
                   </TouchableOpacity>
                 )}
                 {(menuTagsExpanded || selectedTags.length === 0) && (
-                  <TouchableOpacity style={styles.menuIconAction} onPress={() => {
-                    onClose();
-                    openCreateTag();
-                  }}>
+                  <TouchableOpacity
+                    {...uiProps(uiPath('quick_nav', 'tags', 'add_button'))}
+                    style={styles.menuIconAction}
+                    onPress={() => {
+                      logUI(uiPath('quick_nav', 'tags', 'add_button'), 'press');
+                      onClose();
+                      openCreateTag();
+                    }}
+                  >
                     <Text style={styles.menuIconActionText}>＋</Text>
                   </TouchableOpacity>
                 )}
@@ -470,8 +637,19 @@ function QuickNavigation({
               const isActive = selectedTagFilter === tag.id;
               const tagColor = tag.color ?? '#8FA8C9';
               return (
-              <View key={tag.id} style={[styles.manageRow, isActive && { backgroundColor: '#0D2137', borderRadius: 6 }]}>
-                <TouchableOpacity style={styles.managePrimary} onPress={() => { onFilterTag(tag.id); onClose(); }}>
+              <View
+                {...uiProps(uiPath('quick_nav', 'tags', 'row', tag.id))}
+                key={tag.id}
+                style={[styles.manageRow, isActive && { backgroundColor: '#0D2137', borderRadius: 6 }]}
+              >
+                <TouchableOpacity
+                  style={styles.managePrimary}
+                  onPress={() => {
+                    logUI(uiPath('quick_nav', 'tags', 'row', tag.id), 'press');
+                    onFilterTag(tag.id);
+                    onClose();
+                  }}
+                >
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                     {tag.icon ? <Icon name={tag.icon as any} size={16} color={tagColor} /> : null}
                     <Text style={[styles.manageTitle, { color: isActive ? tagColor : (tag.color ?? undefined) }]}>#{tag.name}</Text>
@@ -480,22 +658,30 @@ function QuickNavigation({
                 </TouchableOpacity>
                 {menuTagsEditMode && (
                   <>
-                    <TouchableOpacity style={styles.manageIconButton} onPress={() => {
-                      onClose();
-                      openEditTag(tag);
-                    }}>
+                    <TouchableOpacity
+                      style={styles.manageIconButton}
+                      onPress={() => {
+                        logUI(uiPath('quick_nav', 'tags', 'edit_button', tag.id), 'press');
+                        onClose();
+                        openEditTag(tag);
+                      }}
+                    >
                       <Text style={styles.manageIconText}>✎</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity style={styles.manageIconButtonDanger} onPress={() => {
-                      if (Platform.OS === 'web') {
-                        if (window.confirm(`Remove #${tag.name}?`)) { void deleteTag(tag.id); }
-                      } else {
-                        Alert.alert('Remove tag', `Remove #${tag.name}?`, [
-                          { text: 'Cancel', style: 'cancel' },
-                          { text: 'Remove', style: 'destructive', onPress: () => { void deleteTag(tag.id); } },
-                        ]);
-                      }
-                    }}>
+                    <TouchableOpacity
+                      style={styles.manageIconButtonDanger}
+                      onPress={() => {
+                        logUI(uiPath('quick_nav', 'tags', 'delete_button', tag.id), 'press');
+                        if (Platform.OS === 'web') {
+                          if (window.confirm(`Remove #${tag.name}?`)) { void deleteTag(tag.id); }
+                        } else {
+                          Alert.alert('Remove tag', `Remove #${tag.name}?`, [
+                            { text: 'Cancel', style: 'cancel' },
+                            { text: 'Remove', style: 'destructive', onPress: () => { void deleteTag(tag.id); } },
+                          ]);
+                        }
+                      }}
+                    >
                       <Text style={styles.manageIconText}>✕</Text>
                     </TouchableOpacity>
                   </>
@@ -505,7 +691,14 @@ function QuickNavigation({
             })}
 
             {/* ── Interval Visibility ── */}
-            <TouchableOpacity style={styles.menuItem} onPress={() => setShowIntervalVisibility((p) => !p)}>
+            <TouchableOpacity
+              {...uiProps(uiPath('quick_nav', 'interval_visibility', 'toggle'))}
+              style={styles.menuItem}
+              onPress={() => {
+                logUI(uiPath('quick_nav', 'interval_visibility', 'toggle'), 'press');
+                setShowIntervalVisibility((p) => !p);
+              }}
+            >
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                 <Text style={styles.menuItemText}>Visible Intervals</Text>
                 <Text style={{ color: '#64748B', fontSize: 11, fontWeight: '600' }}>{showIntervalVisibility ? '▾' : '▸'}</Text>
@@ -513,9 +706,13 @@ function QuickNavigation({
             </TouchableOpacity>
             {showIntervalVisibility && (['day', 'week', 'month', 'year', 'all', 'custom'] as IntervalKey[]).map((key) => (
               <TouchableOpacity
+                {...uiProps(uiPath('quick_nav', 'interval_visibility', 'key', key))}
                 key={key}
                 style={[styles.menuItem, { paddingVertical: 6, paddingLeft: 20 }]}
-                onPress={() => setIntervalVisibility({ ...intervalVisibility, [key]: !intervalVisibility[key] })}
+                onPress={() => {
+                  logUI(uiPath('quick_nav', 'interval_visibility', 'key', key), 'press');
+                  setIntervalVisibility({ ...intervalVisibility, [key]: !intervalVisibility[key] });
+                }}
               >
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flex: 1 }}>
                   <Text style={styles.menuItemText}>{key.toUpperCase()}</Text>
@@ -528,13 +725,36 @@ function QuickNavigation({
 
 
             {/* ── Navigation links ── */}
-            <TouchableOpacity style={styles.menuItem} onPress={() => {
-              onClose();
-              setShowFriendsModal(true);
-            }}>
+            <TouchableOpacity
+              {...uiProps(uiPath('quick_nav', 'nav', 'pools_item'))}
+              style={styles.menuItem}
+              onPress={() => {
+                logUI(uiPath('quick_nav', 'nav', 'pools_item'), 'press');
+                onClose();
+                navigation.navigate('Pools');
+              }}
+            >
+              <Text style={styles.menuItemText}>Pools</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              {...uiProps(uiPath('quick_nav', 'nav', 'friends_item'))}
+              style={styles.menuItem}
+              onPress={() => {
+                logUI(uiPath('quick_nav', 'nav', 'friends_item'), 'press');
+                onClose();
+                setShowFriendsModal(true);
+              }}
+            >
               <Text style={styles.menuItemText}>Friends</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.menuItem} onPress={() => setShowExperimental((p) => !p)}>
+            <TouchableOpacity
+              {...uiProps(uiPath('quick_nav', 'nav', 'experimental_toggle'))}
+              style={styles.menuItem}
+              onPress={() => {
+                logUI(uiPath('quick_nav', 'nav', 'experimental_toggle'), 'press');
+                setShowExperimental((p) => !p);
+              }}
+            >
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                 <Text style={styles.menuItemText}>Experimental</Text>
                 <Text style={{ color: '#f59e0b', fontSize: 11, fontWeight: '600' }}>⚗ {showExperimental ? '▾' : '▸'}</Text>
@@ -542,10 +762,15 @@ function QuickNavigation({
             </TouchableOpacity>
             {showExperimental && (
               <>
-                <TouchableOpacity style={[styles.menuItem, { paddingLeft: 20 }]} onPress={() => {
-                  onClose();
-                  navigation.navigate('Lending');
-                }}>
+                <TouchableOpacity
+                  {...uiProps(uiPath('quick_nav', 'nav', 'lending_item'))}
+                  style={[styles.menuItem, { paddingLeft: 20 }]}
+                  onPress={() => {
+                    logUI(uiPath('quick_nav', 'nav', 'lending_item'), 'press');
+                    onClose();
+                    navigation.navigate('Lending');
+                  }}
+                >
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                     <Icon name="Banknote" size={18} color="#EAF2FF" />
                     <Text style={styles.menuItemText}>Lending</Text>
@@ -556,43 +781,71 @@ function QuickNavigation({
                     )}
                   </View>
                 </TouchableOpacity>
-                <TouchableOpacity style={[styles.menuItem, { paddingLeft: 20 }]} onPress={() => {
-                  onClose();
-                  navigation.navigate('Settlements');
-                }}>
+                <TouchableOpacity
+                  {...uiProps(uiPath('quick_nav', 'nav', 'settlements_item'))}
+                  style={[styles.menuItem, { paddingLeft: 20 }]}
+                  onPress={() => {
+                    logUI(uiPath('quick_nav', 'nav', 'settlements_item'), 'press');
+                    onClose();
+                    navigation.navigate('Settlements');
+                  }}
+                >
                   <Text style={styles.menuItemText}>Settlements</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={[styles.menuItem, { paddingLeft: 20 }]} onPress={() => {
-                  onClose();
-                  navigation.navigate('Pools');
-                }}>
-                  <Text style={styles.menuItemText}>Pools</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={[styles.menuItem, { paddingLeft: 20 }]} onPress={() => {
-                  onClose();
-                  void openInvitationsModal();
-                }}>
+                <TouchableOpacity
+                  {...uiProps(uiPath('quick_nav', 'nav', 'invitations_item'))}
+                  style={[styles.menuItem, { paddingLeft: 20 }]}
+                  onPress={() => {
+                    logUI(uiPath('quick_nav', 'nav', 'invitations_item'), 'press');
+                    onClose();
+                    void openInvitationsModal();
+                  }}
+                >
                   <Text style={styles.menuItemText}>Invitations</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  {...uiProps(uiPath('quick_nav', 'nav', 'changelog_item'))}
+                  style={[styles.menuItem, { paddingLeft: 20 }]}
+                  onPress={() => {
+                    logUI(uiPath('quick_nav', 'nav', 'changelog_item'), 'press');
+                    setShowChangelog(true);
+                  }}
+                >
+                  <Text style={styles.menuItemText}>Changelogs</Text>
                 </TouchableOpacity>
               </>
             )}
-            <TouchableOpacity style={styles.menuItem} onPress={() => {
-              onClose();
-              if (Platform.OS === 'web') {
-                (window as any).location.reload();
-              } else {
-                void reloadDashboard();
-              }
-            }}>
+            <TouchableOpacity
+              {...uiProps(uiPath('quick_nav', 'nav', 'reload_button'))}
+              style={styles.menuItem}
+              onPress={() => {
+                logUI(uiPath('quick_nav', 'nav', 'reload_button'), 'press');
+                onClose();
+                if (Platform.OS === 'web') {
+                  (window as any).location.reload();
+                } else {
+                  void reloadDashboard();
+                }
+              }}
+            >
               <Text style={styles.menuItemText}>Reload app</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.menuDanger} onPress={signOut}>
+            <TouchableOpacity
+              {...uiProps(uiPath('quick_nav', 'nav', 'signout_button'))}
+              style={styles.menuDanger}
+              onPress={() => {
+                logUI(uiPath('quick_nav', 'nav', 'signout_button'), 'press');
+                signOut();
+              }}
+            >
               <Text style={styles.menuDangerText}>Sign out</Text>
             </TouchableOpacity>
           </ScrollView>
         </View>
       </View>
     </Modal>
+    <ChangelogModal visible={showChangelog} onClose={() => setShowChangelog(false)} />
+    </>
   );
 }
 

@@ -12,6 +12,7 @@ import { useAuth } from '../context/AuthContext';
 import { useDebts } from '../hooks/useDebts';
 import Icon from '../components/Icon';
 import type { AppDebt } from '../types/pools';
+import { uiPath, uiProps, logUI } from '../lib/devtools';
 
 function DebtRow({ debt, userId, onConfirm, onMarkPaid }: {
   debt: AppDebt;
@@ -31,8 +32,8 @@ function DebtRow({ debt, userId, onConfirm, onMarkPaid }: {
     '#f59e0b';
 
   return (
-    <View style={s.debtRow}>
-      <View style={s.debtIcon}>
+    <View style={s.debtRow} {...uiProps(uiPath('lending', 'debt_row', 'container', debt.id))}>
+      <View style={s.debtIcon} {...uiProps(uiPath('lending', 'debt_row', 'icon', debt.id))}>
         <Icon
           name={iOwe ? 'ArrowUpRight' : 'ArrowDownLeft'}
           size={18}
@@ -40,11 +41,14 @@ function DebtRow({ debt, userId, onConfirm, onMarkPaid }: {
         />
       </View>
       <View style={{ flex: 1 }}>
-        <Text style={s.debtText}>
+        <Text style={s.debtText} {...uiProps(uiPath('lending', 'debt_row', 'text', debt.id))}>
           {iOwe ? `You owe ${shortId}...` : `${shortId}... owes you`}
         </Text>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3 }}>
-          <View style={[s.statusBadge, { backgroundColor: statusColor + '22', borderColor: statusColor }]}>
+          <View
+            style={[s.statusBadge, { backgroundColor: statusColor + '22', borderColor: statusColor }]}
+            {...uiProps(uiPath('lending', 'debt_row', 'status_badge', debt.id))}
+          >
             <Text style={[s.statusText, { color: statusColor }]}>{debt.status}</Text>
           </View>
           {debt.pool_id && (
@@ -54,17 +58,34 @@ function DebtRow({ debt, userId, onConfirm, onMarkPaid }: {
           {otherConfirmed && <Text style={s.debtMeta}>they confirmed</Text>}
         </View>
       </View>
-      <Text style={[s.debtAmount, { color: iOwe ? '#f87171' : '#4ade80' }]}>
+      <Text
+        style={[s.debtAmount, { color: iOwe ? '#f87171' : '#4ade80' }]}
+        {...uiProps(uiPath('lending', 'debt_row', 'amount', debt.id))}
+      >
         {iOwe ? '-' : '+'}{Number(debt.amount).toFixed(2)}
       </Text>
       <View style={s.debtActions}>
         {debt.status === 'pending' && !myConfirmed && (
-          <TouchableOpacity style={s.confirmBtn} onPress={() => onConfirm(debt.id)}>
+          <TouchableOpacity
+            style={s.confirmBtn}
+            onPress={() => {
+              logUI(uiPath('lending', 'debt_row', 'confirm_button', debt.id), 'press');
+              onConfirm(debt.id);
+            }}
+            {...uiProps(uiPath('lending', 'debt_row', 'confirm_button', debt.id))}
+          >
             <Icon name="Check" size={14} color="#060A14" />
           </TouchableOpacity>
         )}
         {debt.status === 'confirmed' && (
-          <TouchableOpacity style={s.paidBtn} onPress={() => onMarkPaid(debt.id)}>
+          <TouchableOpacity
+            style={s.paidBtn}
+            onPress={() => {
+              logUI(uiPath('lending', 'debt_row', 'paid_button', debt.id), 'press');
+              onMarkPaid(debt.id);
+            }}
+            {...uiProps(uiPath('lending', 'debt_row', 'paid_button', debt.id))}
+          >
             <Text style={s.paidBtnText}>Paid</Text>
           </TouchableOpacity>
         )}
@@ -80,6 +101,10 @@ export default function LendingScreen({ navigation }: { navigation: any }) {
   useEffect(() => {
     void getUserDebts();
   }, [getUserDebts]);
+
+  useEffect(() => {
+    logUI(uiPath('lending', 'scroll_view', 'root'), 'mounted');
+  }, []);
 
   const pendingDebts = useMemo(() => debts.filter((d) => d.status === 'pending'), [debts]);
   const confirmedDebts = useMemo(() => debts.filter((d) => d.status === 'confirmed'), [debts]);
@@ -100,32 +125,47 @@ export default function LendingScreen({ navigation }: { navigation: any }) {
 
   return (
     <View style={s.container}>
-      <View style={s.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={s.backButton}>
+      <View style={s.header} {...uiProps(uiPath('lending', 'header', 'container'))}>
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          style={s.backButton}
+          {...uiProps(uiPath('lending', 'header', 'back_button'))}
+        >
           <Icon name="ArrowLeft" size={20} color="#EAF3FF" />
         </TouchableOpacity>
-        <Text style={s.headerTitle}>Lending</Text>
-        <TouchableOpacity onPress={() => void getUserDebts()} style={s.backButton}>
+        <Text style={s.headerTitle} {...uiProps(uiPath('lending', 'header', 'title'))}>Lending</Text>
+        <TouchableOpacity
+          onPress={() => void getUserDebts()}
+          style={s.backButton}
+          {...uiProps(uiPath('lending', 'header', 'refresh_button'))}
+        >
           <Icon name="RefreshCw" size={18} color="#64748B" />
         </TouchableOpacity>
       </View>
 
       {/* Net balance */}
-      <View style={s.balanceCard}>
-        <Text style={s.balanceLabel}>Net balance</Text>
-        <Text style={[s.balanceValue, { color: netBalance >= 0 ? '#4ade80' : '#f87171' }]}>
+      <View style={s.balanceCard} {...uiProps(uiPath('lending', 'balance_card', 'container'))}>
+        <Text style={s.balanceLabel} {...uiProps(uiPath('lending', 'balance_card', 'label'))}>Net balance</Text>
+        <Text
+          style={[s.balanceValue, { color: netBalance >= 0 ? '#4ade80' : '#f87171' }]}
+          {...uiProps(uiPath('lending', 'balance_card', 'value'))}
+        >
           {netBalance >= 0 ? '+' : ''}{netBalance.toFixed(2)}
         </Text>
-        <Text style={s.balanceHint}>
+        <Text style={s.balanceHint} {...uiProps(uiPath('lending', 'balance_card', 'hint'))}>
           {netBalance > 0 ? 'Others owe you' : netBalance < 0 ? 'You owe others' : 'All settled'}
         </Text>
       </View>
 
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 40 }}>
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{ paddingBottom: 40 }}
+        {...uiProps(uiPath('lending', 'scroll_view', 'root'))}
+      >
         {loading && <ActivityIndicator color="#53E3A6" style={{ marginTop: 24 }} />}
 
         {!loading && debts.length === 0 && (
-          <View style={s.emptyContainer}>
+          <View style={s.emptyContainer} {...uiProps(uiPath('lending', 'empty_state', 'container'))}>
             <Icon name="Handshake" size={40} color="#1F3A59" />
             <Text style={s.emptyText}>No debts</Text>
             <Text style={s.emptyHint}>Settle a pool to create debts</Text>
@@ -134,7 +174,7 @@ export default function LendingScreen({ navigation }: { navigation: any }) {
 
         {pendingDebts.length > 0 && (
           <>
-            <Text style={s.sectionTitle}>Pending ({pendingDebts.length})</Text>
+            <Text style={s.sectionTitle} {...uiProps(uiPath('lending', 'section_title', 'pending'))}>Pending ({pendingDebts.length})</Text>
             {pendingDebts.map((d) => (
               <DebtRow key={d.id} debt={d} userId={user.id} onConfirm={confirmDebt} onMarkPaid={markPaid} />
             ))}
@@ -143,7 +183,7 @@ export default function LendingScreen({ navigation }: { navigation: any }) {
 
         {confirmedDebts.length > 0 && (
           <>
-            <Text style={s.sectionTitle}>Confirmed ({confirmedDebts.length})</Text>
+            <Text style={s.sectionTitle} {...uiProps(uiPath('lending', 'section_title', 'confirmed'))}>Confirmed ({confirmedDebts.length})</Text>
             {confirmedDebts.map((d) => (
               <DebtRow key={d.id} debt={d} userId={user.id} onConfirm={confirmDebt} onMarkPaid={markPaid} />
             ))}
@@ -152,7 +192,7 @@ export default function LendingScreen({ navigation }: { navigation: any }) {
 
         {paidDebts.length > 0 && (
           <>
-            <Text style={s.sectionTitle}>Paid ({paidDebts.length})</Text>
+            <Text style={s.sectionTitle} {...uiProps(uiPath('lending', 'section_title', 'paid'))}>Paid ({paidDebts.length})</Text>
             {paidDebts.map((d) => (
               <DebtRow key={d.id} debt={d} userId={user.id} onConfirm={confirmDebt} onMarkPaid={markPaid} />
             ))}

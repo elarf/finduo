@@ -1,5 +1,6 @@
 import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { logUI, uiPath, uiProps } from '../../lib/devtools';
 import Icon from '../Icon';
 
 interface Props {
@@ -9,12 +10,26 @@ interface Props {
 
 export function PoolActions({ onAddExpense, onAddMember }: Props) {
   return (
-    <View style={s.row}>
-      <TouchableOpacity style={s.primary} onPress={onAddExpense}>
+    <View style={s.row} {...uiProps(uiPath('pool', 'actions', 'container'))}>
+      <TouchableOpacity
+        style={s.primary}
+        onPress={() => {
+          logUI(uiPath('pool', 'actions', 'add_expense_button'), 'press');
+          onAddExpense();
+        }}
+        {...uiProps(uiPath('pool', 'actions', 'add_expense_button'))}
+      >
         <Icon name="Plus" size={16} color="#060A14" />
         <Text style={s.primaryText}>Add expense</Text>
       </TouchableOpacity>
-      <TouchableOpacity style={[s.primary, s.secondary]} onPress={onAddMember}>
+      <TouchableOpacity
+        style={[s.primary, s.secondary]}
+        onPress={() => {
+          logUI(uiPath('pool', 'actions', 'add_member_button'), 'press');
+          onAddMember();
+        }}
+        {...uiProps(uiPath('pool', 'actions', 'add_member_button'))}
+      >
         <Icon name="UserPlus" size={16} color="#EAF3FF" />
         <Text style={[s.primaryText, { color: '#EAF3FF' }]}>Add member</Text>
       </TouchableOpacity>

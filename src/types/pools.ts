@@ -24,6 +24,8 @@ export type PoolParticipant = {
   external_name: string | null;
   /** Denormalized display name for UI (works for both types) */
   display_name: string | null;
+  /** Enriched client-side from user_profiles; null for external members */
+  avatar_url?: string | null;
   created_at: string;
 };
 
@@ -42,7 +44,10 @@ export type PoolTransaction = {
 
 /**
  * In-memory settlement result — not persisted until the user explicitly commits.
- * fromParticipantId / toParticipantId are auth user UUIDs (resolved from participants).
+ *
+ * kind='debt'  → write to the debts table (both parties are auth users)
+ * kind='entry' → at least one party is external; auth user should record as a
+ *                personal transaction entry instead of a debt record.
  */
 export type PreTransaction = {
   fromParticipantId: string;
@@ -51,8 +56,20 @@ export type PreTransaction = {
   metadata: {
     reason: 'settlement';
     sourcePoolId: string;
+    kind: 'debt' | 'entry';
+    /** Only present when kind='entry'. 'income' = auth user is owed; 'expense' = auth user owes. */
+    entryType?: 'income' | 'expense';
   };
 };
+
+/**
+ * Result returned from settlePoolDebts — drives the UI after confirmation.
+ */
+export type SettleResult =
+  | { kind: 'settled'; debtCount: number }
+  | { kind: 'balanced' }
+  | { kind: 'entry'; amount: number; entryType: 'income' | 'expense' }
+  | { kind: 'error' };
 
 export type DebtStatus = 'pending' | 'confirmed' | 'paid';
 

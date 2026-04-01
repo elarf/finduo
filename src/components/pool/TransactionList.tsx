@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { logUI, uiPath, uiProps } from '../../lib/devtools';
 import Icon from '../Icon';
 import type { PoolMember, PoolTransaction } from '../../types/pools';
 
@@ -30,13 +31,23 @@ export function TransactionList({
   onEdit,
   onDelete,
 }: Props) {
+  useEffect(() => {
+    logUI(uiPath('pool', 'tx_list', 'scroll_view'), 'mounted');
+  }, []);
+
   return (
     <>
-      <Text style={s.sectionTitle}>Transactions</Text>
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 40 }}>
+      <Text style={s.sectionTitle} {...uiProps(uiPath('pool', 'tx_list', 'title'))}>Transactions</Text>
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{ paddingBottom: 40 }}
+        {...uiProps(uiPath('pool', 'tx_list', 'scroll_view'))}
+      >
         {loading && <ActivityIndicator color="#53E3A6" style={{ marginTop: 12 }} />}
         {!loading && transactions.length === 0 && (
-          <Text style={s.emptyText}>No transactions yet</Text>
+          <Text style={s.emptyText} {...uiProps(uiPath('pool', 'tx_list', 'empty_text'))}>
+            No transactions yet
+          </Text>
         )}
         {transactions.map((tx) => {
           const payer = members.find((m) => m.user_id === tx.paid_by || m.id === tx.paid_by);
@@ -44,24 +55,34 @@ export function TransactionList({
             payer?.display_name ??
             (tx.paid_by === currentUserId ? 'You' : tx.paid_by?.slice(0, 8));
           const canDelete = tx.paid_by === currentUserId || poolCreatedBy === currentUserId;
+          const rowPath = uiPath('pool', 'tx_list', 'row', tx.id);
           return (
             <TouchableOpacity
               key={tx.id}
               style={s.row}
-              onPress={() => onEdit(tx)}
+              onPress={() => {
+                logUI(rowPath, 'press');
+                onEdit(tx);
+              }}
               activeOpacity={0.7}
+              {...uiProps(rowPath)}
             >
               <View style={{ flex: 1 }}>
-                <Text style={s.description}>{tx.description || 'Expense'}</Text>
-                <Text style={s.meta}>
+                <Text style={s.description} {...uiProps(uiPath('pool', 'tx_list', 'description', tx.id))}>
+                  {tx.description || 'Expense'}
+                </Text>
+                <Text style={s.meta} {...uiProps(uiPath('pool', 'tx_list', 'meta', tx.id))}>
                   {tx.date} &middot; {payerLabel}
                 </Text>
               </View>
-              <Text style={s.amount}>{Number(tx.amount).toFixed(2)}</Text>
+              <Text style={s.amount} {...uiProps(uiPath('pool', 'tx_list', 'amount', tx.id))}>
+                {Number(tx.amount).toFixed(2)}
+              </Text>
               {canDelete && (
                 <TouchableOpacity
                   style={s.deleteBtn}
                   onPress={() => {
+                    logUI(uiPath('pool', 'tx_list', 'delete_button', tx.id), 'press');
                     Alert.alert('Delete', 'Remove this expense?', [
                       { text: 'Cancel', style: 'cancel' },
                       {
@@ -71,6 +92,7 @@ export function TransactionList({
                       },
                     ]);
                   }}
+                  {...uiProps(uiPath('pool', 'tx_list', 'delete_button', tx.id))}
                 >
                   <Icon name="Trash2" size={14} color="#f87171" />
                 </TouchableOpacity>

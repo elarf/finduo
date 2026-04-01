@@ -3,6 +3,7 @@ import { Text, TouchableOpacity, View } from 'react-native';
 import { useDashboard } from '../../../context/DashboardContext';
 import Icon from '../../Icon';
 import { styles } from '../../../screens/DashboardScreen.styles';
+import { uiPath, uiProps, logUI } from '../../../lib/devtools';
 
 export default function CategoriesRow() {
   const {
@@ -20,11 +21,15 @@ export default function CategoriesRow() {
 
   return (
     <>
-      <View style={styles.sectionHeader}>
+      <View {...uiProps(uiPath('dashboard', 'categories_row', 'container'))} style={styles.sectionHeader}>
         <View style={styles.sectionHeaderLeft}>
           <Text style={styles.sectionTitle}>Categories</Text>
           {desktopView && (
-            <TouchableOpacity onPress={() => setCategoriesCollapsed((p) => !p)} style={styles.collapseTrigger}>
+            <TouchableOpacity
+              {...uiProps(uiPath('dashboard', 'categories_row', 'collapse_btn'))}
+              onPress={() => setCategoriesCollapsed((p) => !p)}
+              style={styles.collapseTrigger}
+            >
               <Text style={styles.collapseChevron}>{categoriesCollapsed ? '▸' : '▾'}</Text>
             </TouchableOpacity>
           )}
@@ -32,13 +37,18 @@ export default function CategoriesRow() {
       </View>
 
       {(!desktopView || !categoriesCollapsed) && (
-        <View style={styles.chipsWrap}>
+        <View {...uiProps(uiPath('dashboard', 'categories_row', 'chips_wrap'))} style={styles.chipsWrap}>
           {sortedSelectedCategories.map((c) => (
             <TouchableOpacity
               key={c.id}
+              {...uiProps(uiPath('dashboard', 'categories_row', 'category_chip', c.id))}
               style={[styles.categoryChip, c.color ? { borderColor: c.color } : undefined]}
-              onPress={() => openEntryModal(c.type, c.id)}
+              onPress={() => {
+                logUI(uiPath('dashboard', 'categories_row', 'category_chip', c.id), 'press');
+                openEntryModal(c.type, c.id);
+              }}
               onLongPress={() => {
+                logUI(uiPath('dashboard', 'categories_row', 'category_chip', c.id), 'long_press');
                 setEditingCategoryId(c.id);
                 setCategoryName(c.name);
                 setCategoryType(c.type);

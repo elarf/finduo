@@ -3,6 +3,7 @@ import { Animated, Modal, ScrollView, Text, TouchableOpacity, View } from 'react
 import Icon from '../Icon';
 import { styles } from '../../screens/DashboardScreen.styles';
 import { AppAccount } from '../../types/dashboard';
+import { uiPath, uiProps, logUI } from '../../lib/devtools';
 
 type AccountPickerSheetProps = {
   visible: boolean;
@@ -49,12 +50,16 @@ function AccountPickerSheet({
             ],
           },
         ]}
+        {...uiProps(uiPath('account_picker', 'sheet', 'sheet'))}
       >
-        <View style={styles.catPickerHeader}>
-          <Text style={styles.catPickerTitle}>
+        <View style={styles.catPickerHeader} {...uiProps(uiPath('account_picker', 'sheet', 'backdrop'))}>
+          <Text style={styles.catPickerTitle} {...uiProps(uiPath('account_picker', 'sheet', 'title'))}>
             {acctPickerSheetTarget === 'transfer-from' ? 'From Account' : acctPickerSheetTarget === 'transfer-to' ? 'To Account' : 'Choose Account'}
           </Text>
-          <TouchableOpacity onPress={onClose}>
+          <TouchableOpacity
+            onPress={() => { logUI(uiPath('account_picker', 'header', 'close_button'), 'press'); onClose(); }}
+            {...uiProps(uiPath('account_picker', 'header', 'close_button'))}
+          >
             <Icon name="close" size={24} color="#8FA8C9" />
           </TouchableOpacity>
         </View>
@@ -73,6 +78,7 @@ function AccountPickerSheet({
                 isActive && styles.catPickerItemActive,
               ]}
               onPress={() => {
+                logUI(uiPath('account_picker', 'list', 'account_row', a.id), 'press');
                 if (acctPickerSheetTarget === 'entry') {
                   setEntryAccountId(a.id);
                 } else if (acctPickerSheetTarget === 'invite') {
@@ -85,10 +91,16 @@ function AccountPickerSheet({
                 }
                 onClose();
               }}
+              {...uiProps(uiPath('account_picker', 'list', 'account_row', a.id))}
             >
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+              <View
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}
+                {...uiProps(uiPath('account_picker', 'list', 'account_icon', a.id))}
+              >
                 {a.icon && <Icon name={a.icon} size={20} color="#8FA8C9" />}
-                <Text style={styles.catPickerItemText}>{a.name}</Text>
+                <Text style={styles.catPickerItemText} {...uiProps(uiPath('account_picker', 'list', 'account_name', a.id))}>
+                  {a.name}
+                </Text>
               </View>
               <Text style={styles.catPickerItemSub}>{a.currency}</Text>
             </TouchableOpacity>

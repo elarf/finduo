@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import {
   Alert,
   Animated,
@@ -16,6 +16,7 @@ import {
 import Icon from '../Icon';
 import { styles } from '../../screens/DashboardScreen.styles';
 import { AppAccount, AppCategory, AppTag, TransactionType } from '../../types/dashboard';
+import { uiPath, uiProps, logUI } from '../../lib/devtools';
 
 type EntryModalProps = {
   visible: boolean;
@@ -123,6 +124,10 @@ const EntryModal = React.memo(function EntryModal(props: EntryModalProps) {
     onDelete,
   } = props;
 
+  useEffect(() => {
+    logUI(uiPath('entry_modal', 'card', 'container'), 'mount');
+  }, []);
+
   const { width: screenWidth } = useWindowDimensions();
   const isWide = Platform.OS === 'web' && screenWidth >= 1024;
 
@@ -143,6 +148,14 @@ const EntryModal = React.memo(function EntryModal(props: EntryModalProps) {
     };
     return map[currency] ?? { prefix: '', suffix: currency };
   })();
+
+  const normalizeNumpadKey = (k: string) => {
+    if (k === '<') return 'backspace';
+    if (k === '.') return 'dot';
+    if (k === '00') return 'double_zero';
+    if (k === '000') return 'triple_zero';
+    return k;
+  };
 
   const sortedEntryTags = useMemo(
     () => [...entryTags].sort((a, b) => (entryTagUsage[b.id] ?? 0) - (entryTagUsage[a.id] ?? 0)),
@@ -167,13 +180,26 @@ const EntryModal = React.memo(function EntryModal(props: EntryModalProps) {
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View style={[{ flex: 1 }, isWide && { backgroundColor: 'rgba(0,0,0,0.55)', alignItems: 'center', justifyContent: 'center' }]}>
-        {isWide && <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />}
-        <View style={[styles.entryModalFullscreen, isWide && { width: 390, maxHeight: '90%' as any, borderRadius: 16, overflow: 'hidden' }]}>
+      <View {...uiProps(uiPath('entry_modal', 'backdrop', 'container'))} style={[{ flex: 1 }, isWide && { backgroundColor: 'rgba(0,0,0,0.55)', alignItems: 'center', justifyContent: 'center' }]}>
+        {isWide && (
+          <Pressable
+            {...uiProps(uiPath('entry_modal', 'backdrop', 'container'))}
+            style={StyleSheet.absoluteFill}
+            onPress={() => {
+              logUI(uiPath('entry_modal', 'backdrop', 'container'), 'press');
+              onClose();
+            }}
+          />
+        )}
+        <View {...uiProps(uiPath('entry_modal', 'card', 'container'))} style={[styles.entryModalFullscreen, isWide && { width: 390, maxHeight: '90%' as any, borderRadius: 16, overflow: 'hidden' }]}>
           {/* Top bar */}
           <View style={styles.entryModalTopBar}>
             <TouchableOpacity
-              onPress={() => setEntryType(isIncome ? 'expense' : 'income')}
+              {...uiProps(uiPath('entry_modal', 'type_toggle', isIncome ? 'income_button' : 'expense_button'))}
+              onPress={() => {
+                logUI(uiPath('entry_modal', 'type_toggle', isIncome ? 'income_button' : 'expense_button'), 'press');
+                setEntryType(isIncome ? 'expense' : 'income');
+              }}
               style={[styles.toggleButton, { flex: 0, minWidth: 110, paddingHorizontal: 20 }, isIncome ? styles.toggleButtonActiveIncome : styles.toggleButtonActiveExpense]}
             >
               <Text style={isIncome ? styles.toggleButtonTextIncome : styles.toggleButtonTextExpense}>
@@ -181,10 +207,21 @@ const EntryModal = React.memo(function EntryModal(props: EntryModalProps) {
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
+              {...uiProps(uiPath('entry_modal', 'account_picker', 'button'))}
               style={[styles.entryAccountBtn, { flexDirection: 'row', alignItems: 'center', gap: 6 }]}
-              onPress={() => openAcctPickerSheet('entry')}
+              onPress={() => {
+                logUI(uiPath('entry_modal', 'account_picker', 'button'), 'press');
+                openAcctPickerSheet('entry');
+              }}
             >
-              {entryAccount?.icon ? <Icon name={entryAccount.icon as any} size={13} color="#8FA8C9" /> : null}
+              {entryAccount?.icon ? (
+                <Icon
+                  {...uiProps(uiPath('entry_modal', 'account_picker', 'icon'))}
+                  name={entryAccount.icon as any}
+                  size={13}
+                  color="#8FA8C9"
+                />
+              ) : null}
               <Text style={styles.entryAccountBtnText}>{entryAccount?.name ?? 'Account'}</Text>
             </TouchableOpacity>
           </View>
@@ -194,22 +231,52 @@ const EntryModal = React.memo(function EntryModal(props: EntryModalProps) {
             contentContainerStyle={[styles.entryModalScrollContent, { flexGrow: 1 }]}
           >
             {/* 1. Date picker */}
-            <TouchableOpacity style={[styles.datePressable, { marginBottom: 6 }]} onPress={openDatePicker}>
+            <TouchableOpacity
+              {...uiProps(uiPath('entry_modal', 'date_picker', 'button'))}
+              style={[styles.datePressable, { marginBottom: 6 }]}
+              onPress={() => {
+                logUI(uiPath('entry_modal', 'date_picker', 'button'), 'press');
+                openDatePicker();
+              }}
+            >
               <Icon name="calendar" size={18} color="#8FA8C9" />
               <Text style={styles.datePressableText}>
                 {entryDate ? (entryDate === new Date().toISOString().slice(0, 10) ? `${entryDate}, Today` : entryDate) : 'Select date'}
               </Text>
             </TouchableOpacity>
             {/* 2. Amount display + suggested values */}
-            <View style={[styles.entryAmountDisplay, { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'center', gap: 4, paddingHorizontal: 12 }]}>
-              {currencySymbol.prefix ? <Text style={localStyles.currencyTag}>{currencySymbol.prefix}</Text> : null}
-              <Text style={[styles.entryAmountDisplayText, { color: amountColor }]}>{entryAmount || '0'}</Text>
-              {currencySymbol.suffix ? <Text style={localStyles.currencyTag}>{currencySymbol.suffix}</Text> : null}
+            <View {...uiProps(uiPath('entry_modal', 'amount', 'display'))} style={[styles.entryAmountDisplay, { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'center', gap: 4, paddingHorizontal: 12 }]}>
+              {currencySymbol.prefix ? (
+                <Text {...uiProps(uiPath('entry_modal', 'amount', 'currency'))} style={localStyles.currencyTag}>
+                  {currencySymbol.prefix}
+                </Text>
+              ) : null}
+              <Text {...uiProps(uiPath('entry_modal', 'amount', 'text'))} style={[styles.entryAmountDisplayText, { color: amountColor }]}>
+                {entryAmount || '0'}
+              </Text>
+              {currencySymbol.suffix ? (
+                <Text {...uiProps(uiPath('entry_modal', 'amount', 'currency'))} style={localStyles.currencyTag}>
+                  {currencySymbol.suffix}
+                </Text>
+              ) : null}
             </View>
             {recentCategoryAmounts.length > 0 && (
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[styles.modalChipsRow, { alignItems: 'flex-start' }]}>
-                {recentCategoryAmounts.map((v) => (
-                  <TouchableOpacity key={`${entryType}-${v}`} style={[styles.modalChip, { alignSelf: 'flex-start' }]} onPress={() => setEntryAmount(String(v))}>
+              <ScrollView
+                {...uiProps(uiPath('entry_modal', 'recent_amounts', 'container'))}
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={[styles.modalChipsRow, { alignItems: 'flex-start' }]}
+              >
+                {recentCategoryAmounts.map((v, index) => (
+                  <TouchableOpacity
+                    {...uiProps(uiPath('entry_modal', 'recent_amounts', 'chip', String(index)))}
+                    key={`${entryType}-${v}`}
+                    style={[styles.modalChip, { alignSelf: 'flex-start' }]}
+                    onPress={() => {
+                      logUI(uiPath('entry_modal', 'recent_amounts', 'chip', String(index)), 'press');
+                      setEntryAmount(String(v));
+                    }}
+                  >
                     <Text style={[styles.modalChipText, { fontSize: 13 }]}>{formatCurrency(v, entryAccount?.currency)}</Text>
                   </TouchableOpacity>
                 ))}
@@ -226,6 +293,7 @@ const EntryModal = React.memo(function EntryModal(props: EntryModalProps) {
                   </View>
                 ))}
               <TextInput
+                {...uiProps(uiPath('entry_modal', 'note', 'input'))}
                 ref={noteInputRef}
                 value={entryNote}
                 onChangeText={setEntryNote}
@@ -241,7 +309,14 @@ const EntryModal = React.memo(function EntryModal(props: EntryModalProps) {
             {noteFieldFocused && noteSuggestions.length > 0 && (
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[styles.modalChipsRow, { marginBottom: 6 }]}>
                 {noteSuggestions.map((s) => (
-                  <TouchableOpacity key={s} style={styles.modalChip} onPress={() => setEntryNote(s)}>
+                  <TouchableOpacity
+                    key={s}
+                    style={styles.modalChip}
+                    onPress={() => {
+                      logUI(uiPath('entry_modal', 'note', 'suggestion'), 'press');
+                      setEntryNote(s);
+                    }}
+                  >
                     <Text style={styles.modalChipText}>{s}</Text>
                   </TouchableOpacity>
                 ))}
@@ -249,10 +324,11 @@ const EntryModal = React.memo(function EntryModal(props: EntryModalProps) {
             )}
             {/* 4. Tags — wrapped rows sorted by category usage */}
             {(sortedEntryTags.length > 0 || true) && (
-              <View style={{ marginTop: 8 }}>
+              <View {...uiProps(uiPath('entry_modal', 'tags', 'container'))} style={{ marginTop: 8 }}>
                 <View style={localStyles.tagsWrap}>
                   {sortedEntryTags.map((tag) => (
                     <TouchableOpacity
+                      {...uiProps(uiPath('entry_modal', 'tags', 'chip', tag.id))}
                       key={tag.id}
                       style={[
                         styles.modalChip,
@@ -260,7 +336,10 @@ const EntryModal = React.memo(function EntryModal(props: EntryModalProps) {
                         tag.color ? { borderColor: tag.color } : undefined,
                         entryTagIds.includes(tag.id) ? [styles.modalChipActive, tag.color ? { backgroundColor: `${tag.color}22` } : undefined] : undefined,
                       ]}
-                      onPress={() => toggleTag(tag.id)}
+                      onPress={() => {
+                        logUI(uiPath('entry_modal', 'tags', 'chip', tag.id), 'press');
+                        toggleTag(tag.id);
+                      }}
                     >
                       {tag.icon ? <Icon name={tag.icon as any} size={11} color={tag.color ?? '#EAF3FF'} /> : null}
                       <Text style={[styles.modalChipText, { fontSize: 13 }, tag.color ? { color: tag.color } : undefined]}>#{tag.name}</Text>
@@ -278,7 +357,12 @@ const EntryModal = React.memo(function EntryModal(props: EntryModalProps) {
                       onSubmitEditing={() => void createTag()}
                     />
                     {newTagName.trim().length > 0 && (
-                      <TouchableOpacity onPress={() => void createTag()}>
+                      <TouchableOpacity
+                        onPress={() => {
+                          logUI(uiPath('entry_modal', 'tags', 'new_tag_add'), 'press');
+                          void createTag();
+                        }}
+                      >
                         <Text style={localStyles.newTagAdd}>Add</Text>
                       </TouchableOpacity>
                     )}
@@ -287,9 +371,17 @@ const EntryModal = React.memo(function EntryModal(props: EntryModalProps) {
               </View>
             )}
             {/* 5. Numpad */}
-            <View style={styles.numpadGrid}>
-              {['7', '8', '9', '4', '5', '6', '1', '2', '3', 'C', '0', '<'].map((k) => (
-                <TouchableOpacity key={k} style={styles.numpadKey} onPress={() => appendNumpad(k)}>
+            <View {...uiProps(uiPath('entry_modal', 'numpad', 'container'))} style={styles.numpadGrid}>
+              {['7', '8', '9', '4', '5', '6', '1', '2', '3', '.', '0', '00', 'C', '000', '<'].map((k) => (
+                <TouchableOpacity
+                  {...uiProps(uiPath('entry_modal', 'numpad', 'key', normalizeNumpadKey(k)))}
+                  key={k}
+                  style={styles.numpadKey}
+                  onPress={() => {
+                    logUI(uiPath('entry_modal', 'numpad', 'key', normalizeNumpadKey(k)), 'press');
+                    appendNumpad(k);
+                  }}
+                >
                   <Text style={styles.numpadKeyText}>{k}</Text>
                 </TouchableOpacity>
               ))}
@@ -299,21 +391,52 @@ const EntryModal = React.memo(function EntryModal(props: EntryModalProps) {
           {/* Bottom bar — category-aware CTA */}
           <View style={bottomBarStyles.bottomBar}>
             {editingTransactionId && onDelete && (
-              <TouchableOpacity style={bottomBarStyles.deleteBtn} onPress={confirmDelete} disabled={saving}>
+              <TouchableOpacity
+                {...uiProps(uiPath('entry_modal', 'actions', 'delete_button'))}
+                style={bottomBarStyles.deleteBtn}
+                onPress={() => {
+                  logUI(uiPath('entry_modal', 'actions', 'delete_button'), 'press');
+                  confirmDelete();
+                }}
+                disabled={saving}
+              >
                 <Icon name="Trash2" size={20} color="#f87171" />
               </TouchableOpacity>
             )}
             {selectedCategory ? (
-              <TouchableOpacity style={bottomBarStyles.cancelBtn} onPress={() => { setEntryCategoryId(null); openCatPicker(); }}>
+              <TouchableOpacity
+                {...uiProps(uiPath('entry_modal', 'actions', 'cancel_button'))}
+                style={bottomBarStyles.cancelBtn}
+                onPress={() => {
+                  logUI(uiPath('entry_modal', 'actions', 'cancel_button'), 'press');
+                  setEntryCategoryId(null);
+                  openCatPicker();
+                }}
+              >
                 <Text style={bottomBarStyles.cancelText}>Reselect</Text>
               </TouchableOpacity>
             ) : (
-              <TouchableOpacity style={bottomBarStyles.cancelBtn} onPress={onClose}>
+              <TouchableOpacity
+                {...uiProps(uiPath('entry_modal', 'actions', 'cancel_button'))}
+                style={bottomBarStyles.cancelBtn}
+                onPress={() => {
+                  logUI(uiPath('entry_modal', 'actions', 'cancel_button'), 'press');
+                  onClose();
+                }}
+              >
                 <Text style={bottomBarStyles.cancelText}>Cancel</Text>
               </TouchableOpacity>
             )}
             {selectedCategory ? (
-              <TouchableOpacity style={bottomBarStyles.saveBtn} onPress={() => void saveEntry()} disabled={saving}>
+              <TouchableOpacity
+                {...uiProps(uiPath('entry_modal', 'actions', 'save_button'))}
+                style={bottomBarStyles.saveBtn}
+                onPress={() => {
+                  logUI(uiPath('entry_modal', 'actions', 'save_button'), 'press');
+                  void saveEntry();
+                }}
+                disabled={saving}
+              >
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                   {selectedCategory.icon
                     ? <Icon name={selectedCategory.icon as any} size={16} color="#060A14" />
@@ -324,7 +447,14 @@ const EntryModal = React.memo(function EntryModal(props: EntryModalProps) {
                 </View>
               </TouchableOpacity>
             ) : (
-              <TouchableOpacity style={bottomBarStyles.chooseCatBtn} onPress={openCatPicker}>
+              <TouchableOpacity
+                {...uiProps(uiPath('entry_modal', 'actions', 'save_button'))}
+                style={bottomBarStyles.chooseCatBtn}
+                onPress={() => {
+                  logUI(uiPath('entry_modal', 'actions', 'save_button'), 'press');
+                  openCatPicker();
+                }}
+              >
                 <Icon name="label" size={16} color="#060A14" />
                 <Text style={bottomBarStyles.saveText}>Choose Category</Text>
               </TouchableOpacity>
@@ -333,6 +463,7 @@ const EntryModal = React.memo(function EntryModal(props: EntryModalProps) {
 
           {/* ─── Embedded fullscreen category picker (swipe-up overlay) ─── */}
           <Animated.View
+            {...uiProps(uiPath('entry_modal', 'category_picker', 'container'))}
             style={[
               StyleSheet.absoluteFill,
               {
@@ -352,13 +483,19 @@ const EntryModal = React.memo(function EntryModal(props: EntryModalProps) {
           >
             <View style={styles.catPickerHeader}>
               <Text style={styles.catPickerTitle}>Choose Category</Text>
-              <TouchableOpacity onPress={closeCatPicker}>
+              <TouchableOpacity
+                onPress={() => {
+                  logUI(uiPath('entry_modal', 'category_picker', 'close_button'), 'press');
+                  closeCatPicker();
+                }}
+              >
                 <Icon name="close" size={24} color="#8FA8C9" />
               </TouchableOpacity>
             </View>
             <ScrollView contentContainerStyle={styles.catPickerGrid} showsVerticalScrollIndicator={false}>
               {entryCategories.map((cat) => (
                 <TouchableOpacity
+                  {...uiProps(uiPath('entry_modal', 'category_picker', 'row', cat.id))}
                   key={cat.id}
                   ref={(r) => { catCellRefs.current[cat.id] = r as any as View; }}
                   onLayout={() => {
@@ -375,7 +512,11 @@ const EntryModal = React.memo(function EntryModal(props: EntryModalProps) {
                     cat.color ? { borderColor: cat.color } : undefined,
                     dragHighlightedCatId === cat.id ? { backgroundColor: `${cat.color ?? '#EAF2FF'}28` } : undefined,
                   ]}
-                  onPress={() => { setEntryCategoryId(cat.id); closeCatPicker(); }}
+                  onPress={() => {
+                    logUI(uiPath('entry_modal', 'category_picker', 'row', cat.id), 'press');
+                    setEntryCategoryId(cat.id);
+                    closeCatPicker();
+                  }}
                 >
                   <Icon
                     name={(cat.icon ?? 'label') as any}

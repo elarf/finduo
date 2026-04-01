@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react';
 import { Alert } from 'react-native';
 import { supabase } from '../lib/supabase';
+import { logAPI } from '../lib/devtools';
 import type { User } from '@supabase/supabase-js';
 import type { UserProfile, ResolvedFriend, ResolvedRequest } from '../types/friends';
 
@@ -14,6 +15,7 @@ export function useFriends(user: User | null) {
   /** Upsert the current user's public profile so others can find them by email. */
   const ensureProfile = useCallback(async () => {
     if (!user) return;
+    logAPI('supabase://user_profiles', { source: 'friends_modal.tab.friends', action: 'ensureProfile' });
     await supabase.from('user_profiles').upsert(
       {
         user_id: user.id,
@@ -38,6 +40,7 @@ export function useFriends(user: User | null) {
     try {
       await ensureProfile();
 
+      logAPI('supabase://friends', { source: 'friends_modal.tab.friends', action: 'loadFriends' });
       const { data: rows, error } = await supabase
         .from('friends')
         .select('id, user_id, friend_user_id, status, created_at, updated_at')
@@ -57,6 +60,7 @@ export function useFriends(user: User | null) {
 
       const profileMap: Record<string, UserProfile> = {};
       if (otherIds.length > 0) {
+        logAPI('supabase://user_profiles', { source: 'friends_modal.tab.friends', action: 'loadFriends' });
         const { data: profileData } = await supabase
           .from('user_profiles')
           .select('user_id, display_name, email, avatar_url')
@@ -98,6 +102,7 @@ export function useFriends(user: User | null) {
       // Load which accounts each friend is a member of (only accounts the current user owns)
       const acceptedFriendIds = resolvedFriends.map((f) => f.userId);
       if (acceptedFriendIds.length > 0) {
+        logAPI('supabase://account_members', { source: 'friends_modal.tab.friends', action: 'loadFriends' });
         const { data: memberRows } = await supabase
           .from('account_members')
           .select('account_id, user_id')
@@ -124,6 +129,7 @@ export function useFriends(user: User | null) {
     async (email: string): Promise<boolean> => {
       if (!user) return false;
       try {
+        logAPI('supabase://user_profiles', { source: 'friends_modal.send_button', action: 'sendFriendRequest' });
         const { data: target, error: lookupErr } = await supabase
           .from('user_profiles')
           .select('user_id')
@@ -135,6 +141,7 @@ export function useFriends(user: User | null) {
         if (target.user_id === user.id) throw new Error('You cannot add yourself.');
 
         // Check for an existing non-rejected relationship in either direction
+        logAPI('supabase://friends', { source: 'friends_modal.send_button', action: 'sendFriendRequest' });
         const { data: existing } = await supabase
           .from('friends')
           .select('id, status')
@@ -150,6 +157,7 @@ export function useFriends(user: User | null) {
           if (active.status === 'blocked') throw new Error('Cannot send a request to this user.');
         }
 
+        logAPI('supabase://friends', { source: 'friends_modal.send_button', action: 'sendFriendRequest' });
         const { error } = await supabase.from('friends').insert({
           user_id: user.id,
           friend_user_id: target.user_id,
@@ -171,6 +179,7 @@ export function useFriends(user: User | null) {
     async (rowId: string) => {
       if (!user) return;
       try {
+        logAPI('supabase://friends', { source: 'friends_modal.accept_button', action: 'acceptRequest' });
         const { error } = await supabase
           .from('friends')
           .update({ status: 'accepted', updated_at: new Date().toISOString() })
@@ -190,6 +199,7 @@ export function useFriends(user: User | null) {
     async (rowId: string) => {
       if (!user) return;
       try {
+        logAPI('supabase://friends', { source: 'friends_modal.reject_button', action: 'rejectRequest' });
         const { error } = await supabase
           .from('friends')
           .update({ status: 'rejected', updated_at: new Date().toISOString() })
@@ -208,6 +218,7 @@ export function useFriends(user: User | null) {
     async (rowId: string) => {
       if (!user) return;
       try {
+        logAPI('supabase://friends', { source: 'friends_modal.cancel_button', action: 'cancelRequest' });
         const { error } = await supabase
           .from('friends')
           .delete()
@@ -233,9 +244,11 @@ export function useFriends(user: User | null) {
       try {
         const row = friends.find((f) => f.rowId === rowId);
         if (row?.direction === 'sent') {
+          logAPI('supabase://friends', { source: 'friends_modal.remove_button', action: 'removeFriend' });
           const { error } = await supabase.from('friends').delete().eq('id', rowId).eq('user_id', user.id);
           if (error) throw error;
         } else {
+          logAPI('supabase://friends', { source: 'friends_modal.remove_button', action: 'removeFriend' });
           const { error } = await supabase
             .from('friends')
             .update({ status: 'rejected', updated_at: new Date().toISOString() })
@@ -254,6 +267,7 @@ export function useFriends(user: User | null) {
     async (rowId: string) => {
       if (!user) return;
       try {
+        logAPI('supabase://friends', { source: 'friends_modal.block_button', action: 'blockFriend' });
         const { error } = await supabase
           .from('friends')
           .update({ status: 'blocked', updated_at: new Date().toISOString() })
@@ -271,6 +285,7 @@ export function useFriends(user: User | null) {
   const addFriendToAccount = useCallback(
     async (friendUserId: string, accountId: string): Promise<boolean> => {
       try {
+        logAPI('supabase://account_members', { source: 'friends_modal.add_to_account_button', action: 'addFriendToAccount' });
         const { error } = await supabase.from('account_members').upsert(
           { account_id: accountId, user_id: friendUserId, role: 'member' },
           { onConflict: 'account_id,user_id', ignoreDuplicates: true },
@@ -294,6 +309,7 @@ export function useFriends(user: User | null) {
   const removeFriendFromAccount = useCallback(
     async (friendUserId: string, accountId: string): Promise<boolean> => {
       try {
+        logAPI('supabase://account_members', { source: 'friends_modal.remove_from_account_button', action: 'removeFriendFromAccount' });
         const { error } = await supabase
           .from('account_members')
           .delete()

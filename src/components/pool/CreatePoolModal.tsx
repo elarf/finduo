@@ -9,6 +9,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { logUI, uiPath, uiProps } from '../../lib/devtools';
 import { poolSharedStyles as sh } from './poolStyles';
 import type { PoolType } from '../../types/pools';
 
@@ -34,36 +35,71 @@ export function CreatePoolModal({ visible, onClose, onSubmit }: Props) {
 
   return (
     <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
-      <Pressable style={sh.modalBackdrop} onPress={onClose}>
-        <Pressable style={sh.modalCard} onPress={(e) => e.stopPropagation()}>
-          <Text style={sh.modalTitle}>Create pool</Text>
+      <Pressable
+        style={sh.modalBackdrop}
+        onPress={onClose}
+        {...uiProps(uiPath('create_pool_modal', 'backdrop', 'container'))}
+      >
+        <Pressable
+          style={sh.modalCard}
+          onPress={(e) => e.stopPropagation()}
+          {...uiProps(uiPath('create_pool_modal', 'card', 'container'))}
+        >
+          <Text style={sh.modalTitle} {...uiProps(uiPath('create_pool_modal', 'card', 'title'))}>
+            Create pool
+          </Text>
           <TextInput
             placeholder="Pool name"
             placeholderTextColor="#64748B"
             value={name}
             onChangeText={setName}
             style={sh.input}
+            {...uiProps(uiPath('create_pool_modal', 'form', 'name_input'))}
           />
-          <Text style={sh.label}>Type</Text>
-          <View style={s.typeRow}>
+          <Text style={sh.label} {...uiProps(uiPath('create_pool_modal', 'form', 'type_label'))}>
+            Type
+          </Text>
+          <View style={s.typeRow} {...uiProps(uiPath('create_pool_modal', 'type_selector', 'container'))}>
             <TouchableOpacity
               style={[s.typeButton, type === 'event' && s.typeButtonActive]}
-              onPress={() => setType('event')}
+              onPress={() => {
+                logUI(uiPath('create_pool_modal', 'type_selector', 'event_button'), 'press');
+                setType('event');
+              }}
+              {...uiProps(uiPath('create_pool_modal', 'type_selector', 'event_button'))}
             >
               <Text style={s.typeButtonText}>Event</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[s.typeButton, type === 'continuous' && s.typeButtonActive]}
-              onPress={() => setType('continuous')}
+              onPress={() => {
+                logUI(uiPath('create_pool_modal', 'type_selector', 'continuous_button'), 'press');
+                setType('continuous');
+              }}
+              {...uiProps(uiPath('create_pool_modal', 'type_selector', 'continuous_button'))}
             >
               <Text style={s.typeButtonText}>Continuous</Text>
             </TouchableOpacity>
           </View>
           <View style={sh.modalActions}>
-            <TouchableOpacity style={sh.modalSecondary} onPress={onClose}>
+            <TouchableOpacity
+              style={sh.modalSecondary}
+              onPress={() => {
+                logUI(uiPath('create_pool_modal', 'actions', 'cancel_button'), 'press');
+                onClose();
+              }}
+              {...uiProps(uiPath('create_pool_modal', 'actions', 'cancel_button'))}
+            >
               <Text style={sh.modalSecondaryText}>Cancel</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={sh.modalPrimary} onPress={() => void handleSubmit()}>
+            <TouchableOpacity
+              style={sh.modalPrimary}
+              onPress={() => {
+                logUI(uiPath('create_pool_modal', 'actions', 'create_button'), 'press');
+                void handleSubmit();
+              }}
+              {...uiProps(uiPath('create_pool_modal', 'actions', 'create_button'))}
+            >
               <Text style={sh.modalPrimaryText}>Create</Text>
             </TouchableOpacity>
           </View>

@@ -15,6 +15,7 @@ import {
 import { styles } from '../../screens/DashboardScreen.styles';
 import type { AppAccount } from '../../types/dashboard';
 import type { ResolvedFriend, ResolvedRequest } from '../../types/friends';
+import { uiPath, uiProps, logUI } from '../../lib/devtools';
 
 type Tab = 'friends' | 'requests' | 'add';
 
@@ -122,9 +123,17 @@ const FriendsModal: React.FC<FriendsModalProps> = ({
 
   return (
     <Modal visible={visible} transparent animationType="none" onRequestClose={onClose} onShow={handleOpen}>
-      <Pressable style={styles.modalBackdrop} onPress={onClose}>
-        <Pressable style={styles.modalCard} onPress={(e) => e.stopPropagation()}>
-          <Text style={styles.modalTitle}>Friends</Text>
+      <Pressable
+        style={styles.modalBackdrop}
+        onPress={() => { logUI(uiPath('friends_modal', 'modal', 'backdrop'), 'press'); onClose(); }}
+        {...uiProps(uiPath('friends_modal', 'modal', 'backdrop'))}
+      >
+        <Pressable
+          style={styles.modalCard}
+          onPress={(e) => { logUI(uiPath('friends_modal', 'modal', 'card'), 'press'); e.stopPropagation(); }}
+          {...uiProps(uiPath('friends_modal', 'modal', 'card'))}
+        >
+          <Text style={styles.modalTitle} {...uiProps(uiPath('friends_modal', 'modal', 'title'))}>Friends</Text>
 
           {/* Tab chips */}
           <View style={[styles.modalChipsRow, { marginBottom: 12 }]}>
@@ -136,7 +145,8 @@ const FriendsModal: React.FC<FriendsModalProps> = ({
                   tab === t && styles.modalChipActive,
                   t === 'requests' && incoming.length > 0 && { borderColor: '#f87171' },
                 ]}
-                onPress={() => setTab(t)}
+                onPress={() => { logUI(uiPath('friends_modal', 'tab', t), 'press'); setTab(t); }}
+                {...uiProps(uiPath('friends_modal', 'tab', t))}
               >
                 <Text style={styles.modalChipText}>
                   {t === 'friends' ? `Friends${friends.length > 0 ? ` (${friends.length})` : ''}` : null}
@@ -177,19 +187,30 @@ const FriendsModal: React.FC<FriendsModalProps> = ({
                               <TouchableOpacity
                                 style={local.friendCard}
                                 activeOpacity={0.7}
-                                onPress={() => setExpandedFriendId(isExpanded ? null : f.userId)}
+                                onPress={() => { logUI(uiPath('friends_modal', 'friends', 'friend_row', f.rowId), 'press'); setExpandedFriendId(isExpanded ? null : f.userId); }}
+                                {...uiProps(uiPath('friends_modal', 'friends', 'friend_row', f.rowId))}
                               >
                                 {/* Avatar */}
                                 {avatar && !failedAvatars.has(f.rowId) ? (
-                                  <Image source={{ uri: avatar }} style={local.avatar} onError={() => onAvatarError(f.rowId)} />
+                                  <Image
+                                    source={{ uri: avatar }}
+                                    style={local.avatar}
+                                    onError={() => onAvatarError(f.rowId)}
+                                    {...uiProps(uiPath('friends_modal', 'friends', 'friend_avatar', f.rowId))}
+                                  />
                                 ) : (
-                                  <View style={local.avatarFallback}>
+                                  <View
+                                    style={local.avatarFallback}
+                                    {...uiProps(uiPath('friends_modal', 'friends', 'friend_avatar', f.rowId))}
+                                  >
                                     <Text style={local.avatarFallbackText}>{avatarFallback(f)}</Text>
                                   </View>
                                 )}
                                 {/* Name + email aligned right */}
                                 <View style={local.friendInfo}>
-                                  <Text style={local.friendName}>{getName(f)}</Text>
+                                  <Text style={local.friendName} {...uiProps(uiPath('friends_modal', 'friends', 'friend_name', f.rowId))}>
+                                    {getName(f)}
+                                  </Text>
                                   {getEmail(f) ? (
                                     <Text style={local.friendEmail}>{getEmail(f)}</Text>
                                   ) : null}
@@ -204,23 +225,27 @@ const FriendsModal: React.FC<FriendsModalProps> = ({
                                   <View style={{ flexDirection: 'row', gap: 4, marginLeft: 6 }}>
                                     <TouchableOpacity
                                       style={styles.manageIconButton}
-                                      onPress={() =>
+                                      onPress={() => {
+                                        logUI(uiPath('friends_modal', 'friends', 'remove_button', f.rowId), 'press');
                                         Alert.alert('Remove friend', `Remove ${getName(f)} from friends?`, [
                                           { text: 'Cancel', style: 'cancel' },
                                           { text: 'Remove', style: 'destructive', onPress: () => void removeFriend(f.rowId) },
-                                        ])
-                                      }
+                                        ]);
+                                      }}
+                                      {...uiProps(uiPath('friends_modal', 'friends', 'remove_button', f.rowId))}
                                     >
                                       <Text style={styles.manageIconText}>✕</Text>
                                     </TouchableOpacity>
                                     <TouchableOpacity
                                       style={styles.manageIconButtonDanger}
-                                      onPress={() =>
+                                      onPress={() => {
+                                        logUI(uiPath('friends_modal', 'friends', 'block_button', f.rowId), 'press');
                                         Alert.alert('Block user', `Block ${getName(f)}? They won't be able to find you.`, [
                                           { text: 'Cancel', style: 'cancel' },
                                           { text: 'Block', style: 'destructive', onPress: () => void blockUser(f.rowId) },
-                                        ])
-                                      }
+                                        ]);
+                                      }}
+                                      {...uiProps(uiPath('friends_modal', 'friends', 'block_button', f.rowId))}
                                     >
                                       <Text style={[styles.manageIconText, { fontSize: 10 }]}>BLK</Text>
                                     </TouchableOpacity>
@@ -276,11 +301,19 @@ const FriendsModal: React.FC<FriendsModalProps> = ({
                       {incoming.map((r) => {
                         const avatar = getAvatar(r);
                         return (
-                          <View key={r.rowId} style={local.friendCard}>
+                          <View key={r.rowId} style={local.friendCard} {...uiProps(uiPath('friends_modal', 'requests', 'request_row', r.rowId))}>
                             {avatar && !failedAvatars.has(r.rowId) ? (
-                              <Image source={{ uri: avatar }} style={local.avatarSmall} onError={() => onAvatarError(r.rowId)} />
+                              <Image
+                                source={{ uri: avatar }}
+                                style={local.avatarSmall}
+                                onError={() => onAvatarError(r.rowId)}
+                                {...uiProps(uiPath('friends_modal', 'requests', 'request_avatar', r.rowId))}
+                              />
                             ) : (
-                              <View style={[local.avatarFallback, local.avatarSmall]}>
+                              <View
+                                style={[local.avatarFallback, local.avatarSmall]}
+                                {...uiProps(uiPath('friends_modal', 'requests', 'request_avatar', r.rowId))}
+                              >
                                 <Text style={local.avatarFallbackText}>{avatarFallback(r)}</Text>
                               </View>
                             )}
@@ -290,13 +323,15 @@ const FriendsModal: React.FC<FriendsModalProps> = ({
                             </View>
                             <TouchableOpacity
                               style={[styles.manageIconButton, { borderColor: '#4ade80' }]}
-                              onPress={() => void acceptRequest(r.rowId)}
+                              onPress={() => { logUI(uiPath('friends_modal', 'requests', 'accept_button', r.rowId), 'press'); void acceptRequest(r.rowId); }}
+                              {...uiProps(uiPath('friends_modal', 'requests', 'accept_button', r.rowId))}
                             >
                               <Text style={[styles.manageIconText, { color: '#4ade80' }]}>✓</Text>
                             </TouchableOpacity>
                             <TouchableOpacity
                               style={styles.manageIconButtonDanger}
-                              onPress={() => void rejectRequest(r.rowId)}
+                              onPress={() => { logUI(uiPath('friends_modal', 'requests', 'reject_button', r.rowId), 'press'); void rejectRequest(r.rowId); }}
+                              {...uiProps(uiPath('friends_modal', 'requests', 'reject_button', r.rowId))}
                             >
                               <Text style={styles.manageIconText}>✕</Text>
                             </TouchableOpacity>
@@ -359,6 +394,7 @@ const FriendsModal: React.FC<FriendsModalProps> = ({
                     autoCorrect={false}
                     returnKeyType="send"
                     onSubmitEditing={() => void handleSend()}
+                    {...uiProps(uiPath('friends_modal', 'add', 'email_input'))}
                   />
                   <Text style={[styles.manageMeta, { marginBottom: 10, marginTop: -4 }]}>
                     The other person must have opened the app at least once.
@@ -369,14 +405,19 @@ const FriendsModal: React.FC<FriendsModalProps> = ({
           )}
 
           <View style={styles.modalActions}>
-            <TouchableOpacity style={styles.modalSecondary} onPress={onClose}>
+            <TouchableOpacity
+              style={styles.modalSecondary}
+              onPress={() => { logUI(uiPath('friends_modal', 'actions', 'close_button'), 'press'); onClose(); }}
+              {...uiProps(uiPath('friends_modal', 'actions', 'close_button'))}
+            >
               <Text style={styles.modalSecondaryText}>Close</Text>
             </TouchableOpacity>
             {tab === 'add' && (
               <TouchableOpacity
                 style={styles.modalPrimary}
-                onPress={() => void handleSend()}
+                onPress={() => { logUI(uiPath('friends_modal', 'actions', 'send_button'), 'press'); void handleSend(); }}
                 disabled={sending || !addEmail.trim()}
+                {...uiProps(uiPath('friends_modal', 'actions', 'send_button'))}
               >
                 <Text style={styles.modalPrimaryText}>{sending ? 'Sending…' : 'Send Request'}</Text>
               </TouchableOpacity>

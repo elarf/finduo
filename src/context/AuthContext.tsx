@@ -113,22 +113,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // to trigger the friends flow first.
         if ((_event === 'SIGNED_IN' || _event === 'TOKEN_REFRESHED' || _event === 'INITIAL_SESSION') && newSession?.user) {
           const u = newSession.user;
-          void supabase.from('user_profiles').upsert(
-            {
-              user_id: u.id,
-              display_name:
-                (u.user_metadata?.full_name as string | undefined) ??
-                (u.user_metadata?.name as string | undefined) ??
-                u.email?.split('@')[0] ??
-                null,
-              email: u.email?.toLowerCase() ?? null,
-              avatar_url:
-                (u.user_metadata?.avatar_url as string | undefined) ||
-                (u.user_metadata?.picture as string | undefined) ||
-                null,
-            },
-            { onConflict: 'user_id' },
-          );
+
+          // Extract avatar URL from OAuth provider metadata
+          const newAvatarUrl =
+            (u.user_metadata?.avatar_url as string | undefined) ||
+            (u.user_metadata?.picture as string | undefined) ||
+            null;
+
+          // Build upsert data - only include avatar_url if we have a new one
+          const upsertData: any = {
+            user_id: u.id,
+            display_name:
+              (u.user_metadata?.full_name as string | undefined) ??
+              (u.user_metadata?.name as string | undefined) ??
+              u.email?.split('@')[0] ??
+              null,
+            email: u.email?.toLowerCase() ?? null,
+          };
+
+          // Only update avatar_url if we have a new one from OAuth
+          // This prevents overwriting existing avatars with null
+          if (newAvatarUrl) {
+            upsertData.avatar_url = newAvatarUrl;
+          }
+
+          void supabase.from('user_profiles').upsert(upsertData, { onConflict: 'user_id' });
         }
       },
     );

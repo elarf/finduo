@@ -4,6 +4,36 @@
 
 ---
 
+## [1.0.1] — 2026-04-01
+
+### 🐛 Bug Fixes
+
+#### ChangelogModal — HTML Comment & HR Noise Stripping
+
+- `sanitizeContent` added to `ChangelogModal.tsx`: strips HTML comments (`<!-- ... -->`) and blank `---` separator lines before parsing fetched markdown
+- Prevents stray comment blocks and unwanted horizontal rules from rendering as layout noise in the modal
+- Fetch chain updated: `.then((text) => setContent(sanitizeContent(text)))` instead of `.then(setContent)`
+
+### 🔧 Technical
+
+#### Migration Cleanup — Clean RLS Baseline
+
+- Archived 9 outdated/conflicting migration files from `supabase/migrations/` to `archive/migrations/`
+  - `20260330a` through `20260330f` — iterative RLS recursion fixes, each superseding the previous
+  - `20260401b_fix_shared_account_access.sql` — rolled into new baseline
+  - `20260401b_debts_external_participants.sql` — rolled into new baseline
+  - `02_clean_rls.sql` — referenced non-existent tables (`pool_members` post-drop, `recurring`, `pool_expenses`, `pool_settlements`, `pool_debts`)
+- New `supabase/migrations/20260401c_clean_rls_baseline.sql` is the authoritative RLS source:
+  - Drops all known policy names before recreating (idempotent)
+  - **Pool full-trust model**: any pool member can `INSERT`, `UPDATE`, `DELETE` pool transactions (was incorrectly restricted to `paid_by = auth.uid()` or owner only)
+  - **Account UPDATE**: restricted to owner only (members have read access only, per spec)
+  - All policies use flat `EXISTS` subqueries — no SECURITY DEFINER functions in policy expressions except `get_connected_user_ids()` for category co-member visibility
+  - Stale functions dropped: `get_my_account_ids()`, `get_my_member_account_ids()`, `is_account_creator()`
+  - Creator backfill + `trg_auto_add_creator_member` trigger rolled in
+  - `debts` participant columns (`from_participant_id`, `to_participant_id`, etc.) added via `ADD COLUMN IF NOT EXISTS`
+
+---
+
 ## [1.0.0] — 2026-04-01
 
 ### 🔍 Architecture

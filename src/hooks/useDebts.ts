@@ -92,32 +92,46 @@ export function useDebts(user: User | null) {
       const fromUserId = participantToUserId.get(debt.from);
       const toUserId = participantToUserId.get(debt.to);
 
+      // Get participant display names for debt records
+      const fromMember = allMembers.find(m => m.id === debt.from);
+      const toMember = allMembers.find(m => m.id === debt.to);
+      const fromName = fromMember?.display_name || fromMember?.external_name || 'Unknown';
+      const toName = toMember?.display_name || toMember?.external_name || 'Unknown';
+
       if (fromUserId && toUserId) {
-        // Auth ↔ Auth: create a proper debt record
+        // Auth ↔ Auth: create a debt record with auth user IDs
         preTxs.push({
           fromParticipantId: fromUserId,
           toParticipantId: toUserId,
           amount: debt.amount,
-          metadata: { reason: 'settlement', sourcePoolId: poolId, kind: 'debt' },
+          metadata: {
+            reason: 'settlement',
+            sourcePoolId: poolId,
+            kind: 'debt',
+            fromParticipantName: fromName,
+            toParticipantName: toName,
+            fromParticipantDbId: debt.from,
+            toParticipantDbId: debt.to,
+          },
         });
-      } else if (toUserId) {
-        // External → Auth: auth user is owed → record as income
+      } else {
+        // Mixed or External participants: create debt record with participant IDs
+        // This ensures ALL debts from settlement are tracked, not just auth-to-auth ones
         preTxs.push({
-          fromParticipantId: debt.from,
-          toParticipantId: toUserId,
+          fromParticipantId: debt.from, // participant ID (not user ID)
+          toParticipantId: debt.to,     // participant ID (not user ID)
           amount: debt.amount,
-          metadata: { reason: 'settlement', sourcePoolId: poolId, kind: 'entry', entryType: 'income' },
-        });
-      } else if (fromUserId) {
-        // Auth → External: auth user owes → record as expense
-        preTxs.push({
-          fromParticipantId: fromUserId,
-          toParticipantId: debt.to,
-          amount: debt.amount,
-          metadata: { reason: 'settlement', sourcePoolId: poolId, kind: 'entry', entryType: 'expense' },
+          metadata: {
+            reason: 'settlement',
+            sourcePoolId: poolId,
+            kind: 'debt',
+            fromParticipantName: fromName,
+            toParticipantName: toName,
+            fromUserId: fromUserId || null,
+            toUserId: toUserId || null,
+          },
         });
       }
-      // External → External: no auth user involved, skip
     }
 
     return preTxs;
@@ -126,6 +140,7 @@ export function useDebts(user: User | null) {
   /**
    * WRITE — commits debt-type pre-transactions to the debts table and closes the pool.
    * Only called after the user explicitly confirms the settlement preview.
+   * Now handles both auth-to-auth debts and debts involving external participants.
    */
   const commitPoolSettlement = useCallback(async (
     poolId: string,
@@ -133,18 +148,27 @@ export function useDebts(user: User | null) {
   ): Promise<void> => {
     if (!user || preTxs.length === 0) return;
 
-    // Only write debt-type entries to the debts table
-    const debtRows = preTxs
-      .filter((p) => p.metadata.kind === 'debt')
-      .map((p) => ({
-        from_user: p.fromParticipantId,
-        to_user: p.toParticipantId,
+    // All settlements are now debt-type records
+    const debtRows = preTxs.map((p) => {
+      const isAuthToAuth = p.metadata.fromUserId && p.metadata.toUserId;
+
+      return {
+        // For auth-to-auth debts, use auth user IDs for compatibility
+        // For mixed/external debts, use participant IDs
+        from_user: isAuthToAuth ? p.metadata.fromUserId : p.fromParticipantId,
+        to_user: isAuthToAuth ? p.metadata.toUserId : p.toParticipantId,
         amount: p.amount,
         pool_id: p.metadata.sourcePoolId,
         status: 'pending' as const,
         from_confirmed: false,
         to_confirmed: false,
-      }));
+        // New fields for participant information
+        from_participant_id: p.metadata.fromParticipantDbId || p.fromParticipantId,
+        to_participant_id: p.metadata.toParticipantDbId || p.toParticipantId,
+        from_participant_name: p.metadata.fromParticipantName,
+        to_participant_name: p.metadata.toParticipantName,
+      };
+    });
 
     if (debtRows.length > 0) {
       logAPI('supabase://debts', { source: 'settlements.pool_card.settle_button', action: 'commitPoolSettlement' });
@@ -160,11 +184,10 @@ export function useDebts(user: User | null) {
 
   /**
    * One-step settle used by PoolScreen's Settle button.
+   * Updated to handle all settlement transactions as debt records.
    * Returns a SettleResult that drives what the UI does next:
    *   'settled' → debt records created, pool closed → navigate away
    *   'balanced' → no debts, pool left open
-   *   'entry'   → at least one external member; pool closed; auth user should
-   *               record a personal ledger entry for the net amount
    *   'error'   → something went wrong; error already surfaced via webAlert
    */
   const settlePoolDebts = useCallback(async (poolId: string): Promise<SettleResult> => {
@@ -177,36 +200,11 @@ export function useDebts(user: User | null) {
         return { kind: 'balanced' };
       }
 
-      const debtPrTxs = preTxs.filter((p) => p.metadata.kind === 'debt');
-      const entryPrTxs = preTxs.filter((p) => p.metadata.kind === 'entry');
+      // All settlements are now debt records - commit them all
+      await commitPoolSettlement(poolId, preTxs);
 
-      if (debtPrTxs.length > 0) {
-        // commitPoolSettlement closes the pool and inserts debt rows
-        await commitPoolSettlement(poolId, debtPrTxs);
-      }
-
-      if (entryPrTxs.length > 0) {
-        if (debtPrTxs.length === 0) {
-          // No debt-type settlements → pool not yet closed by commitPoolSettlement
-          logAPI('supabase://pools', { source: 'pool.header.settle_button', action: 'closePoolForEntrySettle' });
-          await supabase.from('pools').update({ status: 'closed' }).eq('id', poolId);
-        }
-
-        // Aggregate net amount for the auth user across all entry-type items
-        let net = 0;
-        for (const pt of entryPrTxs) {
-          if (pt.metadata.entryType === 'income') net += pt.amount;
-          else if (pt.metadata.entryType === 'expense') net -= pt.amount;
-        }
-
-        if (debtPrTxs.length > 0) {
-          webAlert('Pool settled', `${debtPrTxs.length} debt(s) created. Record your share as a transaction.`);
-        }
-        return { kind: 'entry', amount: Math.round(Math.abs(net) * 100) / 100, entryType: net >= 0 ? 'income' : 'expense' };
-      }
-
-      webAlert('Pool settled', `${debtPrTxs.length} debt(s) created.`);
-      return { kind: 'settled', debtCount: debtPrTxs.length };
+      webAlert('Pool settled', `${preTxs.length} debt(s) created.`);
+      return { kind: 'settled', debtCount: preTxs.length };
     } catch (err) {
       webAlert(
         err instanceof Error && (err.message.includes('Pool needs') || err.message.includes('No transactions'))

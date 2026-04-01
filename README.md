@@ -6,6 +6,21 @@ Financial tracking app for couples. Track income, expenses, and transfers across
 
 ## Patch Notes
 
+### v1.0.1 — ChangelogModal sanitization, migration cleanup
+
+#### Bug Fixes
+
+- **ChangelogModal:** `sanitizeContent` strips HTML comments and blank `---` separators before parsing fetched markdown, preventing rendering noise
+- Full list: [PATCHNOTES.md](./PATCHNOTES.md)
+
+#### Technical
+
+- **Migration cleanup:** 9 outdated RLS migrations archived; new `20260401c_clean_rls_baseline.sql` is the authoritative RLS source
+- Pool domain corrected to full-trust model: any member can UPDATE/DELETE pool transactions
+- Stale SECURITY DEFINER functions removed; all policies use flat `EXISTS` subqueries
+
+---
+
 ### v1.0.0 — DevTools tracing, pool deletion, numpad enhancements, changelog modal
 
 #### Architecture
@@ -428,7 +443,10 @@ npx supabase db push
 
 This single file creates all tables, indexes, RLS policies, and functions. See `supabase/db/schema.md` for the full schema reference.
 
-For incremental updates, apply any `supabase/migrations/*.sql` files that post-date your last push (e.g. `20260401_unified_pool_participants.sql` replaces `pool_members` with `pool_participants`).
+For incremental updates, apply the following in order after the baseline:
+
+1. `20260401_unified_pool_participants.sql` — replaces `pool_members` with `pool_participants`; remaps `pool_transactions.paid_by` to participant UUIDs
+2. `20260401c_clean_rls_baseline.sql` — authoritative RLS rebuild: drops all prior policies, recreates full policy set with flat EXISTS pattern, creator membership backfill + trigger, debts participant columns
 
 ### 5. Start development
 

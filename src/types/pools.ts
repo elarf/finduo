@@ -44,10 +44,7 @@ export type PoolTransaction = {
 
 /**
  * In-memory settlement result — not persisted until the user explicitly commits.
- *
- * kind='debt'  → write to the debts table (both parties are auth users)
- * kind='entry' → at least one party is external; auth user should record as a
- *                personal transaction entry instead of a debt record.
+ * Updated to handle both auth-to-auth debts and debts involving external participants.
  */
 export type PreTransaction = {
   fromParticipantId: string;
@@ -59,6 +56,15 @@ export type PreTransaction = {
     kind: 'debt' | 'entry';
     /** Only present when kind='entry'. 'income' = auth user is owed; 'expense' = auth user owes. */
     entryType?: 'income' | 'expense';
+    /** Participant display names for UI */
+    fromParticipantName?: string;
+    toParticipantName?: string;
+    /** Original participant database IDs */
+    fromParticipantDbId?: string;
+    toParticipantDbId?: string;
+    /** Auth user IDs when both parties are authenticated */
+    fromUserId?: string | null;
+    toUserId?: string | null;
   };
 };
 
@@ -84,4 +90,9 @@ export type AppDebt = {
   to_confirmed: boolean;
   created_at: string;
   updated_at: string;
+  /** New fields for external participant support */
+  from_participant_id?: string;
+  to_participant_id?: string;
+  from_participant_name?: string;
+  to_participant_name?: string;
 };

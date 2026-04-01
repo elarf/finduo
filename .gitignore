@@ -49,3 +49,10 @@ yarn-error.*
 
 # Claude Code temp files
 tmpclaude-*
+
+# Debug/test files
+debug-*.js
+test-*.js
+
+# One-off production fixes (applied directly)
+supabase/migrations/*production*.sql

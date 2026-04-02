@@ -23,6 +23,9 @@ let html = fs.readFileSync(distHtml, 'utf8');
 
 // --- HEAD TAGS ---
 const headTags = [
+  // Ensure correct viewport on all devices — critical for Samsung (S22/S25) and Android Chrome,
+  // which otherwise default to a 980px desktop viewport until JS runs.
+  '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">',
   '<link rel="manifest" href="/manifest.json">',
   '<meta name="theme-color" content="#53E3A6">',
   '<meta name="apple-mobile-web-app-capable" content="yes">',

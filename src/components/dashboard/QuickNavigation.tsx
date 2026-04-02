@@ -21,6 +21,7 @@ import type {
   TransactionType,
 } from '../../types/dashboard';
 import { uiPath, uiProps, logUI } from '../../lib/devtools';
+import { APP_VERSION, fetchLatestVersion, isNewerVersion } from '../../lib/version';
 import ChangelogModal from './ChangelogModal';
 
 type QuickNavigationProps = {
@@ -129,9 +130,16 @@ function QuickNavigation({
   onFilterTransfers,
 }: QuickNavigationProps) {
   const [deletingCategoryIds, setDeletingCategoryIds] = useState<Set<string>>(new Set());
-  const [showExperimental, setShowExperimental] = useState(false);
+  const [showFinOps, setShowFinOps] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const [showIntervalVisibility, setShowIntervalVisibility] = useState(false);
   const [showChangelog, setShowChangelog] = useState(false);
+  const [latestVersion, setLatestVersion] = useState<string | null>(null);
+  const updateAvailable = latestVersion !== null && isNewerVersion(APP_VERSION, latestVersion);
+
+  useEffect(() => {
+    void fetchLatestVersion().then(setLatestVersion);
+  }, []);
 
   useEffect(() => {
     logUI(uiPath('quick_nav', 'panel', 'container'), 'mount');
@@ -166,45 +174,65 @@ function QuickNavigation({
         />
         <View style={styles.menuPanel}>
           <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.menuScrollContent}>
-            <Text style={styles.menuTitle}>Quick Navigation</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <Text style={styles.menuTitle}>Quick Navigation</Text>
+              <TouchableOpacity
+                onPress={() => setShowChangelog(true)}
+                style={[
+                  { paddingHorizontal: 7, paddingVertical: 3, borderRadius: 5, borderWidth: 1 },
+                  updateAvailable
+                    ? { backgroundColor: '#053d1e', borderColor: '#4ade80' }
+                    : { backgroundColor: '#0E1A2B', borderColor: '#1F3A59' },
+                ]}
+              >
+                <Text style={{ fontSize: 10, fontWeight: '700', color: updateAvailable ? '#4ade80' : '#475569' }}>
+                  {updateAvailable ? `v${APP_VERSION} → v${latestVersion!}` : `v${APP_VERSION}`}
+                </Text>
+              </TouchableOpacity>
+            </View>
 
             {/* ── Accounts ── */}
-            <View {...uiProps(uiPath('quick_nav', 'accounts', 'section_header'))} style={styles.menuSectionHeader}>
-              <TouchableOpacity
-                onPress={() => {
-                  logUI(uiPath('quick_nav', 'accounts', 'section_header'), 'press');
-                  setMenuAccountsExpanded((prev) => !prev);
-                }}
-              >
-                <Text style={styles.menuSectionTitle}>Accounts {menuAccountsExpanded ? '▾' : '▸'}</Text>
-              </TouchableOpacity>
-              <View style={{ flexDirection: 'row', gap: 6 }}>
-                {menuAccountsExpanded && (
-                  <TouchableOpacity
-                    style={[styles.menuIconAction, menuAccountsEditMode && { backgroundColor: '#2C4669' }]}
-                    onPress={() => {
-                      logUI(uiPath('quick_nav', 'accounts', 'edit_mode_toggle'), 'press');
-                      setMenuAccountsEditMode((p) => !p);
-                    }}
-                  >
-                    <Text style={styles.manageIconText}>✎</Text>
-                  </TouchableOpacity>
-                )}
-                {(menuAccountsExpanded || accounts.length === 0) && (
-                  <TouchableOpacity
-                    {...uiProps(uiPath('quick_nav', 'accounts', 'add_button'))}
-                    style={styles.menuIconAction}
-                    onPress={() => {
-                      logUI(uiPath('quick_nav', 'accounts', 'add_button'), 'press');
-                      onClose();
-                      openCreateAccount();
-                    }}
-                  >
-                    <Text style={styles.menuIconActionText}>＋</Text>
-                  </TouchableOpacity>
-                )}
+            <TouchableOpacity
+              {...uiProps(uiPath('quick_nav', 'accounts', 'section_header'))}
+              style={styles.menuItem}
+              onPress={() => {
+                logUI(uiPath('quick_nav', 'accounts', 'section_header'), 'press');
+                setMenuAccountsExpanded((prev) => !prev);
+              }}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', width: '100%' }}>
+                <View style={{ width: 20 }}>
+                  <Text style={{ color: '#8FA8C9', fontSize: 11, fontWeight: '700' }}>{menuAccountsExpanded ? '▾' : '▸'}</Text>
+                </View>
+                <Text style={[styles.menuItemText, { flex: 1, textAlign: 'center' }]}>Accounts</Text>
+                <View style={{ minWidth: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 6 }}>
+                  {menuAccountsExpanded && (
+                    <TouchableOpacity
+                      style={[styles.menuIconAction, menuAccountsEditMode && { backgroundColor: '#2C4669' }]}
+                      onPress={() => {
+                        logUI(uiPath('quick_nav', 'accounts', 'edit_mode_toggle'), 'press');
+                        setMenuAccountsEditMode((p) => !p);
+                      }}
+                    >
+                      <Text style={styles.manageIconText}>✎</Text>
+                    </TouchableOpacity>
+                  )}
+                  {(menuAccountsExpanded || accounts.length === 0) && (
+                    <TouchableOpacity
+                      {...uiProps(uiPath('quick_nav', 'accounts', 'add_button'))}
+                      style={styles.menuIconAction}
+                      onPress={() => {
+                        logUI(uiPath('quick_nav', 'accounts', 'add_button'), 'press');
+                        onClose();
+                        openCreateAccount();
+                      }}
+                    >
+                      <Text style={styles.menuIconActionText}>＋</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
               </View>
-            </View>
+            </TouchableOpacity>
             {menuAccountsExpanded && accounts.map((account, accountIdx) => {
               const isOwned = account.created_by === user?.id;
               const isPrimary = account.id === primaryAccountId;
@@ -341,48 +369,53 @@ function QuickNavigation({
             })}
 
             {/* ── Income Categories ── */}
-            <View {...uiProps(uiPath('quick_nav', 'income_cats', 'section_header'))} style={styles.menuSectionHeader}>
-              <TouchableOpacity
-                onPress={() => {
-                  logUI(uiPath('quick_nav', 'income_cats', 'section_header'), 'press');
-                  setMenuIncomeCatExpanded((prev) => !prev);
-                }}
-              >
-                <Text style={[styles.menuSectionTitle, { color: '#4ade80' }]}>Income {menuIncomeCatExpanded ? '▾' : '▸'}</Text>
-              </TouchableOpacity>
-              <View style={{ flexDirection: 'row', gap: 6 }}>
-                {menuIncomeCatExpanded && (
-                  <TouchableOpacity
-                    style={[styles.menuIconAction, menuIncomeCatEditMode && { backgroundColor: '#2C4669' }]}
-                    onPress={() => {
-                      logUI(uiPath('quick_nav', 'income_cats', 'edit_mode_toggle'), 'press');
-                      setMenuIncomeCatEditMode((p) => !p);
-                    }}
-                  >
-                    <Text style={styles.manageIconText}>✎</Text>
-                  </TouchableOpacity>
-                )}
-                {(menuIncomeCatExpanded || !categories.some((c) => c.type === 'income' && c.name !== 'Transfer')) && (
-                  <TouchableOpacity
-                    {...uiProps(uiPath('quick_nav', 'income_cats', 'add_button'))}
-                    style={styles.menuIconAction}
-                    onPress={() => {
-                      logUI(uiPath('quick_nav', 'income_cats', 'add_button'), 'press');
-                      onClose();
-                      setEditingCategoryId(null);
-                      setCategoryName('');
-                      setCategoryType('income');
-                      setCategoryColor(null);
-                      setCategoryIcon(null);
-                      setCategoryTagIds([]);
-                      setShowCategoryModal(true);
-                    }}
-                  >
-                    <Text style={styles.menuIconActionText}>＋</Text>
-                  </TouchableOpacity>
-                )}
+            <TouchableOpacity
+              {...uiProps(uiPath('quick_nav', 'income_cats', 'section_header'))}
+              style={styles.menuItem}
+              onPress={() => {
+                logUI(uiPath('quick_nav', 'income_cats', 'section_header'), 'press');
+                setMenuIncomeCatExpanded((prev) => !prev);
+              }}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', width: '100%' }}>
+                <View style={{ width: 20 }}>
+                  <Text style={{ color: '#4ade80', fontSize: 11, fontWeight: '700' }}>{menuIncomeCatExpanded ? '▾' : '▸'}</Text>
+                </View>
+                <Text style={[styles.menuItemText, { flex: 1, textAlign: 'center', color: '#4ade80' }]}>Income</Text>
+                <View style={{ minWidth: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 6 }}>
+                  {menuIncomeCatExpanded && (
+                    <TouchableOpacity
+                      style={[styles.menuIconAction, menuIncomeCatEditMode && { backgroundColor: '#2C4669' }]}
+                      onPress={() => {
+                        logUI(uiPath('quick_nav', 'income_cats', 'edit_mode_toggle'), 'press');
+                        setMenuIncomeCatEditMode((p) => !p);
+                      }}
+                    >
+                      <Text style={styles.manageIconText}>✎</Text>
+                    </TouchableOpacity>
+                  )}
+                  {(menuIncomeCatExpanded || !categories.some((c) => c.type === 'income' && c.name !== 'Transfer')) && (
+                    <TouchableOpacity
+                      {...uiProps(uiPath('quick_nav', 'income_cats', 'add_button'))}
+                      style={styles.menuIconAction}
+                      onPress={() => {
+                        logUI(uiPath('quick_nav', 'income_cats', 'add_button'), 'press');
+                        onClose();
+                        setEditingCategoryId(null);
+                        setCategoryName('');
+                        setCategoryType('income');
+                        setCategoryColor(null);
+                        setCategoryIcon(null);
+                        setCategoryTagIds([]);
+                        setShowCategoryModal(true);
+                      }}
+                    >
+                      <Text style={styles.menuIconActionText}>＋</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
               </View>
-            </View>
+            </TouchableOpacity>
             {menuIncomeCatExpanded && (menuIncomeCatEditMode ? categories : selectedCategories).filter((c) => c.type === 'income' && c.name !== 'Transfer').map((category) => {
               const isHidden = hiddenCategoryIds.has(category.id);
               const catColor = isHidden ? '#475569' : (category.color ?? '#4ade80');
@@ -463,48 +496,53 @@ function QuickNavigation({
             })}
 
             {/* ── Expense Categories ── */}
-            <View {...uiProps(uiPath('quick_nav', 'expense_cats', 'section_header'))} style={styles.menuSectionHeader}>
-              <TouchableOpacity
-                onPress={() => {
-                  logUI(uiPath('quick_nav', 'expense_cats', 'section_header'), 'press');
-                  setMenuExpenseCatExpanded((prev) => !prev);
-                }}
-              >
-                <Text style={[styles.menuSectionTitle, { color: '#f87171' }]}>Expense {menuExpenseCatExpanded ? '▾' : '▸'}</Text>
-              </TouchableOpacity>
-              <View style={{ flexDirection: 'row', gap: 6 }}>
-                {menuExpenseCatExpanded && (
-                  <TouchableOpacity
-                    style={[styles.menuIconAction, menuExpenseCatEditMode && { backgroundColor: '#2C4669' }]}
-                    onPress={() => {
-                      logUI(uiPath('quick_nav', 'expense_cats', 'edit_mode_toggle'), 'press');
-                      setMenuExpenseCatEditMode((p) => !p);
-                    }}
-                  >
-                    <Text style={styles.manageIconText}>✎</Text>
-                  </TouchableOpacity>
-                )}
-                {(menuExpenseCatExpanded || !categories.some((c) => c.type === 'expense' && c.name !== 'Transfer')) && (
-                  <TouchableOpacity
-                    {...uiProps(uiPath('quick_nav', 'expense_cats', 'add_button'))}
-                    style={styles.menuIconAction}
-                    onPress={() => {
-                      logUI(uiPath('quick_nav', 'expense_cats', 'add_button'), 'press');
-                      onClose();
-                      setEditingCategoryId(null);
-                      setCategoryName('');
-                      setCategoryType('expense');
-                      setCategoryColor(null);
-                      setCategoryIcon(null);
-                      setCategoryTagIds([]);
-                      setShowCategoryModal(true);
-                    }}
-                  >
-                    <Text style={styles.menuIconActionText}>＋</Text>
-                  </TouchableOpacity>
-                )}
+            <TouchableOpacity
+              {...uiProps(uiPath('quick_nav', 'expense_cats', 'section_header'))}
+              style={styles.menuItem}
+              onPress={() => {
+                logUI(uiPath('quick_nav', 'expense_cats', 'section_header'), 'press');
+                setMenuExpenseCatExpanded((prev) => !prev);
+              }}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', width: '100%' }}>
+                <View style={{ width: 20 }}>
+                  <Text style={{ color: '#f87171', fontSize: 11, fontWeight: '700' }}>{menuExpenseCatExpanded ? '▾' : '▸'}</Text>
+                </View>
+                <Text style={[styles.menuItemText, { flex: 1, textAlign: 'center', color: '#f87171' }]}>Expense</Text>
+                <View style={{ minWidth: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 6 }}>
+                  {menuExpenseCatExpanded && (
+                    <TouchableOpacity
+                      style={[styles.menuIconAction, menuExpenseCatEditMode && { backgroundColor: '#2C4669' }]}
+                      onPress={() => {
+                        logUI(uiPath('quick_nav', 'expense_cats', 'edit_mode_toggle'), 'press');
+                        setMenuExpenseCatEditMode((p) => !p);
+                      }}
+                    >
+                      <Text style={styles.manageIconText}>✎</Text>
+                    </TouchableOpacity>
+                  )}
+                  {(menuExpenseCatExpanded || !categories.some((c) => c.type === 'expense' && c.name !== 'Transfer')) && (
+                    <TouchableOpacity
+                      {...uiProps(uiPath('quick_nav', 'expense_cats', 'add_button'))}
+                      style={styles.menuIconAction}
+                      onPress={() => {
+                        logUI(uiPath('quick_nav', 'expense_cats', 'add_button'), 'press');
+                        onClose();
+                        setEditingCategoryId(null);
+                        setCategoryName('');
+                        setCategoryType('expense');
+                        setCategoryColor(null);
+                        setCategoryIcon(null);
+                        setCategoryTagIds([]);
+                        setShowCategoryModal(true);
+                      }}
+                    >
+                      <Text style={styles.menuIconActionText}>＋</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
               </View>
-            </View>
+            </TouchableOpacity>
             {menuExpenseCatExpanded && (menuExpenseCatEditMode ? categories : selectedCategories).filter((c) => c.type === 'expense' && c.name !== 'Transfer').map((category) => {
               const isHidden = hiddenCategoryIds.has(category.id);
               const catColor = isHidden ? '#475569' : (category.color ?? '#f87171');
@@ -587,52 +625,61 @@ function QuickNavigation({
             {/* ── Transfers ── */}
             <TouchableOpacity
               {...uiProps(uiPath('quick_nav', 'nav', 'transfers_item'))}
-              style={styles.menuSectionHeader}
+              style={styles.menuItem}
               onPress={() => {
                 logUI(uiPath('quick_nav', 'nav', 'transfers_item'), 'press');
                 onFilterTransfers();
               }}
             >
-              <Text style={[styles.menuSectionTitle, { color: '#a855f7' }]}>↔ Transfers</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', width: '100%' }}>
+                <View style={{ width: 20 }} />
+                <Text style={[styles.menuItemText, { flex: 1, textAlign: 'center', color: '#a855f7' }]}>↔ Transfers</Text>
+                <View style={{ minWidth: 20 }} />
+              </View>
             </TouchableOpacity>
 
             {/* ── Tags ── */}
-            <View {...uiProps(uiPath('quick_nav', 'tags', 'section_header'))} style={styles.menuSectionHeader}>
-              <TouchableOpacity
-                onPress={() => {
-                  logUI(uiPath('quick_nav', 'tags', 'section_header'), 'press');
-                  setMenuTagsExpanded((prev) => !prev);
-                }}
-              >
-                <Text style={styles.menuSectionTitle}>Tags {menuTagsExpanded ? '▾' : '▸'}</Text>
-              </TouchableOpacity>
-              <View style={{ flexDirection: 'row', gap: 6 }}>
-                {menuTagsExpanded && (
-                  <TouchableOpacity
-                    style={[styles.menuIconAction, menuTagsEditMode && { backgroundColor: '#2C4669' }]}
-                    onPress={() => {
-                      logUI(uiPath('quick_nav', 'tags', 'edit_mode_toggle'), 'press');
-                      setMenuTagsEditMode((p) => !p);
-                    }}
-                  >
-                    <Text style={styles.manageIconText}>✎</Text>
-                  </TouchableOpacity>
-                )}
-                {(menuTagsExpanded || selectedTags.length === 0) && (
-                  <TouchableOpacity
-                    {...uiProps(uiPath('quick_nav', 'tags', 'add_button'))}
-                    style={styles.menuIconAction}
-                    onPress={() => {
-                      logUI(uiPath('quick_nav', 'tags', 'add_button'), 'press');
-                      onClose();
-                      openCreateTag();
-                    }}
-                  >
-                    <Text style={styles.menuIconActionText}>＋</Text>
-                  </TouchableOpacity>
-                )}
+            <TouchableOpacity
+              {...uiProps(uiPath('quick_nav', 'tags', 'section_header'))}
+              style={styles.menuItem}
+              onPress={() => {
+                logUI(uiPath('quick_nav', 'tags', 'section_header'), 'press');
+                setMenuTagsExpanded((prev) => !prev);
+              }}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', width: '100%' }}>
+                <View style={{ width: 20 }}>
+                  <Text style={{ color: '#8FA8C9', fontSize: 11, fontWeight: '700' }}>{menuTagsExpanded ? '▾' : '▸'}</Text>
+                </View>
+                <Text style={[styles.menuItemText, { flex: 1, textAlign: 'center' }]}>Tags</Text>
+                <View style={{ minWidth: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 6 }}>
+                  {menuTagsExpanded && (
+                    <TouchableOpacity
+                      style={[styles.menuIconAction, menuTagsEditMode && { backgroundColor: '#2C4669' }]}
+                      onPress={() => {
+                        logUI(uiPath('quick_nav', 'tags', 'edit_mode_toggle'), 'press');
+                        setMenuTagsEditMode((p) => !p);
+                      }}
+                    >
+                      <Text style={styles.manageIconText}>✎</Text>
+                    </TouchableOpacity>
+                  )}
+                  {(menuTagsExpanded || selectedTags.length === 0) && (
+                    <TouchableOpacity
+                      {...uiProps(uiPath('quick_nav', 'tags', 'add_button'))}
+                      style={styles.menuIconAction}
+                      onPress={() => {
+                        logUI(uiPath('quick_nav', 'tags', 'add_button'), 'press');
+                        onClose();
+                        openCreateTag();
+                      }}
+                    >
+                      <Text style={styles.menuIconActionText}>＋</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
               </View>
-            </View>
+            </TouchableOpacity>
             {menuTagsExpanded && selectedTags.map((tag) => {
               const isActive = selectedTagFilter === tag.id;
               const tagColor = tag.color ?? '#8FA8C9';
@@ -690,78 +737,50 @@ function QuickNavigation({
               );
             })}
 
-            {/* ── Interval Visibility ── */}
+
+
+            {/* ── FinOps ── */}
             <TouchableOpacity
-              {...uiProps(uiPath('quick_nav', 'interval_visibility', 'toggle'))}
+              {...uiProps(uiPath('quick_nav', 'nav', 'finops_toggle'))}
               style={styles.menuItem}
               onPress={() => {
-                logUI(uiPath('quick_nav', 'interval_visibility', 'toggle'), 'press');
-                setShowIntervalVisibility((p) => !p);
+                logUI(uiPath('quick_nav', 'nav', 'finops_toggle'), 'press');
+                setShowFinOps((p) => !p);
               }}
             >
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <Text style={styles.menuItemText}>Visible Intervals</Text>
-                <Text style={{ color: '#64748B', fontSize: 11, fontWeight: '600' }}>{showIntervalVisibility ? '▾' : '▸'}</Text>
-              </View>
-            </TouchableOpacity>
-            {showIntervalVisibility && (['day', 'week', 'month', 'year', 'all', 'custom'] as IntervalKey[]).map((key) => (
-              <TouchableOpacity
-                {...uiProps(uiPath('quick_nav', 'interval_visibility', 'key', key))}
-                key={key}
-                style={[styles.menuItem, { paddingVertical: 6, paddingLeft: 20 }]}
-                onPress={() => {
-                  logUI(uiPath('quick_nav', 'interval_visibility', 'key', key), 'press');
-                  setIntervalVisibility({ ...intervalVisibility, [key]: !intervalVisibility[key] });
-                }}
-              >
-                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flex: 1 }}>
-                  <Text style={styles.menuItemText}>{key.toUpperCase()}</Text>
-                  <Text style={{ color: intervalVisibility[key] ? '#4ade80' : '#64748B', fontSize: 13, fontWeight: '700' }}>
-                    {intervalVisibility[key] ? '✓' : '✕'}
-                  </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', width: '100%' }}>
+                <View style={{ width: 20 }}>
+                  <Text style={{ color: '#53E3A6', fontSize: 11, fontWeight: '700' }}>{showFinOps ? '▾' : '▸'}</Text>
                 </View>
-              </TouchableOpacity>
-            ))}
-
-
-            {/* ── Navigation links ── */}
-            <TouchableOpacity
-              {...uiProps(uiPath('quick_nav', 'nav', 'pools_item'))}
-              style={styles.menuItem}
-              onPress={() => {
-                logUI(uiPath('quick_nav', 'nav', 'pools_item'), 'press');
-                onClose();
-                navigation.navigate('Pools');
-              }}
-            >
-              <Text style={styles.menuItemText}>Pools</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              {...uiProps(uiPath('quick_nav', 'nav', 'friends_item'))}
-              style={styles.menuItem}
-              onPress={() => {
-                logUI(uiPath('quick_nav', 'nav', 'friends_item'), 'press');
-                onClose();
-                setShowFriendsModal(true);
-              }}
-            >
-              <Text style={styles.menuItemText}>Friends</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              {...uiProps(uiPath('quick_nav', 'nav', 'experimental_toggle'))}
-              style={styles.menuItem}
-              onPress={() => {
-                logUI(uiPath('quick_nav', 'nav', 'experimental_toggle'), 'press');
-                setShowExperimental((p) => !p);
-              }}
-            >
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <Text style={styles.menuItemText}>Experimental</Text>
-                <Text style={{ color: '#f59e0b', fontSize: 11, fontWeight: '600' }}>⚗ {showExperimental ? '▾' : '▸'}</Text>
+                <Text style={[styles.menuItemText, { flex: 1, textAlign: 'center' }]}>FinOps</Text>
+                <View style={{ minWidth: 20, alignItems: 'flex-end' }}>
+                  {pendingDebtCount > 0 && !showFinOps && (
+                    <View style={{ backgroundColor: '#f87171', borderRadius: 10, minWidth: 20, height: 20, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 5 }}>
+                      <Text style={{ color: '#fff', fontSize: 11, fontWeight: '700' }}>{pendingDebtCount}</Text>
+                    </View>
+                  )}
+                </View>
               </View>
             </TouchableOpacity>
-            {showExperimental && (
+            {showFinOps && (
               <>
+                <TouchableOpacity
+                  {...uiProps(uiPath('quick_nav', 'nav', 'pools_item'))}
+                  style={[styles.menuItem, { paddingLeft: 20 }]}
+                  onPress={() => {
+                    logUI(uiPath('quick_nav', 'nav', 'pools_item'), 'press');
+                    onClose();
+                    navigation.navigate('Pools');
+                  }}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', width: '100%' }}>
+                    <View style={{ width: 22 }}>
+                      <Icon name="Users" size={14} color="#8FA8C9" />
+                    </View>
+                    <Text style={[styles.menuItemText, { flex: 1, textAlign: 'center' }]}>Pools</Text>
+                    <View style={{ minWidth: 22 }} />
+                  </View>
+                </TouchableOpacity>
                 <TouchableOpacity
                   {...uiProps(uiPath('quick_nav', 'nav', 'lending_item'))}
                   style={[styles.menuItem, { paddingLeft: 20 }]}
@@ -771,14 +790,18 @@ function QuickNavigation({
                     navigation.navigate('Lending');
                   }}
                 >
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                    <Icon name="Banknote" size={18} color="#EAF2FF" />
-                    <Text style={styles.menuItemText}>Lending</Text>
-                    {pendingDebtCount > 0 && (
-                      <View style={{ backgroundColor: '#f87171', borderRadius: 10, minWidth: 20, height: 20, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 5 }}>
-                        <Text style={{ color: '#fff', fontSize: 11, fontWeight: '700' }}>{pendingDebtCount}</Text>
-                      </View>
-                    )}
+                  <View style={{ flexDirection: 'row', alignItems: 'center', width: '100%' }}>
+                    <View style={{ width: 22 }}>
+                      <Icon name="Banknote" size={14} color="#8FA8C9" />
+                    </View>
+                    <Text style={[styles.menuItemText, { flex: 1, textAlign: 'center' }]}>Lending</Text>
+                    <View style={{ minWidth: 22, alignItems: 'flex-end' }}>
+                      {pendingDebtCount > 0 && (
+                        <View style={{ backgroundColor: '#f87171', borderRadius: 10, minWidth: 20, height: 20, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 5 }}>
+                          <Text style={{ color: '#fff', fontSize: 11, fontWeight: '700' }}>{pendingDebtCount}</Text>
+                        </View>
+                      )}
+                    </View>
                   </View>
                 </TouchableOpacity>
                 <TouchableOpacity
@@ -790,8 +813,49 @@ function QuickNavigation({
                     navigation.navigate('Settlements');
                   }}
                 >
-                  <Text style={styles.menuItemText}>Settlements</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', width: '100%' }}>
+                    <View style={{ width: 22 }}>
+                      <Icon name="ArrowRightLeft" size={14} color="#8FA8C9" />
+                    </View>
+                    <Text style={[styles.menuItemText, { flex: 1, textAlign: 'center' }]}>Settlements</Text>
+                    <View style={{ minWidth: 22 }} />
+                  </View>
                 </TouchableOpacity>
+              </>
+            )}
+            <TouchableOpacity
+              {...uiProps(uiPath('quick_nav', 'nav', 'friends_item'))}
+              style={styles.menuItem}
+              onPress={() => {
+                logUI(uiPath('quick_nav', 'nav', 'friends_item'), 'press');
+                onClose();
+                setShowFriendsModal(true);
+              }}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', width: '100%' }}>
+                <View style={{ width: 20 }} />
+                <Text style={[styles.menuItemText, { flex: 1, textAlign: 'center' }]}>Friends</Text>
+                <View style={{ minWidth: 20 }} />
+              </View>
+            </TouchableOpacity>
+            <TouchableOpacity
+              {...uiProps(uiPath('quick_nav', 'nav', 'experimental_toggle'))}
+              style={styles.menuItem}
+              onPress={() => {
+                logUI(uiPath('quick_nav', 'nav', 'experimental_toggle'), 'press');
+                setShowSettings((p) => !p);
+              }}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', width: '100%' }}>
+                <View style={{ width: 20 }}>
+                  <Text style={{ color: '#64748B', fontSize: 11, fontWeight: '700' }}>{showSettings ? '▾' : '▸'}</Text>
+                </View>
+                <Text style={[styles.menuItemText, { flex: 1, textAlign: 'center' }]}>Settings</Text>
+                <View style={{ minWidth: 20 }} />
+              </View>
+            </TouchableOpacity>
+            {showSettings && (
+              <>
                 <TouchableOpacity
                   {...uiProps(uiPath('quick_nav', 'nav', 'invitations_item'))}
                   style={[styles.menuItem, { paddingLeft: 20 }]}
@@ -801,7 +865,11 @@ function QuickNavigation({
                     void openInvitationsModal();
                   }}
                 >
-                  <Text style={styles.menuItemText}>Invitations</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', width: '100%' }}>
+                    <View style={{ width: 20 }} />
+                    <Text style={[styles.menuItemText, { flex: 1, textAlign: 'center' }]}>Invitations</Text>
+                    <View style={{ minWidth: 20 }} />
+                  </View>
                 </TouchableOpacity>
                 <TouchableOpacity
                   {...uiProps(uiPath('quick_nav', 'nav', 'changelog_item'))}
@@ -811,35 +879,104 @@ function QuickNavigation({
                     setShowChangelog(true);
                   }}
                 >
-                  <Text style={styles.menuItemText}>Changelogs</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', width: '100%' }}>
+                    <View style={{ width: 20 }} />
+                    <Text style={[styles.menuItemText, { flex: 1, textAlign: 'center' }]}>Changelogs</Text>
+                    <View style={{ minWidth: 20 }} />
+                  </View>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  {...uiProps(uiPath('quick_nav', 'interval_visibility', 'toggle'))}
+                  style={[styles.menuItem, { paddingLeft: 20 }]}
+                  onPress={() => {
+                    logUI(uiPath('quick_nav', 'interval_visibility', 'toggle'), 'press');
+                    setShowIntervalVisibility((p) => !p);
+                  }}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', width: '100%' }}>
+                    <View style={{ width: 20 }}>
+                      <Text style={{ color: '#64748B', fontSize: 11, fontWeight: '700' }}>{showIntervalVisibility ? '▾' : '▸'}</Text>
+                    </View>
+                    <Text style={[styles.menuItemText, { flex: 1, textAlign: 'center' }]}>Visible Intervals</Text>
+                    <View style={{ minWidth: 20 }} />
+                  </View>
+                </TouchableOpacity>
+                {showIntervalVisibility && (['day', 'week', 'month', 'year', 'all', 'custom'] as IntervalKey[]).map((key) => (
+                  <TouchableOpacity
+                    {...uiProps(uiPath('quick_nav', 'interval_visibility', 'key', key))}
+                    key={key}
+                    style={[styles.menuItem, { paddingVertical: 6, paddingLeft: 36 }]}
+                    onPress={() => {
+                      logUI(uiPath('quick_nav', 'interval_visibility', 'key', key), 'press');
+                      setIntervalVisibility({ ...intervalVisibility, [key]: !intervalVisibility[key] });
+                    }}
+                  >
+                    <View style={{ flexDirection: 'row', alignItems: 'center', width: '100%' }}>
+                      <View style={{ width: 20 }} />
+                      <Text style={[styles.menuItemText, { flex: 1, textAlign: 'center' }]}>{key.toUpperCase()}</Text>
+                      <View style={{ minWidth: 20, alignItems: 'flex-end' }}>
+                        <Text style={{ color: intervalVisibility[key] ? '#4ade80' : '#64748B', fontSize: 13, fontWeight: '700' }}>
+                          {intervalVisibility[key] ? '✓' : '✕'}
+                        </Text>
+                      </View>
+                    </View>
+                  </TouchableOpacity>
+                ))}
+                <TouchableOpacity
+                  {...uiProps(uiPath('quick_nav', 'nav', 'reload_button'))}
+                  style={[styles.menuItem, { paddingLeft: 20 }]}
+                  onPress={() => {
+                    logUI(uiPath('quick_nav', 'nav', 'reload_button'), 'press');
+                    onClose();
+                    if (Platform.OS === 'web') {
+                      const doReload = () => {
+                        // Navigate to the clean base URL (no query params) — the SW
+                        // and caches are already cleared so the browser fetches fresh.
+                        window.location.replace(
+                          window.location.origin + window.location.pathname
+                        );
+                      };
+                      // Unregister service worker and clear all caches before reloading
+                      // so the browser fetches the latest assets from the server.
+                      const steps: Promise<unknown>[] = [];
+                      if ('serviceWorker' in navigator) {
+                        steps.push(
+                          navigator.serviceWorker.getRegistrations().then((regs) =>
+                            Promise.all(regs.map((r) => r.unregister()))
+                          )
+                        );
+                      }
+                      if ('caches' in window) {
+                        steps.push(
+                          caches.keys().then((names) =>
+                            Promise.all(names.map((n) => caches.delete(n)))
+                          )
+                        );
+                      }
+                      void Promise.all(steps).then(doReload);
+                    } else {
+                      void reloadDashboard();
+                    }
+                  }}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', width: '100%' }}>
+                    <View style={{ width: 20 }} />
+                    <Text style={[styles.menuItemText, { flex: 1, textAlign: 'center' }]}>Reload app</Text>
+                    <View style={{ minWidth: 20 }} />
+                  </View>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  {...uiProps(uiPath('quick_nav', 'nav', 'signout_button'))}
+                  style={[styles.menuDanger, { marginTop: 4 }]}
+                  onPress={() => {
+                    logUI(uiPath('quick_nav', 'nav', 'signout_button'), 'press');
+                    signOut();
+                  }}
+                >
+                  <Text style={styles.menuDangerText}>Sign out</Text>
                 </TouchableOpacity>
               </>
             )}
-            <TouchableOpacity
-              {...uiProps(uiPath('quick_nav', 'nav', 'reload_button'))}
-              style={styles.menuItem}
-              onPress={() => {
-                logUI(uiPath('quick_nav', 'nav', 'reload_button'), 'press');
-                onClose();
-                if (Platform.OS === 'web') {
-                  (window as any).location.reload();
-                } else {
-                  void reloadDashboard();
-                }
-              }}
-            >
-              <Text style={styles.menuItemText}>Reload app</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              {...uiProps(uiPath('quick_nav', 'nav', 'signout_button'))}
-              style={styles.menuDanger}
-              onPress={() => {
-                logUI(uiPath('quick_nav', 'nav', 'signout_button'), 'press');
-                signOut();
-              }}
-            >
-              <Text style={styles.menuDangerText}>Sign out</Text>
-            </TouchableOpacity>
           </ScrollView>
         </View>
       </View>

@@ -2,339 +2,283 @@
 
 <!-- markdownlint-disable MD013 MD024 -->
 
-Financial tracking app for couples. Track income, expenses, and transfers across shared accounts with real-time sync, category-based spending insights, and cross-currency support.
-
-## Patch Notes
-
-### v1.0.3 — Account share revoke fix, all Lucide icons, global Transfer category
-
-#### Bug Fixes
-
-- **Revoke account access:** `Alert.alert` callbacks are silently discarded on web — confirm dialog appeared but never triggered the revoke; now uses `window.confirm` on web
-- **Duplicate Transfer categories:** each user was creating their own "Transfer" categories; now a single global system category shared by all users (`is_default = true`, `user_id = NULL`)
-
-#### Features
-
-- **Icon picker:** expanded from ~280 curated icons to all Lucide icons (~1,900); lazy-loaded 60 per page, search returns all matches instantly
-- **Transfer icon:** global Transfer category now uses the `Replace` Lucide icon
-- Full list: [PATCHNOTES.md](./PATCHNOTES.md)
+Financial tracking app for couples and shared households. Track income, expenses, and transfers across multiple accounts with real-time sync, category-based spending insights, shared expense pools, and cross-currency support.
 
 ---
 
-### v1.0.1 — ChangelogModal sanitization, migration cleanup
+## Latest Release — v1.0.4
 
-#### Bug Fixes
+- **Pool settlement redesign** — Debts and Pools in accordion sections; "Record" button converts any confirmed debt or pool transfer directly into a Dashboard transaction
+- **FinOps section** in Quick Navigation groups Pools, Lending, and Settlements; "Experimental" renamed to Settings
+- **Version indicator** in the Quick Navigation header with automatic update detection from GitHub
+- **Hard reload** now unregisters the service worker and clears all caches before fetching fresh assets
+- **Mobile viewport fix** — correct device width detected from the first paint on Samsung Galaxy and Android Chrome
+- **Bug fixes:** pool INSERT policy, pool SELECT/UPDATE/DELETE RLS granularity, external member NOT NULL, pool close visibility, settlement "Unknown" name, multi-settlement prevention, avatar overwrite on login
 
-- **ChangelogModal:** `sanitizeContent` strips HTML comments and blank `---` separators before parsing fetched markdown, preventing rendering noise
-- Full list: [PATCHNOTES.md](./PATCHNOTES.md)
-
-#### Technical
-
-- **Migration cleanup:** 9 outdated RLS migrations archived; new `20260401c_clean_rls_baseline.sql` is the authoritative RLS source
-- Pool domain corrected to full-trust model: any member can UPDATE/DELETE pool transactions
-- Stale SECURITY DEFINER functions removed; all policies use flat `EXISTS` subqueries
-
----
-
-### v1.0.0 — DevTools tracing, pool deletion, numpad enhancements, changelog modal
-
-#### Architecture
-
-- Full DevTools tracing: every UI element has a stable `testID`/`data-ui` attribute; `logUI`/`logAPI` emit scoped console messages; `EXPO_PUBLIC_DEBUG_UI=true` highlights instrumented elements on web
-- `src/lib/devtools.ts` — `uiPath`, `uiProps`, `logUI`, `logAPI`, `webAlert` utilities
-
-#### Features
-
-- Pool deletion: creator-only, behind edit toggle in pool header, confirmed by dialog
-- Pool settle works with 1-member pools and auth + external member combinations; net amount shown as a banner with "Add as transaction" button
-- Numpad: decimal dot, `00`, and `000` keys added; new bottom rows: `. 0 00` / `C 000 ←`
-- Pools promoted to main Quick Navigation (above Friends); no longer in Experimental
-- Changelogs modal (Experimental): shows PATCHNOTES.md with toggle to README; scroll-to-top FAB
-
-#### Bug Fixes
-
-- `Alert.alert` is a no-op on react-native-web — replaced with `webAlert` / `window.confirm` throughout
-- Pool transaction FK violation (code 23503) when external member is payer — fixed in app and DB
-- `closePool` returns `Promise<boolean>`; navigation only triggers on confirmed success
-- Full list: [PATCHNOTES.md](./PATCHNOTES.md)
-
----
-
-### v0.9.1 — Fixed shared account access
-
-#### Bug Fixes
-
-- **Shared account access:** Fixed critical issue where account creators couldn't access their own transactions/data after creation. Root cause: missing `account_members` rows for creators under current RLS architecture.
-  - Client fixes: `saveAccount` auto-inserts creator membership, `joinByToken`/`addFriendToAccount` use upsert (prevents 409 conflicts)
-  - Database fixes: Backfilled missing creator memberships, added auto-member trigger, cleaned RLS policies
-- Full list: [PATCHNOTES.md](./PATCHNOTES.md)
-
----
-
-### v0.9.0 — Cache-first data loading, pull-to-refresh (TanStack Query)
-
-#### Architecture
-
-- Cache-first data loading with `@tanstack/react-query` v5; five query hooks (`useAccountsQuery`, `useTransactionsQuery`, etc.) with stable keys and targeted invalidation
-- App reopen behavior: renders instantly from cache if data < 5 min old; silent background refetch
-- `DashboardContext` now proxies mutations to `queryClient.setQueryData`; all existing callbacks unchanged
-- Pull-to-refresh added to main dashboard scroll view with haptic feedback
-
----
-
-### v0.8.0 — Pool architecture, external members, settlement preview
-
-#### Architecture
-
-- `PoolScreen.tsx` refactored from 1024 lines to a ~120-line orchestration shell; all pool UI split into `src/components/pool/` components and a dedicated `usePool.ts` hook
-- `SettlementsScreen` is now a pure read-only derivation view — settlement uses a **compute → preview → commit** flow; nothing writes to DB until the user explicitly confirms
-- New `PreTransaction` type: settlement results are held in memory and previewed before being committed as debt records
-
-#### Features
-
-- External pool members: add participants who are not app users (by name); they can be selected as payer on expenses
-- Unified `pool_participants` table replaces `pool_members`; `pool_transactions.paid_by` now references participant UUIDs (supports external payers)
-
-#### Bug Fixes
-
-- Payer selector now renders with any number of members (previously required 2+)
-- Full list: [PATCHNOTES.md](./PATCHNOTES.md)
+Full history: [PATCHNOTES.md](./PATCHNOTES.md)
 
 ---
 
 ## Tech Stack
 
 - **Frontend:** React Native 0.83.2 + Expo SDK 55, TypeScript
-- **Web:** react-native-web with PWA support (installable on Android/iOS)
+- **Web:** react-native-web with PWA support (installable on Android and iOS)
 - **Backend:** Supabase (PostgreSQL, Auth, Row Level Security)
 - **Auth:** Google OAuth (PKCE flow)
-- **Icons:** lucide-react-native (Material Symbol names mapped to Lucide components)
+- **Data layer:** TanStack Query v5 (cache-first, 5 min stale time, 1 hr gc)
+- **Icons:** lucide-react-native (all ~1,900 icons available in picker)
 - **DevTools:** `src/lib/devtools.ts` — stable `testID`/`data-ui` attributes, console tracing, debug overlay
 
+---
+
 ## Features
-
-### Accounts
-
-- Create multiple financial accounts with different currencies (USD, EUR, GBP, CAD, AUD, JPY, HUF)
-- Per-account settings: include/exclude from balance overview, carry-over balance between intervals, initial balance with date
-- Reorder accounts (persisted to Supabase per user)
-- Set a primary account (persisted to Supabase per user)
-- Desktop/mobile view toggle on web
-- Account icons shown in quick navigation menu
 
 ### Transactions
 
 - Add income and expense transactions with amount, date, category, note, and tags
-- Display-only amount field with custom numpad (avoids keyboard on mobile)
+- Display-only amount field with a custom numpad (avoids the mobile keyboard)
 - Numpad layout: `7 8 9` / `4 5 6` / `1 2 3` / `. 0 00` / `C 000 ←` — supports fast large-number and precise decimal entry
-- Currency symbol shown inline with the amount (e.g. $123, €123, 123 Ft); no separate currency row
-- Custom calendar date picker for transaction date selection
-- Transactions sorted by user-chosen date (database `created_at` is hidden)
-- Recent amount suggestions based on history
+- Currency symbol shown inline with the amount (e.g. $123, €123, 123 Ft)
+- Custom calendar date picker; transactions sorted by user-chosen date
+- Recent amount suggestions based on transaction history
 - Infinite scroll with progressive loading (12 at a time)
-- Amount text colored green (income) or red (expense)
-- Transaction list shows tags with color and icon inline, followed by note text
-- If no note is provided, tag names are shown as the title; if neither, shows fallback text
+- Amount text colored green for income, red for expense
+- Transaction list shows tag icons and colors inline, followed by note text
+- If no note is provided, tag names are shown as the title; if both are absent, a fallback text is shown
+- Edit and delete transactions inline from the list
 
 ### Transfers
 
-- Dedicated transfer flow between accounts with currency conversion support
-- Exchange rate or destination amount input for cross-currency transfers
-- Transfer transactions use a global system "Transfer" category (`is_default`, shared by all users, not editable or deletable) and are excluded from income/expense totals
-- Transfers still affect net account balance
-- Transfer transactions display with a `↔` indicator and `Replace` icon
+- Dedicated transfer flow between any two accounts owned or shared by the user
+- Cross-currency support: enter the exchange rate or the destination amount directly
+- Transfer transactions use a global system "Transfer" category (shared by all users, not editable or deletable)
+- Transfers are excluded from income/expense totals but still affect net account balance
+- Transfer entries display with a `↔` indicator and the `Replace` icon
 
 ### Categories
 
 - User-global categories shared across all accounts (not per-account)
-- Categories are owned by users, not accounts — survive account deletion
+- Categories survive account deletion — they belong to users, not accounts
 - Connected users (sharing any account) see each other's categories automatically
-- Per-user category hiding: hide categories you don't want without deleting them
-- Categories have type (income/expense), color, and icon
-- Friend's categories are read-only (view and use, but cannot edit or delete)
-- Income and Expense categories shown in separate dropdown sections in quick navigation
-- Icon picker with all ~1,900 Lucide icons; lazy-loaded 60 at a time, search returns all matches instantly
-- Auto-suggest icon based on category name keywords
-- Category-based spending chart (horizontal bar chart with tap-to-filter)
-- Tap a category chip to quickly add a transaction pre-filled with that category
-- Enables cross-user spending comparison within the same category
+- Per-user category hiding: hide categories without deleting them; other users are unaffected
+- Categories have type (income/expense), optional color, and optional icon
+- A friend's categories are read-only (use but cannot edit or delete)
+- Income and Expense category sections shown as separate collapsible groups in Quick Navigation
+- Icon picker with all ~1,900 Lucide icons; lazy-loaded 60 per page, search returns all matches instantly
+- Icon auto-suggested based on category name keywords
+- Category-based horizontal spending bar chart with tap-to-filter
+- Tap a category chip to quickly open the entry modal pre-filled with that category
 
 ### Tags
 
 - Global tags with optional color and icon
-- Tag chips in transaction entry modal show each tag's icon and color; selected state uses background contrast
-- Attach tags to transactions, categories, and accounts
-- Inline tag creation in the transaction entry modal
-- Tag delete from Quick Navigation menu keeps menu open (no disruptive close)
+- Attach tags to transactions; filter the transaction list by tag
+- Tag chips in the transaction entry modal show each tag's icon and color; selected state uses background contrast
+- Inline tag creation inside the transaction entry modal
+- Tag delete from Quick Navigation keeps the menu open
+
+### Accounts
+
+- Create multiple financial accounts with different currencies (USD, EUR, GBP, CAD, AUD, JPY, HUF)
+- Per-account settings: include or exclude from the balance overview, carry-over balance between intervals, initial balance with a start date
+- Reorder accounts in Quick Navigation (order persisted to Supabase per user)
+- Set a primary account (persisted per user)
+- Account icons shown in Quick Navigation when not in edit mode
+- Share accounts with friends directly (no token required, non-expiring, revocable)
+- Invite other users to an account via time-limited tokens
 
 ### Friends System
 
-- Add other users as friends by email
-- Mutual friend requests (send, accept, reject)
-- Block users to prevent future requests
-- Share accounts with friends directly — no token needed, no expiration
-- Revoke friend access to accounts at any time
-- Friend list shows profile pictures and shared account count
-- Expand a friend to manage which accounts they have access to
+- Add other registered users as friends by email address
+- Mutual friend requests: send, accept, reject, or block
+- Blocked users cannot see the relationship or send new requests
+- Expand a friend in the Friends modal to manage which accounts they have access to
+- Share any owned account with a friend — access is non-expiring and revocable at any time
+- Friend list shows profile pictures (Google avatar or initial fallback) and the count of shared accounts
 
 ### Sharing & Invitations
 
-- Share accounts with other users via invite tokens
-- Token-based invite system: generate a token, share it, recipient pastes to join
-- Configurable expiration (default 7 days)
+- Generate invite tokens for any owned account with a configurable expiration (default 7 days)
 - Named invites for tracking who was invited
-- Shared accounts appear alongside owned accounts
+- Token recipients paste the token to join the account instantly
+- Shared accounts appear alongside owned accounts in all views
 
 ### Pools
 
-- Shared expense pools for splitting costs with friends
-- Two pool types: Event (one-time trip, dinner) or Continuous (roommates, recurring)
-- Pool creator can add registered app users (friends) or external participants by display name
-- External members shown with purple chip styling; can be selected as payer on any expense
-- All members can add and edit expenses; payer selector shows every participant (auth + external)
-- Per-person split shown automatically (total / member count)
-- Pool creator can delete the pool (confirmation required); accessible via edit toggle in pool header
-- Pool can be settled or closed; settle works with 1-member pools and auth + external combinations
+Pools are shared expense pools for splitting costs among a group.
+
+- Two pool types: **Event** (one-time, e.g. a trip or dinner) and **Continuous** (recurring, e.g. roommates)
+- Pool creator can add registered app users (from their friend list) or external participants by display name
+- External members shown with purple chip styling; can be selected as the payer on any expense
+- All pool members can add and edit expenses; the payer selector shows every participant (auth and external)
+- Per-person split shown automatically (total ÷ member count)
+- Settlement flow: **Calculate** (greedy algorithm, no DB write) → **Preview** (see each transfer: who owes whom and how much) → **Commit** (persists debts and closes pool) or **Discard** (no DB change)
 - Settlement excludes external participants from the debt graph (their payments still count toward the total)
-- Unified `pool_participants` table — `pool_transactions.paid_by` references participant UUIDs, not user UUIDs directly
-- RLS ensures users can only see pools they are members of; member list exposed via SECURITY DEFINER RPC to bypass terminal SELECT policy
+- Only the pool creator can commit a settlement, preventing duplicate debt rows from concurrent commits
+- Pool creator can close an event pool (sets `status: closed` and `end_date`; disables adding expenses and members)
+- Pool creator can delete the pool (confirmation required via dialog)
+- RLS ensures users can only see pools they are members of; the member list is exposed via a SECURITY DEFINER RPC
 
-### Settlements & Lending
+### Lending (FinOps)
 
-- Unified Settlements screen accessible from Quick Navigation menu (Experimental section)
-- Two sections: read-only pool browser, Debts list
-- Settlement uses a **compute → preview → commit** flow: tap Calculate Settlement, review each transfer (debtor → creditor, amount) as a `PreTransaction`, then Commit (persists debts + closes pool) or Discard (no DB write)
+Accessible from the FinOps section in Quick Navigation.
+
+- Lists all debts involving the current user, grouped by status: Pending, Ready to record, Paid
+- Net balance card shows overall debt position at a glance (positive = others owe you, negative = you owe others)
+- Confirm a pending debt (your side of the two-sided confirmation)
+- Once both sides confirm, the debt moves to "Ready to record" with a green **Record** button
+- Tapping **Record** navigates to the Dashboard with the entry modal pre-filled (income or expense, correct amount, descriptive note)
+
+### Settlements (FinOps)
+
+Accessible from the FinOps section in Quick Navigation.
+
+- **Debts section** (accordion, starts collapsed): Pending, Ready to record, Paid sub-sections; same confirm and Record actions as Lending
+- **Pools section** (accordion, starts expanded): browse all pools you belong to; expand any pool row to auto-calculate its settlement plan inline
+- Committed (closed) pools show an X/Y auth-members-confirmed banner and per-transfer "Record" buttons
 - `SettlementsScreen` is read-only — pool management (create, add expense, add member, close, delete) is done exclusively in PoolScreen
-- Settlement algorithm: greedy debtor-creditor matching (equal split, minimum transfers)
-- External pool members are excluded from the debt graph (debts are between auth users only)
-- Debts require dual confirmation (from_user and to_user each confirm independently)
-- Status flow: pending → confirmed (both sides confirmed) → paid
-- Net balance card shows overall debt position
-- Confirm and Mark Paid buttons contextually shown per debt
+- Settlement algorithm: greedy debtor-creditor matching for minimum number of transfers
 
 ### Overview Mode
 
-- Tap the balance card header to toggle between single-account and included-accounts overview
-- Overview mode shows combined balance across all included accounts
-- Categories section and bottom action buttons are hidden in overview mode
-- Transaction list switches to show all included-account transactions with account badges
+- Tap the balance card header to toggle between single-account and all-included-accounts overview
+- Overview totals combine balance, income, and expenses across all non-excluded accounts
+- Transaction list switches to show all included-account transactions with per-transaction account badges
 - Spending chart aggregates across all included accounts
+- Categories row and bottom action buttons are hidden in overview mode
 
 ### Date Filtering
 
 - Interval options: Day, Week, Month, Year, All, Custom
-- Custom range with start/end date inputs
-- Balance carry-over respects interval boundaries
+- Custom range with start and end date inputs
 - Opening balance computed from pre-interval transactions when carry-over is enabled
+- Balance carry-over respects interval boundaries per account setting
 
 ### Balance Card
 
-- Income colored green, expenses colored red
-- Opening balance and total included balance colored by sign (green if positive, red if negative)
-- Net balance with negative indicator
-
-### Mobile UX
-
-- Full-screen slide-up transaction modal layout: date → amount (with inline currency symbol) → note → tags → numpad → category → save/cancel
-- Income/Expense type toggle moved into the modal header — tap the button to switch type; color updates live (green/red)
-- No redundant close button — Cancel in the bottom bar is the only way to dismiss
-- Tag chips in entry modal show the tag's icon and color; selected tags highlighted with background contrast
-- Account icon displayed in modal header alongside account name
-- Persistent bottom bar with large Cancel and Save buttons
-- Swipe-to-select category picker: press "Choose Category" and drag to a category without lifting finger (PanResponder-based)
-- Category picker and account picker transitions are instant (no slide animation delay)
-- Category picker also works as a normal tappable grid
-- Cannot save a transaction without choosing a category (enforced in UI)
-- Scroll-to-top floating action button appears when scrolled past 320px
-- Swipe from left edge to open Quick Navigation menu (PanResponder-based, 20px edge zone)
-- Android hardware back button closes the topmost open modal/sheet; never exits the app or pops navigation
-- Logo shown on full-width loading screen
-
-### Desktop UX
-
-- Two-column layout at viewport width >= 1024px
-- Framed mobile preview mode (430px max-width with borders)
-- Card-style modals with backdrop dismiss
-- Collapsible sections for spending chart and categories
-- Right sidebar: fixed "All Accounts" summary card at top, scrollable content below
-- Sidebar spending chart with independent tap-to-filter (does not affect main dashboard filter)
-- Sidebar filter updates transaction list title and filters transactions by selected category
+- Income total colored green, expense total colored red
+- Opening balance and net balance colored by sign (green if ≥ 0, red if < 0)
+- Tap the balance card header to enter Overview mode
 
 ### Quick Navigation Menu
 
-- Account management with icons (large when not editing, hidden in edit mode)
-- Income and Expense category sections with icons and colors
-- Edit/delete buttons hidden behind edit mode toggle per section (accounts, categories, tags)
-- **Pools** link (top-level, navigates to PoolScreen)
-- **Friends** modal access
-- **Experimental** section (collapsed by default, toggled by tapping): Lending, Settlements, Invitations, Changelogs
-  - Lending link with pending debt badge (navigates to LendingScreen)
-  - Settlements link (navigates to unified Settlements screen)
-  - Invitations access
-  - Changelogs modal — PATCHNOTES.md and README.md viewer with scroll-to-top FAB
-- Full app reload (web: page reload, native: dashboard reload)
-- Interval selection
-- Sign out
-- Mobile: swipe from left edge to open
-- Menu order: Pools, Friends, Experimental (collapsed), Reload app, Sign out
+Swipe from the left edge (20 px zone) or tap the avatar to open.
+
+- **Version badge** — top-right of the panel header; fetches the latest `package.json` from GitHub on open; turns green with a `v1.0.3 → v1.0.4` style indicator when an update is available; tap to open ChangelogModal
+- **Accounts** — expand to see all accounts with icon, currency, and inclusion status; edit mode reveals reorder arrows, primary toggle, include/exclude toggle, edit and delete buttons
+- **Income** — expand to see income categories; tap to pre-fill an income transaction; edit mode adds hide, edit, delete buttons
+- **Expense** — expand to see expense categories; same tap and edit behaviour as Income
+- **↔ Transfers** — tap to filter the transaction list to transfers only
+- **Tags** — expand to see all tags; tap a tag to filter the transaction list; edit mode adds edit and delete buttons
+- **FinOps** (collapsible, shows pending debt badge when collapsed):
+  - **Pools** — opens PoolScreen
+  - **Lending** — opens LendingScreen; shows pending debt count badge
+  - **Settlements** — opens SettlementsScreen
+- **Friends** — opens the Friends modal
+- **Settings** (collapsible):
+  - **Invitations** — opens the Invitations modal
+  - **Changelogs** — opens ChangelogModal (PATCHNOTES.md + README.md viewer with scroll-to-top FAB)
+  - **Visible Intervals** — toggle which interval options are shown (Day, Week, Month, Year, All, Custom); selection persisted to `localStorage` across sessions
+  - **Reload app** — on web: unregisters service worker, clears all caches, reloads; on native: invalidates all queries
+  - **Sign out** — ends the session
 
 ### Header
 
-- Logo is a static image (tap-to-refresh was replaced by pull-to-refresh)
-- Profile/avatar button opens quick navigation sidebar
-- Avatar shows Google profile picture or email initial fallback
-- View mode toggle button (desktop/mobile)
+- Centered logo (static image; pull-to-refresh replaced tap-to-refresh)
+- Avatar button (top-left) opens Quick Navigation; shows Google profile picture or email-initial fallback
+- View-mode toggle button (top-right on web) switches between desktop and mobile layout
+
+### Mobile UX
+
+- Full-screen slide-up transaction modal: date → amount (inline currency) → note → tags → numpad → category → save/cancel
+- Income/Expense type toggle is a single button in the modal header; color updates live (green/red)
+- Cancel button in the modal bottom bar is the only dismiss path (no redundant close button)
+- Swipe-to-select category picker: press "Choose Category" and drag to a category without lifting the finger
+- Category picker also works as a regular tappable grid
+- Cannot save a transaction without selecting a category (enforced in the UI)
+- Scroll-to-top floating action button appears when scrolled past 320 px
+- Swipe from the left edge (20 px zone) to open Quick Navigation
+- Pull-to-refresh on the main scroll view (haptic feedback on native) — independent spinner that always dismisses via `try/finally`
+- Android hardware back button closes the topmost open modal or sheet; never exits the app unexpectedly
+
+### Desktop UX
+
+- Two-column layout at viewport width ≥ 1024 px
+- Left column: framed mobile-style dashboard (max 430 px)
+- Right sidebar: fixed "All Accounts" summary card at the top; scrollable content; independent spending chart with tap-to-filter (category filter in sidebar does not affect main dashboard filter)
+- Sidebar transaction list updates when a sidebar category is tapped
+- Card-style modals with backdrop dismiss on desktop
 
 ### PWA (Progressive Web App)
 
 - Installable on Android and iOS via browser "Add to Home Screen"
-- Service worker with stale-while-revalidate caching strategy
-- Web manifest with standalone display mode, dark theme, portrait orientation
+- Service worker with stale-while-revalidate caching strategy (`public/sw.js`)
+- Web manifest: standalone display, dark theme, portrait orientation (`public/manifest.json`)
 - Apple-specific meta tags for iOS home screen experience
-- Post-build script injects all PWA tags into the Expo web export
+- Correct viewport meta tag (`width=device-width, initial-scale=1, viewport-fit=cover`) injected at build time — ensures Samsung Galaxy and Android Chrome detect the correct device width from the first paint
+
+---
 
 ## Database Schema
 
-> Full schema reference: [`supabase/db/schema.md`](./supabase/db/schema.md)
+> Full reference: [`supabase/db/schema.md`](./supabase/db/schema.md)
 
 ### Tables
 
 | Table | Purpose |
-| ------- | ------- |
+| --- | --- |
 | `accounts` | Financial accounts (name, currency, icon, created_by, tag_ids) |
-| `account_members` | User-account relationships for sharing (user_id, account_id, role) |
+| `account_members` | User–account relationships for sharing (user_id, account_id, role) |
 | `account_settings` | Per-account config (included_in_balance, carry_over_balance, initial_balance, initial_balance_date) |
 | `account_invites` | Sharing tokens (token, name, invited_by, expires_at, used_at) |
-| `categories` | Transaction categories (name, type, color, icon, tag_ids); user-owned, shared via connected users |
-| `tags` | Tags per account (name, color, icon) |
-| `transactions` | Financial transactions (account_id, category_id, amount, note, type, date, tag_ids) |
+| `categories` | Transaction categories (name, type, color, icon, tag_ids); user-owned, visible to connected users |
+| `tags` | Tags scoped by account membership (name, color, icon) |
+| `transactions` | Financial transactions (account_id, category_id, amount, note, type, date) |
 | `transaction_tags` | Many-to-many join between transactions and tags |
 | `user_preferences` | Per-user prefs (account_order, primary_account_id, excluded_account_ids) |
 | `user_hidden_categories` | Per-user category hiding (user_id, category_id) |
-| `user_profiles` | Public user discovery (display_name, email, avatar_url) for friend system |
+| `user_profiles` | Public user discovery (display_name, email, avatar_url) for the friend system |
 | `friends` | Directional friend relationships (user_id → friend_user_id, status: pending/accepted/rejected/blocked) |
+| `contacts` | Named contacts for external pool participants (display_name, linked user optional) |
 | `pools` | Shared expense pools (name, type: event/continuous, created_by, start_date, end_date, status) |
-| `pool_participants` | Unified pool membership: auth users and external participants (type: auth/external, user_id nullable, external_name nullable) |
-| `pool_transactions` | Pool expenses (pool_id, paid_by → pool_participants.id, amount, description, date) |
-| `debts` | Settlement debts (from_user, to_user, amount, pool_id, status, from_confirmed, to_confirmed) |
+| `pool_members` | Unified pool membership: auth users and external participants (type: auth/external, user_id nullable, external_name nullable, contact_id nullable) |
+| `pool_transactions` | Pool expenses (pool_id, paid_by → pool_members.id, amount, description, date) |
+| `debts` | Settlement debts (from_user, to_user, amount, pool_id, status, from_confirmed, to_confirmed, participant name fields) |
 
 ### Key Design Decisions
 
 - Categories are user-owned (`user_id` FK) and shared across all accounts — no per-account scoping
 - Connected users (sharing at least one account) automatically see each other's categories via RLS
-- Users can hide unwanted categories per-user without affecting others (`user_hidden_categories` table)
-- Pool participants unified in `pool_participants` (replaces `pool_members`); `paid_by` on transactions references participant UUIDs, enabling external (non-user) payers; FK to `auth.users` is RESTRICT-only (not CASCADE) to prevent silent data loss
-- Transfer categories are detected by `category.name === 'Transfer'` — auto-created per-user when making the first transfer
-- Category icons are stored as Material Symbol names in the database; `Icon.tsx` maps them to Lucide components at render time
-- Row Level Security (RLS) is enabled; users can only access their own data and shared accounts
+- Users can hide unwanted categories per-user without affecting others (`user_hidden_categories`)
+- `pool_members` unifies auth users and external participants in a single table; `paid_by` on pool transactions references `pool_members.id`, enabling external payers
+- Transfer categories are a global system record (`is_default = true`, `user_id = NULL`) shared by all users
+- Category icons are stored as Lucide component names; `Icon.tsx` resolves them at render time
+- Row Level Security (RLS) is enabled on all tables; users can only access their own data and shared accounts
+- `account_members` SELECT policy is terminal (`user_id = auth.uid()` only); cross-table membership checks use SECURITY DEFINER RPCs to avoid infinite recursion
 - Friends use directional rows with mutual acceptance; blocked users cannot see the relationship
-- Account sharing via friends creates `account_members` rows — same as invite tokens but non-expiring and revocable
+- `pool_members.user_id` is nullable (external members have no user account); a CHECK constraint enforces that auth members have `user_id` and external members have `external_name`
+
+### SECURITY DEFINER RPCs
+
+| Function | Purpose |
+| --- | --- |
+| `is_account_member(acc_id)` | Returns true if `auth.uid()` is a member of the account |
+| `share_account(p_account_id, p_user_id)` | Adds a user to an account as a member |
+| `unshare_account(p_account_id, p_user_id)` | Removes a user from an account |
+| `get_friend_account_memberships(p_friend_ids)` | Returns a map of which accounts each friend can access |
+| `get_account_co_members(p_user_id)` | Returns all users who share at least one account with the caller |
+| `get_pool_members(p_pool_id)` | Returns pool members with contact data joined |
+| `add_pool_member(p_pool_id, p_user_id, p_display_name, p_contact_id)` | Adds a member to a pool (auth or external) |
+| `remove_pool_member(p_member_id)` | Removes a pool member |
+| `delete_own_account(p_account_id)` | Cascade-deletes an account the caller owns |
+
+---
 
 ## Project Structure
 
 ```text
 finduo/
-  App.tsx                          Entry point: SafeAreaProvider > AuthProvider > RootNavigator
+  App.tsx                          Entry: SafeAreaProvider > AuthProvider > RootNavigator
   index.ts                         registerRootComponent(App)
   app.json                         Expo config (scheme, icons, web PWA settings)
   public/
@@ -342,90 +286,105 @@ finduo/
     sw.js                          Service worker (stale-while-revalidate)
     icon.png                       PWA icon
   scripts/
-    patch-web.js                   Post-build: inject PWA tags into dist/index.html
+    patch-web.js                   Post-build: inject PWA tags + viewport meta into dist/index.html
     import-monefy.js               CLI tool to import Monefy CSV exports
     create-env.js                  Environment file creation helper
   src/
     components/
-      Icon.tsx                     Unified Lucide icon component (Material Symbol name -> Lucide)
+      Icon.tsx                     Unified Lucide icon component (name -> component)
       dashboard/
         AccountModal.tsx           Create/edit account modal
         AccountPickerSheet.tsx     Full-screen account picker (mobile)
         CategoryModal.tsx          Create/edit category modal
-        ChangelogModal.tsx         Changelog viewer modal (PATCHNOTES + README, scroll-to-top FAB)
+        ChangelogModal.tsx         Changelog viewer (PATCHNOTES + README, scroll-to-top FAB)
         DatePickerModal.tsx        Custom calendar date picker
         EntryModal.tsx             Transaction entry modal (desktop card + mobile fullscreen)
         FriendsModal.tsx           Friends management (list, requests, add, account sharing)
-        IconPickerSheet.tsx        Lucide icon grid picker
+        IconPickerSheet.tsx        Lucide icon grid picker (~1,900 icons, lazy-loaded)
         InvitationsModal.tsx       Token-based invite management
-        QuickNavigation.tsx        Side-panel nav menu (accounts, categories, tags, pools, friends, experimental)
+        QuickNavigation.tsx        Side-panel nav (accounts, categories, tags, FinOps, friends, settings)
         TagModal.tsx               Create/edit tag modal
-        TransferModal.tsx          Cross-account transfer modal
+        TransferModal.tsx          Cross-account transfer modal with exchange-rate support
         boxes/
           OverviewCard.tsx         Balance overview + interval picker + account overview grid
-          SpendingChart.tsx        Spending by category bars + desktop battery chart
-          CategoriesRow.tsx        Category chips row (tap-to-add, long-press-to-edit)
+          SpendingChart.tsx        Category bar chart + desktop battery chart
+          CategoriesRow.tsx        Category chips row (tap-to-add)
           TransactionSection.tsx   Transaction list with filter-aware header + invite card
         layout/
           DashboardLayout.tsx      Outermost frame: loading screen + assembles all sections
-          DashboardHeader.tsx      Header: avatar button, centered logo, view-toggle
-          DashboardBody.tsx        desktopBodyWrapper + edge swipe PanResponder + sidebar
+          DashboardHeader.tsx      Header: avatar, logo, view-mode toggle
+          DashboardBody.tsx        Desktop wrapper + edge-swipe PanResponder + sidebar
           MainScrollView.tsx       Main ScrollView + warning banner + Box components
-          DesktopSidebar.tsx       Sidebar (desktop only): totals, accounts, spending, transactions
+          DesktopSidebar.tsx       Sidebar (desktop): totals, accounts, spending, transactions
           ScrollTopFab.tsx         Scroll-to-top FAB (visible when scrollY > 320)
           BottomActions.tsx        Filter bar + income/transfer/expense bottom buttons
           ModalsRoot.tsx           Renders all modal/sheet components from context
       pool/
-        PoolHeader.tsx             Header with back/settle/close/delete/add action buttons
-        PoolSummaryCard.tsx        Total / members / per-person summary card
-        PoolMemberChips.tsx        Horizontal member chip row (purple for external)
-        PoolActions.tsx            Add Expense + Add Member action buttons
-        TransactionList.tsx        Read-only transaction list with edit/delete (owner only)
-        TransactionModal.tsx       Add/edit expense modal with full member payer selector
-        AddMemberModal.tsx         Add member: friends tab (invite accepted users) or external tab (by name)
+        AddMemberModal.tsx         Add member: friends tab or external tab (by name/contact)
         CreatePoolModal.tsx        Create pool modal (name + type selector)
+        PoolActions.tsx            Add Expense + Add Member action buttons
+        PoolHeader.tsx             Header: back, settle, close, delete, add buttons
         PoolListContent.tsx        Pool list with loading and empty states
+        PoolMemberChips.tsx        Member chip row (purple for external participants)
+        PoolSummaryCard.tsx        Total / members / per-person summary card
+        SettlementModal.tsx        Compute → preview → commit settlement flow
+        TransactionList.tsx        Read-only expense list with edit/delete (creator only)
+        TransactionModal.tsx       Add/edit expense with full member payer selector
         poolStyles.ts              Shared StyleSheet for all pool components
     context/
       AuthContext.tsx              Auth state, Google OAuth (web + native), deep link handling
       DashboardContext.tsx         All dashboard state + actions (DashboardProvider + useDashboard())
     hooks/
       useDashboardData.ts          Core data loading + targeted state update setters
-      useFriends.ts                Friends system: requests, acceptance, blocking, account sharing
-      usePools.ts                  Pool CRUD: create, list, add participants (auth+external), close, delete
-      usePool.ts                   Pool detail state: selectedPool, poolMembers, poolTotal, perPerson, settle/close/delete handlers
+      useDebts.ts                  Debt management: computePoolSettlement, commitPoolSettlement, confirmDebt
+      useFriends.ts                Friends system: requests, acceptance, blocking, profile upsert, account sharing
+      usePool.ts                   Pool detail state: selectedPool, poolMembers, poolTotal, perPerson, handlers
+      usePools.ts                  Pool CRUD: create, list, add/load members, close, delete
       usePoolTransactions.ts       Pool transaction CRUD: add, list, update, delete expenses
-      useDebts.ts                  Debt management: computePoolSettlement, commitPoolSettlement, settlePoolDebts, confirm, mark paid
+      useContacts.ts               Contact CRUD + findOrCreateContactForUser
     lib/
-      devtools.ts                  DevTools utilities: uiPath, uiProps, logUI, logAPI, webAlert
-      supabase.ts                  Supabase client init (PKCE, AsyncStorage on native)
+      devtools.ts                  uiPath, uiProps, logUI, logAPI, webAlert utilities
+      supabase.ts                  Supabase client (PKCE, AsyncStorage on native)
+      version.ts                   APP_VERSION constant, fetchLatestVersion(), isNewerVersion()
     utils/
       settlePool.ts                Pure settlement algorithm (greedy debtor-creditor matching)
     navigation/
       index.tsx                    Root navigator: Login vs Dashboard based on session
     screens/
-      LoginScreen.tsx              Google sign-in UI
       DashboardScreen.tsx          Composition shell: <DashboardProvider><DashboardLayout />
       DashboardScreen.styles.ts    Shared StyleSheet for dashboard components
-      PoolScreen.tsx               Orchestration shell: mounts pool components, owns modal state
-      LendingScreen.tsx            Standalone lending screen: debts list, confirm, mark paid
-      SettlementsScreen.tsx        Derivation-only settlements: read-only pool browser + compute→preview→commit + debts
+      LendingScreen.tsx            Debts list: confirm, net balance, convert to transaction
+      LoginScreen.tsx              Google sign-in UI
+      PoolScreen.tsx               Orchestration shell: pool list + detail, owns modal state
+      SettlementsScreen.tsx        Debts + Pools accordion view, compute/record settlements
     types/
       auth.ts                      AuthContextValue interface
-      dashboard.ts                 App data types, helpers (AppAccount, AppCategory, etc.)
-      friends.ts                   Friend system types (ResolvedFriend, ResolvedRequest, etc.)
+      dashboard.ts                 App data types (AppAccount, AppCategory, AppTag, etc.)
+      friends.ts                   Friend types (ResolvedFriend, ResolvedRequest, etc.)
       pools.ts                     Pool and debt types (Pool, PoolParticipant, PoolTransaction, AppDebt, PreTransaction, SettleResult)
   supabase/
     db/
-      schema.md                    Human-readable schema reference (all tables, columns, RLS)
+      schema.md                    Human-readable schema reference (tables, columns, RLS)
     migrations/
-      0000_baseline.sql            Complete schema baseline (recreates all 16 tables from scratch)
-      archive/                     Superseded incremental migrations (kept for history)
+      0000_baseline.sql            Full schema baseline (all tables, indexes, RLS, functions)
+      20260401_unified_pool_participants.sql
+      20260401c_clean_rls_baseline.sql
+      20260401e_production_full_fix.sql
+      20260402b_temp_categories_on_revoke.sql
+      20260402c_global_transfer_categories.sql
+      20260402d_cleanup_leftover_transfer_categories.sql
+      20260402e_transfer_category_icon.sql
+      20260402f_pools_insert_policy.sql
+      20260402g_pools_granular_rls.sql
+      20260402h_pool_members_nullable_user_id.sql
+      archive/                     Superseded incremental migrations (history only)
 ```
+
+---
 
 ## Getting Started
 
-### 1. Clone & install dependencies
+### 1. Clone and install
 
 ```bash
 npm install
@@ -437,12 +396,12 @@ npm install
 cp .env.example .env
 ```
 
-Edit `.env` with your Supabase project URL and anon key (Supabase Dashboard > Settings > API).
+Edit `.env` with your Supabase project URL and anon key (Supabase Dashboard → Settings → API).
 
-### 3. Set up Google OAuth in Supabase
+### 3. Set up Google OAuth
 
-1. Go to **Authentication > Providers > Google** in your Supabase Dashboard.
-2. Enable the Google provider and add your OAuth credentials.
+1. Go to **Authentication → Providers → Google** in your Supabase Dashboard.
+2. Enable the provider and add your OAuth credentials.
 3. Add `finduo://` as an authorised redirect URL (for native).
 4. Add your production web URL as a redirect URL (for web).
 
@@ -456,12 +415,18 @@ npx supabase link --project-ref <your-project-ref>
 npx supabase db push
 ```
 
-This single file creates all tables, indexes, RLS policies, and functions. See `supabase/db/schema.md` for the full schema reference.
+Then apply incremental migrations in order:
 
-For incremental updates, apply the following in order after the baseline:
-
-1. `20260401_unified_pool_participants.sql` — replaces `pool_members` with `pool_participants`; remaps `pool_transactions.paid_by` to participant UUIDs
-2. `20260401c_clean_rls_baseline.sql` — authoritative RLS rebuild: drops all prior policies, recreates full policy set with flat EXISTS pattern, creator membership backfill + trigger, debts participant columns
+1. `20260401_unified_pool_participants.sql`
+2. `20260401c_clean_rls_baseline.sql`
+3. `20260401e_production_full_fix.sql`
+4. `20260402b_temp_categories_on_revoke.sql`
+5. `20260402c_global_transfer_categories.sql`
+6. `20260402d_cleanup_leftover_transfer_categories.sql`
+7. `20260402e_transfer_category_icon.sql`
+8. `20260402f_pools_insert_policy.sql`
+9. `20260402g_pools_granular_rls.sql`
+10. `20260402h_pool_members_nullable_user_id.sql`
 
 ### 5. Start development
 
@@ -470,16 +435,18 @@ npx expo start          # All platforms
 npx expo start --web    # Web only
 ```
 
-## Build & Deploy
+---
+
+## Build and Deploy
 
 ### Web (PWA)
 
 ```bash
-npm run build:web       # Exports to dist/ and patches with PWA tags
-npm run serve:web       # Serve locally for testing
+npm run build:web       # Exports to dist/ and patches with PWA tags + viewport meta
+npm run serve:web       # Serve dist/ locally for testing
 ```
 
-### Android APK (preview)
+### Android (preview build)
 
 ```bash
 eas build -p android --profile preview --non-interactive
@@ -491,50 +458,66 @@ eas build -p android --profile preview --non-interactive
 node scripts/import-monefy.js --csv <path-to-export.csv> --user-id <supabase-user-id>
 ```
 
-## Validate Before Commit
+---
+
+## Development
+
+### Validate before committing
 
 ```bash
-npx tsc --noEmit
-git status --short
+npx tsc --noEmit        # TypeScript check
+git status --short      # Review changed files
 ```
 
-## Areas for Improvement
+### Bump the app version
+
+Update `src/lib/version.ts` (`APP_VERSION`) and `package.json` (`version`) together when releasing.
+
+### DevTools
+
+Set `EXPO_PUBLIC_DEBUG_UI=true` in `.env` to render green dashed outlines on all instrumented UI elements (web only). All interactions emit `[UI]` prefixed messages; all Supabase calls emit `[API]` prefixed messages to the browser console.
+
+---
+
+## Roadmap
 
 ### Architecture
 
-- [x] Extract dashboard logic into context (`DashboardContext`/`DashboardProvider`) and UI into Box/layout components
-- [x] Full DevTools tracing across all screens and components (`src/lib/devtools.ts`)
-- [ ] Split `DashboardContext` into finer-grained hooks (useTransactions, useAccounts, useCategories) to reduce re-renders
-- [ ] Create dedicated screens for account management, category management, settings
+- [x] Context-based dashboard (`DashboardContext` / `DashboardProvider`)
+- [x] TanStack Query cache layer with targeted invalidation
+- [x] Full DevTools tracing across all screens and components
+- [ ] Split `DashboardContext` into finer-grained hooks to reduce re-renders
+- [ ] Dedicated screens for account management and category management
+- [ ] Supabase Realtime subscriptions for live updates between shared users
 
 ### Features
 
-- [ ] Recurring transactions (subscriptions, salary, etc.)
+- [x] Pool settlement calculations (compute → preview → commit)
+- [x] Pool deletion and closure (creator-only)
+- [x] Lending between friends with debt confirmation
+- [x] Convert confirmed debts directly to Dashboard transactions
+- [ ] Recurring transactions (subscriptions, salary, rent)
 - [ ] Budget limits per category with alerts
-- [ ] Charts: pie chart for spending breakdown, line chart for trends over time
-- [ ] Export data to CSV/PDF
-- [ ] Multi-currency dashboard with base-currency conversion
+- [ ] Line chart for balance trends over time
+- [ ] Pie chart for spending breakdown
+- [ ] Export data to CSV or PDF
+- [ ] Multi-currency dashboard with base-currency conversion and live rates
 - [ ] Push notifications for shared account activity
 - [ ] Dark/light theme toggle
 - [ ] Transaction search and advanced filtering
-- [ ] Bulk transaction operations (multi-select, delete, re-categorize)
-- [ ] Receipt photo attachment on transactions
-- [ ] Account balance history / net worth tracking over time
-- [x] Pool settlement calculations (who owes whom)
-- [x] Pool deletion (creator-only, confirmation required)
-- [x] Lending between friends
-- [ ] Friend-to-friend spending comparison (categories are shared, UI for comparison needed)
+- [ ] Bulk transaction operations (multi-select, delete, re-categorise)
+- [ ] Receipt photo attachment
+- [ ] Account balance history and net worth tracking
 
 ### Technical
 
-- [ ] Add unit tests and integration tests
-- [ ] Remove legacy `loadMaterialSymbols` web/native files (dead code)
-- [ ] Remove `material-icons` package from dependencies (no longer used)
+- [x] Targeted state updates for mutations (no full refetch after save/delete)
+- [x] Android back button intercept (closes modals)
+- [x] Cross-platform alert/confirm (`webAlert` on web, `Alert.alert` on native)
+- [x] Hard reload with service worker unregistration and full cache clear
+- [ ] Unit tests and integration tests
+- [ ] Remove legacy `loadMaterialSymbols` files (dead code)
+- [ ] Remove `material-icons` package (no longer used)
 - [ ] Add proper error boundaries
-- [x] Implement targeted state updates for mutations (no full refetch after save/delete)
-- [x] Android back button intercept (closes modals; exit confirmation dialog on dashboard)
-- [x] Cross-platform alert/confirm (`webAlert`, `window.confirm` on web; `Alert.alert` on native)
-- [ ] Add offline support with sync queue
-- [ ] Set up CI/CD pipeline (lint, typecheck, test, build)
-- [ ] Add Supabase realtime subscriptions for live updates between shared users
-- [ ] Consider migrating from PKCE browser redirect to popup-based OAuth for better mobile web UX
+- [ ] Offline support with sync queue
+- [ ] CI/CD pipeline (lint, typecheck, test, build)

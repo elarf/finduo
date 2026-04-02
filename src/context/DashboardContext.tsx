@@ -694,9 +694,21 @@ export function DashboardProvider({
   const [customStart, setCustomStart] = useState(todayIso());
   const [customEnd, setCustomEnd] = useState(todayIso());
   const [timeCursorOffset, setTimeCursorOffset] = useState(0);
-  const [intervalVisibility, setIntervalVisibility] = useState<Record<IntervalKey, boolean>>({
+
+  const INTERVAL_VIS_KEY = 'finduo_interval_visibility';
+  const INTERVAL_DEFAULTS: Record<IntervalKey, boolean> = {
     day: true, week: true, month: true, year: true, all: true, custom: true,
+  };
+  const [intervalVisibility, setIntervalVisibility] = useState<Record<IntervalKey, boolean>>(() => {
+    try {
+      const stored = localStorage.getItem(INTERVAL_VIS_KEY);
+      if (stored) return { ...INTERVAL_DEFAULTS, ...(JSON.parse(stored) as Record<IntervalKey, boolean>) };
+    } catch {}
+    return INTERVAL_DEFAULTS;
   });
+  useEffect(() => {
+    try { localStorage.setItem(INTERVAL_VIS_KEY, JSON.stringify(intervalVisibility)); } catch {}
+  }, [intervalVisibility]);
 
   // ── Modal visibility ──
   const [menuOpen, setMenuOpen] = useState(false);
@@ -1517,14 +1529,14 @@ export function DashboardProvider({
     setShowEntryModal(true);
   }, [catPickerAnim, selectedAccountId, setEntryAccountId]);
 
-  // Open the entry modal pre-filled when the Dashboard is navigated to with prefill params
+  // Open the entry modal pre-filled when the Dashboard is navigated to with prefill params.
+  // Uses _key (e.g. debt ID) so re-navigating with a new prefill triggers the effect again.
   useEffect(() => {
     if (prefillEntry) {
       openEntryModalWithAmount(prefillEntry.type, prefillEntry.amount, prefillEntry.note);
     }
-    // Intentionally run only once on mount — prefillEntry comes from navigation params
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [(prefillEntry as any)?._key]);
 
   const openEditTransaction = useCallback((tx: AppTransaction) => {
     setEditingTransactionId(tx.id);

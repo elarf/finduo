@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Image, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image, StyleSheet, Text, View } from 'react-native';
 import { logUI, uiPath, uiProps } from '../../lib/devtools';
 import type { PoolMember } from '../../types/pools';
 
@@ -12,17 +12,12 @@ export function PoolMemberChips({ members, currentUserId }: Props) {
   const [failedAvatars, setFailedAvatars] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    logUI(uiPath('pool', 'member_chips', 'scroll_view'), 'mounted');
+    logUI(uiPath('pool', 'member_chips', 'container'), 'mounted');
   }, []);
 
   if (members.length === 0) return null;
   return (
-    <ScrollView
-      horizontal
-      showsHorizontalScrollIndicator={false}
-      contentContainerStyle={s.row}
-      {...uiProps(uiPath('pool', 'member_chips', 'scroll_view'))}
-    >
+    <View style={s.grid} {...uiProps(uiPath('pool', 'member_chips', 'container'))}>
       {members.map((m) => {
         const label =
           m.display_name ?? (m.user_id === currentUserId ? 'You' : (m.user_id?.slice(0, 8) ?? '?'));
@@ -50,43 +45,46 @@ export function PoolMemberChips({ members, currentUserId }: Props) {
                 <Text style={s.avatarLetter}>{initial}</Text>
               </View>
             )}
-            <Text style={s.chipText} {...uiProps(labelPath)}>{label}</Text>
+            <Text style={s.chipText} numberOfLines={1} {...uiProps(labelPath)}>{label}</Text>
           </View>
         );
       })}
-    </ScrollView>
+    </View>
   );
 }
 
 const s = StyleSheet.create({
-  row: {
+  grid: {
     flexDirection: 'row',
-    gap: 6,
+    flexWrap: 'wrap',
+    gap: 8,
     paddingHorizontal: 16,
     paddingTop: 10,
-    paddingBottom: 2,
+    paddingBottom: 4,
   },
   chip: {
+    flexBasis: '45%',
+    flexGrow: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 8,
     backgroundColor: '#1F3A59',
     borderRadius: 20,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingHorizontal: 10,
+    height: 38,
   },
   chipExternal: {
     backgroundColor: '#2A1F3A',
   },
   avatar: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
   },
   avatarFallback: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
     overflow: 'hidden',
     backgroundColor: '#0E2A45',
     alignItems: 'center',
@@ -97,15 +95,17 @@ const s = StyleSheet.create({
   },
   avatarLetter: {
     color: '#BAD0EE',
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: '600',
-    lineHeight: 12,
+    lineHeight: 13,
     textAlign: 'center',
     textAlignVertical: 'center',
     includeFontPadding: false,
   },
   chipText: {
     color: '#BAD0EE',
-    fontSize: 12,
+    fontSize: 13,
+    lineHeight: 16,
+    flex: 1,
   },
 });

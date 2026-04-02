@@ -17,6 +17,7 @@ import { TransactionModal } from '../components/pool/TransactionModal';
 import { AddMemberModal } from '../components/pool/AddMemberModal';
 import { CreatePoolModal } from '../components/pool/CreatePoolModal';
 import { PoolListContent } from '../components/pool/PoolListContent';
+import { SettlementModal } from '../components/pool/SettlementModal';
 import { uiPath, uiProps } from '../lib/devtools';
 import type { Pool, PoolTransaction } from '../types/pools';
 import type { PoolType } from '../types/pools';
@@ -35,7 +36,7 @@ export default function PoolScreen({ navigation }: { navigation: any }) {
     getPoolTransactions, addPoolTransaction, updatePoolTransaction, deletePoolTransaction,
   } = usePoolTransactions(user);
 
-  const { settlePoolDebts } = useDebts(user);
+  const { settlePoolDebts, computePoolSettlement, commitPoolSettlement } = useDebts(user);
   const { friends, loading: friendsLoading, loadFriends } = useFriends(user);
   const {
     contacts, loading: contactsLoading,
@@ -58,6 +59,7 @@ export default function PoolScreen({ navigation }: { navigation: any }) {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showAddTxModal, setShowAddTxModal] = useState(false);
   const [showAddMemberModal, setShowAddMemberModal] = useState(false);
+  const [showSettlementModal, setShowSettlementModal] = useState(false);
 
   // Which transaction is being edited (null = create mode)
   const [editingTx, setEditingTx] = useState<PoolTransaction | null>(null);
@@ -148,8 +150,8 @@ export default function PoolScreen({ navigation }: { navigation: any }) {
           title={pool.selectedPool.name}
           subtitle={`${pool.selectedPool.type === 'event' ? 'Event' : 'Continuous'} · ${pool.selectedPool.status}`}
           onBack={() => pool.setSelectedPool(null)}
-          onSettle={isActive ? pool.handleSettlePool : undefined}
-          onClose={isActive ? pool.handleClosePool : undefined}
+          onSettle={isActive ? () => setShowSettlementModal(true) : undefined}
+          onClose={isActive && isCreator && pool.selectedPool.type === 'event' ? pool.handleClosePool : undefined}
           onDelete={isCreator ? pool.handleDeletePool : undefined}
         />
 
@@ -163,22 +165,24 @@ export default function PoolScreen({ navigation }: { navigation: any }) {
 
         <PoolMemberChips members={pool.poolMembers} currentUserId={user?.id ?? ''} />
 
+        <View style={{ flex: 1 }}>
+          <TransactionList
+            transactions={transactions}
+            loading={txLoading}
+            members={pool.poolMembers}
+            currentUserId={user?.id ?? ''}
+            poolCreatedBy={pool.selectedPool.created_by}
+            onEdit={openEditTxModal}
+            onDelete={deletePoolTransaction}
+          />
+        </View>
+
         {isActive && (
           <PoolActions
             onAddExpense={() => setShowAddTxModal(true)}
             onAddMember={() => setShowAddMemberModal(true)}
           />
         )}
-
-        <TransactionList
-          transactions={transactions}
-          loading={txLoading}
-          members={pool.poolMembers}
-          currentUserId={user?.id ?? ''}
-          poolCreatedBy={pool.selectedPool.created_by}
-          onEdit={openEditTxModal}
-          onDelete={deletePoolTransaction}
-        />
 
         <TransactionModal
           visible={showAddTxModal}
@@ -199,6 +203,23 @@ export default function PoolScreen({ navigation }: { navigation: any }) {
           friendsLoading={friendsLoading}
           contacts={contacts}
           contactsLoading={contactsLoading}
+        />
+
+        <SettlementModal
+          visible={showSettlementModal}
+          onClose={() => setShowSettlementModal(false)}
+          onSaved={async () => {
+            setShowSettlementModal(false);
+            await getUserPools();
+            pool.setSelectedPool(null);
+          }}
+          poolId={pool.selectedPool.id}
+          poolName={pool.selectedPool.name}
+          members={pool.poolMembers}
+          transactions={transactions}
+          perPerson={pool.perPerson}
+          computeSettlement={computePoolSettlement}
+          commitSettlement={commitPoolSettlement}
         />
       </View>
     );

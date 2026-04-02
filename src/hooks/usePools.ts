@@ -164,7 +164,7 @@ export function usePools(user: User | null) {
       logAPI('supabase://pools', { source: 'pool.summary_card.card', action: 'closePool' });
       const { error } = await supabase
         .from('pools')
-        .update({ status: 'closed' })
+        .update({ status: 'closed', end_date: new Date().toISOString().slice(0, 10) })
         .eq('id', poolId);
       if (error) throw error;
       await getUserPools();

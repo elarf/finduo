@@ -4,6 +4,112 @@
 
 ---
 
+## [1.0.4] — 2026-04-02
+
+### Bug Fixes
+
+#### Avatar Overwritten with Null on Login
+
+- `ensureProfile()` in `useFriends.ts` always included `avatar_url` in the upsert payload even when the metadata field was absent, overwriting stored avatars with `null` on every sign-in or token refresh
+- Fix: `avatar_url` is only appended to the upsert payload when a non-null value is found in `user_metadata.avatar_url` or `user_metadata.picture`
+
+#### Oversized Pool Member Chips
+
+- Chips lacked an explicit `height`, causing them to inflate on web
+- Replaced `paddingVertical: 3` with `height: 26` in `PoolMemberChips.tsx`
+
+#### Pool INSERT Policy Missing
+
+- No `pools` INSERT policy existed; authenticated users could not create new pools
+- Added `pools_insert` policy: `WITH CHECK (created_by = auth.uid())`
+
+#### Pool RLS — Silent Failures for SELECT / UPDATE / DELETE
+
+- `pools_all` permissive policy caused silent failures: non-creator members could not see a newly created pool (member row did not yet exist at SELECT time); UPDATE/DELETE silently returned 0 rows with no error
+- Replaced with three granular policies: `pools_select` (`created_by = auth.uid() OR is_pool_member(id)`), `pools_update` and `pools_delete` (creator-only USING + WITH CHECK)
+
+#### External Pool Members — NOT NULL Violation (23502)
+
+- `pool_members.user_id` carried a NOT NULL constraint in production, blocking insertion of external (contact-only) participants
+- Migration: dropped NOT NULL from `pool_members.user_id`; added semantic CHECK (`auth` type requires `user_id`, `external` type requires `external_name`)
+
+#### Pool Close Button — Wrong Visibility and Missing end_date
+
+- Close button rendered for non-creators (RLS silently blocked the UPDATE); no `type === 'event'` guard; `end_date` not set on close
+- Button now shown only when `isActive && isCreator && pool.type === 'event'`; `closePool` sets `end_date` alongside `status: 'closed'`
+
+#### Settlement Plan Shows "Unknown" for Creator
+
+- Creator was added via `add_pool_member` RPC with `p_display_name: null`; all name fields returned null, showing "Unknown" in the settlement preview
+- Name resolution in `SettlementModal` now uses the enriched `members` state with metadata fallback
+
+#### Multi-Settlement Not Prevented
+
+- Non-creator members could call `commitPoolSettlement`, inserting duplicate debt rows (member policy allows INSERT) while the pool close step silently failed due to creator-only RLS
+- Commit button gated on `pool.created_by === user.id`
+
+#### LendingScreen — Truncated UUIDs and No Convert-to-Transaction
+
+- Debt counterpart names fell back to truncated UUIDs; confirmed debts showed "Mark Paid" instead of "Record"
+- Applied the same `convertToTransaction` / `prefillEntry` pattern as SettlementsScreen; name resolution now uses `to_participant_name` / `from_participant_name`
+
+### Features
+
+#### Settlement Screen Redesign
+
+- Two-section accordion layout: **Debts** (starts collapsed) → **Pools** (starts expanded)
+- Debt sub-sections: Pending, Ready to record (confirmed), Paid
+- Pool rows expand inline with auto-calculated settlement plan on expand
+- Confirmed debts and settled pool transfers show a green **Record** button
+
+#### Convert Debt / Settlement to Transaction
+
+- Tapping **Record** on any confirmed debt or settled pool transfer navigates to the Dashboard with the entry modal pre-filled (type, amount, descriptive note)
+- Uses a `_key` dependency (debt ID) in the Dashboard `useEffect` so re-navigating to an already-mounted Dashboard always re-triggers the pre-fill
+
+#### Quick Navigation — FinOps Section
+
+- Pools, Lending, and Settlements grouped into a new collapsible **FinOps** section in Quick Navigation
+- FinOps toggle shows the pending debt count badge when the section is collapsed
+- "Experimental" renamed to **Settings**; Visible Intervals, Reload app, and Sign out moved inside
+
+#### Quick Navigation — Version Indicator
+
+- App version badge displayed in the title bar of the Quick Navigation panel (top-right)
+- On open, fetches `package.json` from the GitHub main branch to detect the latest release
+- Badge turns green and shows `vX.Y.Z → vA.B.C` when a newer version is available; tapping opens the ChangelogModal
+
+#### Quick Navigation — Visual Alignment
+
+- All nav buttons and section headers now use a consistent three-slot layout: dropdown indicator on the left, label centered, badge or action buttons on the right
+- Section headers (Accounts, Income, Expense, Tags, Transfers) converted to `menuItem` style — same background, padding, border-radius as nav buttons
+
+#### Interval Visibility Persisted to localStorage
+
+- Selected visible intervals are stored in `localStorage` under the key `finduo_interval_visibility`
+- Persists through app reload and hard refresh; new interval keys added in future versions default to visible on first load
+
+#### Hard Reload — Fetch Latest Assets
+
+- "Reload app" on web now unregisters the service worker, clears all cache storage, then navigates to the clean base URL
+- Guarantees the browser fetches the latest deployed assets from the server instead of serving stale cached files
+
+#### Mobile Viewport — Immediate Device Detection
+
+- Added `<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">` to `patch-web.js`
+- Fixes Samsung Galaxy (S22/S25 Ultra) and Android Chrome rendering with a 980 px desktop viewport on initial load; correct device width is now known from the very first paint
+
+### Technical
+
+- `supabase/migrations/20260402f_pools_insert_policy.sql` — adds `pools` INSERT policy
+- `supabase/migrations/20260402g_pools_granular_rls.sql` — replaces `pools_all` with `pools_select`, `pools_update`, `pools_delete`
+- `supabase/migrations/20260402h_pool_members_nullable_user_id.sql` — drops NOT NULL on `pool_members.user_id`, adds semantic CHECK constraint
+- `src/lib/version.ts` — `APP_VERSION` constant, `fetchLatestVersion()` (GitHub main branch with cache-buster), `isNewerVersion()`
+- `DashboardContext.tsx` — `intervalVisibility` lazy-initialised from `localStorage`, persisted via `useEffect`
+- `patch-web.js` — viewport meta tag injected into `dist/index.html` at build time
+
+---
+
 ## [1.0.3] — 2026-04-02
 
 ### Bug Fixes

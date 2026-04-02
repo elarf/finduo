@@ -42,7 +42,8 @@ const s = StyleSheet.create({
     flexDirection: 'row',
     gap: 10,
     marginHorizontal: 16,
-    marginTop: 12,
+    marginTop: 8,
+    marginBottom: 16,
   },
   primary: {
     flex: 1,

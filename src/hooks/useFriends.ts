@@ -16,22 +16,23 @@ export function useFriends(user: User | null) {
   const ensureProfile = useCallback(async () => {
     if (!user) return;
     logAPI('supabase://user_profiles', { source: 'friends_modal.tab.friends', action: 'ensureProfile' });
-    await supabase.from('user_profiles').upsert(
-      {
-        user_id: user.id,
-        display_name:
-          (user.user_metadata?.full_name as string | undefined) ??
-          (user.user_metadata?.name as string | undefined) ??
-          user.email?.split('@')[0] ??
-          null,
-        email: user.email?.toLowerCase() ?? null,
-        avatar_url:
-          (user.user_metadata?.avatar_url as string | undefined) ||
-          (user.user_metadata?.picture as string | undefined) ||
-          null,
-      },
-      { onConflict: 'user_id' },
-    );
+    const newAvatarUrl =
+      (user.user_metadata?.avatar_url as string | undefined) ||
+      (user.user_metadata?.picture as string | undefined) ||
+      null;
+    const profileData: Record<string, unknown> = {
+      user_id: user.id,
+      display_name:
+        (user.user_metadata?.full_name as string | undefined) ??
+        (user.user_metadata?.name as string | undefined) ??
+        user.email?.split('@')[0] ??
+        null,
+      email: user.email?.toLowerCase() ?? null,
+    };
+    if (newAvatarUrl) {
+      profileData.avatar_url = newAvatarUrl;
+    }
+    await supabase.from('user_profiles').upsert(profileData, { onConflict: 'user_id' });
   }, [user]);
 
   const loadFriends = useCallback(async () => {

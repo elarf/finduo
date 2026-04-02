@@ -14,7 +14,7 @@ async function fetchCategories(userId: string): Promise<CategoriesQueryData> {
     await Promise.all([
       supabase
         .from('categories')
-        .select('id,user_id,name,type,color,icon,tag_ids')
+        .select('id,user_id,name,type,color,icon,tag_ids,temp_for,is_default')
         .order('name', { ascending: true }),
       supabase
         .from('user_hidden_categories')

@@ -23,9 +23,12 @@ type CategoryModalProps = {
   onSave: () => void;
   onDelete: (categoryId: string) => void;
   onToggleHidden: (categoryId: string) => void;
+  onClone: (categoryId: string) => void;
   openIconPickerSheet: (target: 'category') => void;
   saving: boolean;
   isOwnedByUser: boolean;
+  isTempForUser: boolean;
+  isDefault: boolean;
   isHidden: boolean;
 };
 
@@ -36,8 +39,8 @@ function CategoryModal({
   categoryColor, setCategoryColor,
   categoryIcon, setCategoryIcon,
   categoryTagIds, setCategoryTagIds,
-  tags, onSave, onDelete, onToggleHidden, openIconPickerSheet, saving,
-  isOwnedByUser, isHidden,
+  tags, onSave, onDelete, onToggleHidden, onClone, openIconPickerSheet, saving,
+  isOwnedByUser, isTempForUser, isDefault, isHidden,
 }: CategoryModalProps) {
   const readOnly = editingCategoryId !== null && !isOwnedByUser;
   return (
@@ -56,7 +59,9 @@ function CategoryModal({
             {readOnly ? 'Category' : editingCategoryId ? 'Edit category' : 'Create category'}
           </Text>
           {readOnly && (
-            <Text style={{ color: '#64748B', fontSize: 12, marginBottom: 8 }}>Shared by another user</Text>
+            <Text style={{ color: '#64748B', fontSize: 12, marginBottom: 8 }}>
+              {isDefault ? 'System category' : isTempForUser ? 'Temp — access to this category was revoked' : 'Shared by another user'}
+            </Text>
           )}
           <TextInput
             placeholder="Category name"
@@ -156,7 +161,7 @@ function CategoryModal({
           )}
 
           <View style={styles.modalActions}>
-            {editingCategoryId && (
+            {editingCategoryId && !isDefault && (
               <TouchableOpacity
                 style={[styles.modalDanger, !isOwnedByUser && { opacity: 0.5 }]}
                 onPress={() => {
@@ -179,7 +184,7 @@ function CategoryModal({
                 <Text style={styles.modalDangerText}>Remove</Text>
               </TouchableOpacity>
             )}
-            {editingCategoryId && (
+            {editingCategoryId && !isDefault && (
               <TouchableOpacity
                 style={styles.modalSecondary}
                 onPress={() => { logUI(uiPath('category_modal', 'actions', 'hide_button'), 'press'); onToggleHidden(editingCategoryId); }}
@@ -195,6 +200,16 @@ function CategoryModal({
             >
               <Text style={styles.modalSecondaryText}>Cancel</Text>
             </TouchableOpacity>
+            {isTempForUser && editingCategoryId && (
+              <TouchableOpacity
+                style={styles.modalPrimary}
+                onPress={() => { logUI(uiPath('category_modal', 'actions', 'keep_button'), 'press'); onClone(editingCategoryId); }}
+                disabled={saving}
+                {...uiProps(uiPath('category_modal', 'actions', 'keep_button'))}
+              >
+                <Text style={styles.modalPrimaryText}>Keep</Text>
+              </TouchableOpacity>
+            )}
             {!readOnly && (
               <TouchableOpacity
                 style={styles.modalPrimary}

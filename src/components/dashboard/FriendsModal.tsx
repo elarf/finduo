@@ -4,6 +4,7 @@ import {
   Alert,
   Image,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -89,17 +90,24 @@ const FriendsModal: React.FC<FriendsModalProps> = ({
 
   const handleToggleAccount = async (friendUserId: string, accountId: string, hasAccess: boolean) => {
     if (hasAccess) {
-      Alert.alert('Revoke access', 'Remove this friend from the account?', [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Revoke',
-          style: 'destructive',
-          onPress: async () => {
-            await removeFriendFromAccount(friendUserId, accountId);
-            void reloadDashboard();
+      if (Platform.OS === 'web') {
+        if ((window as any).confirm('Remove this friend from the account?')) {
+          await removeFriendFromAccount(friendUserId, accountId);
+          void reloadDashboard();
+        }
+      } else {
+        Alert.alert('Revoke access', 'Remove this friend from the account?', [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Revoke',
+            style: 'destructive',
+            onPress: async () => {
+              await removeFriendFromAccount(friendUserId, accountId);
+              void reloadDashboard();
+            },
           },
-        },
-      ]);
+        ]);
+      }
     } else {
       const ok = await addFriendToAccount(friendUserId, accountId);
       if (ok) void reloadDashboard();

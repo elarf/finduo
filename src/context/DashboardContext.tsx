@@ -25,6 +25,7 @@ import { useNavigation } from '@react-navigation/native';
 import type { User } from '@supabase/supabase-js';
 import { useAuth } from './AuthContext';
 import { supabase } from '../lib/supabase';
+import { logAPI } from '../lib/devtools';
 import Icon, { LUCIDE_ICON_NAMES } from '../components/Icon';
 import {
   TransactionType,
@@ -409,6 +410,7 @@ export type DashboardContextValue = {
   deleteCategory: (categoryId: string) => Promise<void>;
   deleteTransaction: (txId: string) => Promise<void>;
   toggleCategoryHidden: (categoryId: string) => Promise<void>;
+  cloneTempCategory: (categoryId: string) => Promise<void>;
   createTag: () => Promise<void>;
   openCreateTag: () => void;
   openEditTag: (tag: AppTag) => void;
@@ -1723,6 +1725,22 @@ export function DashboardProvider({
     }
   }, [hiddenCategoryIds, setHiddenCategoryIds, user]);
 
+  const cloneTempCategory = useCallback(async (categoryId: string) => {
+    if (!user) return;
+    setSaving(true);
+    try {
+      logAPI('supabase://rpc/clone_temp_category', { source: 'category_modal.keep_button', action: 'cloneTempCategory' });
+      const { error } = await supabase.rpc('clone_temp_category', { p_category_id: categoryId });
+      if (error) throw error;
+      await queryClient.invalidateQueries({ queryKey: ['categories', user.id] });
+      await queryClient.invalidateQueries({ queryKey: ['transactions', _sortedAccountKeyRef.current] });
+    } catch (err) {
+      Alert.alert('Failed to keep category', err instanceof Error ? err.message : 'Unknown error');
+    } finally {
+      setSaving(false);
+    }
+  }, [user, queryClient, setSaving]);
+
   const createTag = useCallback(async () => {
     if (!newTagName.trim()) return;
 
@@ -2122,21 +2140,19 @@ export function DashboardProvider({
       const targetNote = customNote ? `${customNote} (← ${fromAccount.name})` : `Transfer ← ${fromAccount.name}`;
 
       const findOrCreateCat = async (type: 'expense' | 'income') => {
-        const existing = await supabase
+        // Use the global system Transfer category (is_default = true, no user owner).
+        // First check local state to avoid a round-trip when categories are already loaded.
+        const local = categories.find((c) => c.is_default && c.name === 'Transfer' && c.type === type);
+        if (local) return local.id;
+        const { data } = await supabase
           .from('categories')
           .select('id')
-          .eq('user_id', user.id)
+          .eq('is_default', true)
           .eq('name', 'Transfer')
           .eq('type', type)
           .limit(1)
           .maybeSingle();
-        if (existing.data?.id) return existing.data.id as string;
-        const created = await supabase
-          .from('categories')
-          .insert({ user_id: user.id, name: 'Transfer', type })
-          .select('id')
-          .single();
-        return (created.data?.id ?? null) as string | null;
+        return (data?.id ?? null) as string | null;
       };
 
       const [transferExpenseCatId, transferIncomeCatId] = await Promise.all([
@@ -2169,10 +2185,10 @@ export function DashboardProvider({
       setCategories((prev) => {
         let updated = [...prev];
         if (transferExpenseCatId && !prev.find((c) => c.id === transferExpenseCatId)) {
-          updated.push({ id: transferExpenseCatId, user_id: user.id, name: 'Transfer', type: 'expense', color: null, icon: null, tag_ids: [] });
+          updated.push({ id: transferExpenseCatId, user_id: null, name: 'Transfer', type: 'expense', color: '#a855f7', icon: 'Replace', tag_ids: [], is_default: true });
         }
         if (transferIncomeCatId && !prev.find((c) => c.id === transferIncomeCatId)) {
-          updated.push({ id: transferIncomeCatId, user_id: user.id, name: 'Transfer', type: 'income', color: null, icon: null, tag_ids: [] });
+          updated.push({ id: transferIncomeCatId, user_id: null, name: 'Transfer', type: 'income', color: '#a855f7', icon: 'Replace', tag_ids: [], is_default: true });
         }
         return updated.sort((a, b) => a.name.localeCompare(b.name));
       });
@@ -2609,6 +2625,7 @@ export function DashboardProvider({
     deleteCategory,
     deleteTransaction,
     toggleCategoryHidden,
+    cloneTempCategory,
     createTag,
     openCreateTag,
     openEditTag,

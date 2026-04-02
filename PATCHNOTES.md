@@ -4,6 +4,40 @@
 
 ---
 
+## [1.0.3] — 2026-04-02
+
+### Bug Fixes
+
+#### Revoke Account Share — No Effect on Web
+- `Alert.alert` button callbacks are silently discarded on React Native Web — the confirm dialog appeared but tapping Revoke never called `removeFriendFromAccount`, so nothing happened and no network request was made
+- `FriendsModal.handleToggleAccount` now uses `window.confirm` on web and `Alert.alert` on native, matching the cross-platform pattern already used in `CategoryModal`
+
+#### Duplicate Transfer Categories
+- Creating a transfer used `findOrCreateCat` per user — multiple users each created their own "Transfer" expense and income categories, leading to duplicates across shared accounts
+- Transfer is now a global system category: two stable rows (`is_default = true`, `user_id = NULL`) with fixed UUIDs shared by all users
+- Existing per-user Transfer rows re-pointed to global IDs and deleted via migration
+- Previously applied leftover per-user Transfer rows cleaned up via additional migration
+
+### Features
+
+#### All Lucide Icons in the Icon Picker
+- Icon picker expanded from a curated static list of ~280 icons to the full `lucide-react-native` library (~1,900 icons)
+- Icon list is derived dynamically from package exports — no static list to maintain; updates automatically with library upgrades
+- Lazy loading: first 60 icons shown on open (~2 screen heights); scrolling appends 60 more per page
+- Searching always shows all matching results instantly, bypassing pagination
+- Web uses `ScrollView` with `onScroll` near-bottom detection; native uses `FlatList` with `onEndReached`
+
+#### Transfer Category Icon
+- Global Transfer categories now use the `Replace` Lucide icon instead of the `↔` text character
+
+### Technical
+- `supabase/migrations/20260402b_temp_categories_on_revoke.sql` — adds `temp_for` JSONB column to categories for future revoked-share handling
+- `supabase/migrations/20260402c_global_transfer_categories.sql` — global Transfer category migration (`user_id = NULL`, `is_default = true`, stable UUIDs, RLS updated)
+- `supabase/migrations/20260402d_cleanup_leftover_transfer_categories.sql` — cleanup of orphaned per-user Transfer rows
+- `supabase/migrations/20260402e_transfer_category_icon.sql` — updates global Transfer icon to `Replace`
+
+---
+
 ## [1.0.2] — 2026-04-01
 
 ### 🐛 Bug Fixes

@@ -6,6 +6,21 @@ Financial tracking app for couples. Track income, expenses, and transfers across
 
 ## Patch Notes
 
+### v1.0.3 — Account share revoke fix, all Lucide icons, global Transfer category
+
+#### Bug Fixes
+
+- **Revoke account access:** `Alert.alert` callbacks are silently discarded on web — confirm dialog appeared but never triggered the revoke; now uses `window.confirm` on web
+- **Duplicate Transfer categories:** each user was creating their own "Transfer" categories; now a single global system category shared by all users (`is_default = true`, `user_id = NULL`)
+
+#### Features
+
+- **Icon picker:** expanded from ~280 curated icons to all Lucide icons (~1,900); lazy-loaded 60 per page, search returns all matches instantly
+- **Transfer icon:** global Transfer category now uses the `Replace` Lucide icon
+- Full list: [PATCHNOTES.md](./PATCHNOTES.md)
+
+---
+
 ### v1.0.1 — ChangelogModal sanitization, migration cleanup
 
 #### Bug Fixes
@@ -125,9 +140,9 @@ Financial tracking app for couples. Track income, expenses, and transfers across
 
 - Dedicated transfer flow between accounts with currency conversion support
 - Exchange rate or destination amount input for cross-currency transfers
-- Transfer transactions use a "Transfer" category and are excluded from income/expense totals
+- Transfer transactions use a global system "Transfer" category (`is_default`, shared by all users, not editable or deletable) and are excluded from income/expense totals
 - Transfers still affect net account balance
-- Transfer transactions display with a `↔` indicator
+- Transfer transactions display with a `↔` indicator and `Replace` icon
 
 ### Categories
 
@@ -138,7 +153,7 @@ Financial tracking app for couples. Track income, expenses, and transfers across
 - Categories have type (income/expense), color, and icon
 - Friend's categories are read-only (view and use, but cannot edit or delete)
 - Income and Expense categories shown in separate dropdown sections in quick navigation
-- Icon picker with 37 Lucide icons mapped from Material Symbol names
+- Icon picker with all ~1,900 Lucide icons; lazy-loaded 60 at a time, search returns all matches instantly
 - Auto-suggest icon based on category name keywords
 - Category-based spending chart (horizontal bar chart with tap-to-filter)
 - Tap a category chip to quickly add a transaction pre-filled with that category

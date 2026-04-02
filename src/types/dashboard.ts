@@ -13,13 +13,17 @@ export type AppAccount = {
 
 export type AppCategory = {
   id: string;
-  user_id: string;
+  user_id: string | null;
   account_id?: string | null;
   name: string;
   type: TransactionType;
   color?: string | null;
   icon?: string | null;
   tag_ids?: string[] | null;
+  /** User IDs for whom this is a "Temp" category (access revoked but still in use). */
+  temp_for?: string[] | null;
+  /** True for system-level categories (e.g. Transfer) that belong to no user. */
+  is_default?: boolean | null;
 };
 
 export type AppTag = {

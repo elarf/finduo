@@ -125,7 +125,7 @@ export default function ModalsRoot() {
     isCatPickerOpenRef,
     // Actions
     saveEntry, deleteTransaction,
-    saveCategory, deleteCategory, toggleCategoryHidden,
+    saveCategory, deleteCategory, toggleCategoryHidden, cloneTempCategory,
     saveAccount, deleteAccount,
     saveTag, deleteTag,
     createTag, toggleTag,
@@ -276,9 +276,12 @@ export default function ModalsRoot() {
         onSave={() => void saveCategory()}
         onDelete={deleteCategory}
         onToggleHidden={(catId) => { void toggleCategoryHidden(catId); setShowCategoryModal(false); }}
+        onClone={(catId) => { void cloneTempCategory(catId); setShowCategoryModal(false); }}
         openIconPickerSheet={openIconPickerSheet}
         saving={saving}
         isOwnedByUser={!editingCategoryId || categories.find((c) => c.id === editingCategoryId)?.user_id === user?.id}
+        isTempForUser={!!editingCategoryId && !!(categories.find((c) => c.id === editingCategoryId)?.temp_for?.includes(user?.id ?? ''))}
+        isDefault={!!editingCategoryId && !!(categories.find((c) => c.id === editingCategoryId)?.is_default)}
         isHidden={editingCategoryId ? hiddenCategoryIds.has(editingCategoryId) : false}
       />
 

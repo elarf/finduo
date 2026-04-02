@@ -33,10 +33,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Normalise the Google avatar — OAuth may populate either avatar_url or picture.
+  // Normalise the Google avatar — OAuth may populate either avatar_url or picture,
+  // and sometimes only identity_data has it (e.g. first sign-in before profile was public).
   const avatarUrl: string | null =
     (user?.user_metadata?.avatar_url as string | undefined) ||
     (user?.user_metadata?.picture as string | undefined) ||
+    (user?.identities?.[0]?.identity_data?.avatar_url as string | undefined) ||
+    (user?.identities?.[0]?.identity_data?.picture as string | undefined) ||
     null;
 
   const handleDeepLink = useCallback(async (url: string) => {
@@ -114,10 +117,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if ((_event === 'SIGNED_IN' || _event === 'TOKEN_REFRESHED' || _event === 'INITIAL_SESSION') && newSession?.user) {
           const u = newSession.user;
 
-          // Extract avatar URL from OAuth provider metadata
+          // Extract avatar URL — check user_metadata first, then raw identity_data
+          // (Supabase sometimes omits avatar_url from user_metadata on first sign-in
+          // but the original provider payload in identities[0] usually has it)
           const newAvatarUrl =
             (u.user_metadata?.avatar_url as string | undefined) ||
             (u.user_metadata?.picture as string | undefined) ||
+            (u.identities?.[0]?.identity_data?.avatar_url as string | undefined) ||
+            (u.identities?.[0]?.identity_data?.picture as string | undefined) ||
             null;
 
           // Build upsert data - only include avatar_url if we have a new one
@@ -137,7 +144,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             upsertData.avatar_url = newAvatarUrl;
           }
 
-          void supabase.from('user_profiles').upsert(upsertData, { onConflict: 'user_id' });
+          void supabase.from('user_profiles').upsert(upsertData, { onConflict: 'user_id' }).then(({ error }) => {
+            if (error) console.error('[AuthContext] user_profiles upsert failed:', error.message);
+          });
         }
       },
     );

@@ -19,6 +19,8 @@ export function useFriends(user: User | null) {
     const newAvatarUrl =
       (user.user_metadata?.avatar_url as string | undefined) ||
       (user.user_metadata?.picture as string | undefined) ||
+      (user.identities?.[0]?.identity_data?.avatar_url as string | undefined) ||
+      (user.identities?.[0]?.identity_data?.picture as string | undefined) ||
       null;
     const profileData: Record<string, unknown> = {
       user_id: user.id,

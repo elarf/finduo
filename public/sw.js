@@ -1,4 +1,4 @@
-const CACHE_NAME = 'finduo-v1';
+const CACHE_NAME = 'finduo-v2';
 const STATIC_ASSETS = [
   '/',
   '/index.html',

@@ -290,11 +290,11 @@ export function useDebts(user: User | null) {
         .delete()
         .eq('id', debtId);
       if (error) throw error;
-      setDebts((prev) => prev.filter((d) => d.id !== debtId));
+      await getUserDebts();
     } catch (err) {
       Alert.alert('Error', err instanceof Error ? err.message : 'Failed to delete debt');
     }
-  }, [user]);
+  }, [getUserDebts, user]);
 
   return {
     debts,

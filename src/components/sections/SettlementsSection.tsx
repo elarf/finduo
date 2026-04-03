@@ -14,64 +14,9 @@ import { usePoolTransactions } from '../../hooks/usePoolTransactions';
 import { useDebts } from '../../hooks/useDebts';
 import Icon from '../Icon';
 import ContextBar from '../dashboard/layout/ContextBar';
+import DebtListSection from './DebtListSection';
 import type { Pool, PoolMember, AppDebt, PreTransaction } from '../../types/pools';
 import { uiPath, uiProps, logUI } from '../../lib/devtools';
-
-function DebtRow({ debt, userId, onConfirm, onConvert }: {
-  debt: AppDebt;
-  userId: string;
-  onConfirm: (id: string) => void;
-  onConvert: (debt: AppDebt) => void;
-}) {
-  const iOwe = debt.from_user === userId;
-  const myConfirmed = iOwe ? debt.from_confirmed : debt.to_confirmed;
-  const otherConfirmed = iOwe ? debt.to_confirmed : debt.from_confirmed;
-  const otherUserId = iOwe ? debt.to_user : debt.from_user;
-  const otherName = iOwe
-    ? (debt.to_participant_name ?? otherUserId.slice(0, 8))
-    : (debt.from_participant_name ?? otherUserId.slice(0, 8));
-  const statusColor =
-    debt.status === 'paid' ? '#4ade80' :
-    debt.status === 'confirmed' ? '#53E3A6' :
-    '#f59e0b';
-
-  return (
-    <View style={s.debtRow} {...uiProps(uiPath('settlements', 'debt_row', 'container', debt.id))}>
-      <View style={s.debtIcon}>
-        <Icon name={iOwe ? 'ArrowUpRight' : 'ArrowDownLeft'} size={18} color={iOwe ? '#f87171' : '#4ade80'} />
-      </View>
-      <View style={{ flex: 1 }}>
-        <Text style={s.debtText}>{iOwe ? `You owe ${otherName}` : `${otherName} owes you`}</Text>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3 }}>
-          <View style={[s.statusBadge, { backgroundColor: statusColor + '22', borderColor: statusColor }]}>
-            <Text style={[s.statusText, { color: statusColor }]}>{debt.status}</Text>
-          </View>
-          {debt.pool_id && <Text style={s.debtMeta}>pool</Text>}
-          {myConfirmed && <Text style={s.debtMeta}>you confirmed</Text>}
-          {otherConfirmed && <Text style={s.debtMeta}>they confirmed</Text>}
-        </View>
-      </View>
-      <Text style={[s.debtAmount, { color: iOwe ? '#f87171' : '#4ade80' }]}>
-        {iOwe ? '-' : '+'}{Number(debt.amount).toFixed(2)}
-      </Text>
-      <View style={s.debtActions}>
-        {debt.status === 'pending' && !myConfirmed && (
-          <TouchableOpacity style={s.confirmBtn} onPress={() => onConfirm(debt.id)}
-            {...uiProps(uiPath('settlements', 'debt_row', 'confirm_button', debt.id))}>
-            <Icon name="Check" size={14} color="#060A14" />
-          </TouchableOpacity>
-        )}
-        {debt.status === 'confirmed' && (
-          <TouchableOpacity style={s.convertBtn} onPress={() => onConvert(debt)}
-            {...uiProps(uiPath('settlements', 'debt_row', 'convert_button', debt.id))}>
-            <Icon name="ArrowRightLeft" size={13} color="#060A14" />
-            <Text style={s.convertBtnText}>Record</Text>
-          </TouchableOpacity>
-        )}
-      </View>
-    </View>
-  );
-}
 
 export default function SettlementsSection() {
   const { user } = useAuth();
@@ -79,7 +24,7 @@ export default function SettlementsSection() {
 
   const { pools, members, loading: poolsLoading, getUserPools, loadPoolMembers } = usePools(user);
   const { transactions, loading: txLoading, getPoolTransactions } = usePoolTransactions(user);
-  const { debts, loading: debtsLoading, getUserDebts, computePoolSettlement, commitPoolSettlement, confirmDebt } = useDebts(user);
+  const { debts, loading: debtsLoading, getUserDebts, computePoolSettlement, commitPoolSettlement, confirmDebt, markRecorded, archiveDebt, deleteDebt } = useDebts(user);
 
   const [debtsOpen, setDebtsOpen] = useState(false);
   const [poolsOpen, setPoolsOpen] = useState(true);
@@ -127,7 +72,8 @@ export default function SettlementsSection() {
     }
   }, [commitPoolSettlement, getUserDebts, getUserPools, poolPreTxs]);
 
-  const convertToTransaction = useCallback((debt: AppDebt) => {
+  const convertToTransaction = useCallback(async (debt: AppDebt) => {
+    await markRecorded(debt.id);
     const iOwe = debt.from_user === user?.id;
     const otherName = iOwe
       ? (debt.to_participant_name ?? 'counterpart')
@@ -141,19 +87,17 @@ export default function SettlementsSection() {
         _key: debt.id,
       },
     } as never);
-  }, [navigation, setActiveSection, user?.id]);
-
-  const pendingDebts = useMemo(() => debts.filter((d) => d.status === 'pending'), [debts]);
-  const confirmedDebts = useMemo(() => debts.filter((d) => d.status === 'confirmed'), [debts]);
-  const paidDebts = useMemo(() => debts.filter((d) => d.status === 'paid'), [debts]);
+  }, [markRecorded, navigation, setActiveSection, user?.id]);
 
   const netBalance = useMemo(() => {
     if (!user) return 0;
-    return debts.filter((d) => d.status !== 'paid').reduce((sum, d) => {
-      if (d.to_user === user.id) return sum + Number(d.amount);
-      if (d.from_user === user.id) return sum - Number(d.amount);
-      return sum;
-    }, 0);
+    return debts
+      .filter((d) => d.status === 'pending' || d.status === 'confirmed')
+      .reduce((sum, d) => {
+        if (d.to_user === user.id) return sum + Number(d.amount);
+        if (d.from_user === user.id) return sum - Number(d.amount);
+        return sum;
+      }, 0);
   }, [debts, user]);
 
   const poolTotal = useMemo(() => transactions.reduce((sum, tx) => sum + Number(tx.amount), 0), [transactions]);
@@ -207,38 +151,15 @@ export default function SettlementsSection() {
               </View>
             )}
 
-            {pendingDebts.length > 0 && (
-              <>
-                <Text style={s.subSectionTitle} {...uiProps(uiPath('settlements', 'sub_section_title', 'pending'))}>
-                  Pending ({pendingDebts.length})
-                </Text>
-                {pendingDebts.map((d) => (
-                  <DebtRow key={d.id} debt={d} userId={user.id} onConfirm={confirmDebt} onConvert={convertToTransaction} />
-                ))}
-              </>
-            )}
-
-            {confirmedDebts.length > 0 && (
-              <>
-                <Text style={s.subSectionTitle} {...uiProps(uiPath('settlements', 'sub_section_title', 'preTransactions'))}>
-                  Ready to record ({confirmedDebts.length})
-                </Text>
-                {confirmedDebts.map((d) => (
-                  <DebtRow key={d.id} debt={d} userId={user.id} onConfirm={confirmDebt} onConvert={convertToTransaction} />
-                ))}
-              </>
-            )}
-
-            {paidDebts.length > 0 && (
-              <>
-                <Text style={s.subSectionTitle} {...uiProps(uiPath('settlements', 'sub_section_title', 'paid'))}>
-                  Paid ({paidDebts.length})
-                </Text>
-                {paidDebts.map((d) => (
-                  <DebtRow key={d.id} debt={d} userId={user.id} onConfirm={confirmDebt} onConvert={convertToTransaction} />
-                ))}
-              </>
-            )}
+            <DebtListSection
+              debts={debts}
+              userId={user.id}
+              onConfirm={confirmDebt}
+              onConvert={convertToTransaction}
+              onArchive={archiveDebt}
+              onDelete={deleteDebt}
+              screen="settlements"
+            />
           </>
         )}
 
@@ -372,9 +293,15 @@ export default function SettlementsSection() {
                           {poolDebts.length > 0 && (
                             <>
                               <Text style={s.poolDebtLabel}>Settlement debts</Text>
-                              {poolDebts.map((d) => (
-                                <DebtRow key={d.id} debt={d} userId={user.id} onConfirm={confirmDebt} onConvert={convertToTransaction} />
-                              ))}
+                              <DebtListSection
+                                debts={poolDebts}
+                                userId={user.id}
+                                onConfirm={confirmDebt}
+                                onConvert={convertToTransaction}
+                                onArchive={archiveDebt}
+                                onDelete={deleteDebt}
+                                screen="settlements"
+                              />
                             </>
                           )}
                           {poolDebts.length === 0 && <Text style={s.balancedText}>No settlement debts visible for this pool.</Text>}
@@ -397,7 +324,6 @@ const s = StyleSheet.create({
   sectionHeader: { flexDirection: 'row', alignItems: 'center', marginHorizontal: 16, marginTop: 20, marginBottom: 6, gap: 8 },
   sectionTitle: { flex: 1, color: '#64748B', fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1 },
   sectionBadge: { fontSize: 12, fontWeight: '700' },
-  subSectionTitle: { color: '#64748B', fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1, marginHorizontal: 16, marginTop: 20, marginBottom: 6 },
   divider: { height: 1, backgroundColor: '#1F3A59', marginHorizontal: 16, marginTop: 20 },
   balanceCard: { marginHorizontal: 16, marginTop: 10, backgroundColor: '#0E1A2B', borderRadius: 12, borderWidth: 1, borderColor: '#1F3A59', padding: 16, alignItems: 'center', gap: 4 },
   balanceLabel: { color: '#64748B', fontSize: 12, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 1 },
@@ -406,17 +332,6 @@ const s = StyleSheet.create({
   emptyContainer: { alignItems: 'center', marginTop: 24, gap: 6 },
   emptyText: { color: '#64748B', fontSize: 14, textAlign: 'center', marginTop: 8 },
   emptyHint: { color: '#475569', fontSize: 12, textAlign: 'center' },
-  debtRow: { flexDirection: 'row', alignItems: 'center', marginHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#101A2A', gap: 10 },
-  debtIcon: { width: 32, height: 32, borderRadius: 8, backgroundColor: '#0E1A2B', alignItems: 'center', justifyContent: 'center' },
-  debtText: { color: '#EAF3FF', fontSize: 14 },
-  debtMeta: { color: '#475569', fontSize: 10 },
-  debtAmount: { fontSize: 15, fontWeight: '600' },
-  debtActions: { flexDirection: 'row', gap: 6 },
-  statusBadge: { paddingHorizontal: 6, paddingVertical: 1, borderRadius: 4, borderWidth: 1 },
-  statusText: { fontSize: 10, fontWeight: '600' },
-  confirmBtn: { backgroundColor: '#53E3A6', borderRadius: 6, padding: 6 },
-  convertBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#53E3A6', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 5 },
-  convertBtnText: { color: '#060A14', fontSize: 11, fontWeight: '700' },
   poolCard: { marginHorizontal: 16, marginTop: 10, backgroundColor: '#0E1A2B', borderRadius: 12, borderWidth: 1, borderColor: '#1F3A59', padding: 14 },
   poolCardActive: { borderColor: '#53E3A6', borderBottomLeftRadius: 0, borderBottomRightRadius: 0 },
   poolIcon: { width: 36, height: 36, borderRadius: 10, backgroundColor: '#0D2818', alignItems: 'center', justifyContent: 'center' },

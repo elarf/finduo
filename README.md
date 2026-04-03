@@ -6,12 +6,12 @@ Financial tracking app for couples and shared households. Track income, expenses
 
 ---
 
-## Latest Release — v1.0.6
+## Latest Release — v1.0.7
 
-- **Contacts section** — new embedded view in Quick Navigation (FinOps group); merges pool contacts and friends list; edit/add contacts; read-only email for app users; fallback avatar from linked friend's profile
-- **Lending redesign** — Pending (unconfirmed only) / Ready to record / Recorded / Archived (collapsed by default); Record button marks debt then pre-fills Dashboard entry; Archive on recorded debts; re-record from Archived; broken debts shown with italic styling, "broken" badge, and a delete button
-- **Avatar persistence** — OAuth avatars (Google etc.) are snapshotted to Supabase Storage on first login and re-uploaded only when the source URL changes; permanent storage URLs prevent broken avatars after OAuth CDN expiry
-- **Auth loading screen** — background changed to pure black (`#000000`)
+- **Header spinner reload** — tapping the spinner now also refreshes PoolsSection and SettlementsSection data (previously only invalidated TanStack Query caches, leaving embedded section hooks stale)
+- **Pool settlement restricted to creator** — the Settle button is now hidden for non-creator members, matching the Close and Delete button guards; prevents broken debt rows and silent pool-close failures
+- **Settlement pool close hardened** — `commitPoolSettlement` now checks the error from `pools.update`, surfaces it in the modal, and sets `end_date` alongside `status: closed`
+- **Lending badge accuracy** — the pending debt badge in Quick Navigation now only counts debts that are genuinely actionable: excludes broken debts (unknown counterpart) and debts the current user has already confirmed (those appear in "Ready to record" instead)
 
 Full history: [PATCHNOTES.md](./PATCHNOTES.md)
 

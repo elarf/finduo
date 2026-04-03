@@ -152,7 +152,7 @@ export default function PoolScreen({ navigation }: { navigation: any }) {
           title={pool.selectedPool.name}
           subtitle={`${pool.selectedPool.type === 'event' ? 'Event' : 'Continuous'} · ${pool.selectedPool.status}`}
           onBack={() => pool.setSelectedPool(null)}
-          onSettle={isActive ? () => setShowSettlementModal(true) : undefined}
+          onSettle={isActive && isCreator ? () => setShowSettlementModal(true) : undefined}
           onClose={isActive && isCreator && pool.selectedPool.type === 'event' ? pool.handleClosePool : undefined}
           onDelete={isCreator ? pool.handleDeletePool : undefined}
         />

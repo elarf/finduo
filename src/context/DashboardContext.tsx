@@ -125,6 +125,7 @@ export type DashboardContextValue = {
   excludedAccountIds: string[];
   loading: boolean;
   reloading: boolean;
+  reloadKey: number;
   animMultiplier: number;
   saving: boolean;
   setSaving: React.Dispatch<React.SetStateAction<boolean>>;
@@ -472,6 +473,7 @@ export function DashboardProvider({
   } = data;
 
   const queryClient = useQueryClient();
+  const [reloadKey, setReloadKey] = useState(0);
 
   // ── Query hooks ───────────────────────────────────────────────────────────────
   const accountsQ = useAccountsQuery(user?.id);
@@ -668,6 +670,7 @@ export function DashboardProvider({
       queryClient.invalidateQueries({ queryKey: ['tags', key] }),
       queryClient.invalidateQueries({ queryKey: ['account_settings', key] }),
     ]);
+    setReloadKey((k) => k + 1);
     animateIn();
   }, [reloading, user, queryClient, animateIn, setReloading]);
 
@@ -688,7 +691,14 @@ export function DashboardProvider({
   } = useFriends(user);
 
   const { debts, getUserDebts } = useDebts(user);
-  const pendingDebtCount = useMemo(() => debts.filter((d) => d.status === 'pending').length, [debts]);
+  const pendingDebtCount = useMemo(() => debts.filter((d) => {
+    if (d.status !== 'pending') return false;
+    const iOwe = d.from_user === user?.id;
+    const myConfirmed = iOwe ? d.from_confirmed : d.to_confirmed;
+    if (myConfirmed) return false;
+    const otherName = iOwe ? d.to_participant_name : d.from_participant_name;
+    return !!otherName && otherName !== 'Unknown';
+  }).length, [debts, user?.id]);
 
   useEffect(() => { void getUserDebts(); }, [getUserDebts]);
 
@@ -2456,7 +2466,7 @@ export function DashboardProvider({
     primaryAccountId,
     entryAccountId, setEntryAccountId,
     excludedAccountIds,
-    loading, reloading, animMultiplier,
+    loading, reloading, reloadKey, animMultiplier,
     saving, setSaving,
     missingSchemaColumns,
     pendingSelectedAccountIdRef,

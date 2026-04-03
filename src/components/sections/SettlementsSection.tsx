@@ -20,7 +20,7 @@ import { uiPath, uiProps, logUI } from '../../lib/devtools';
 
 export default function SettlementsSection() {
   const { user } = useAuth();
-  const { navigation, setActiveSection } = useDashboard();
+  const { navigation, setActiveSection, reloadKey } = useDashboard();
 
   const { pools, members, loading: poolsLoading, getUserPools, loadPoolMembers } = usePools(user);
   const { transactions, loading: txLoading, getPoolTransactions } = usePoolTransactions(user);
@@ -37,6 +37,13 @@ export default function SettlementsSection() {
     void getUserPools();
     void getUserDebts();
   }, [getUserPools, getUserDebts]);
+
+  useEffect(() => {
+    if (reloadKey === 0) return;
+    void getUserPools();
+    void getUserDebts();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reloadKey]);
 
   const expandPool = useCallback(async (pool: Pool) => {
     const isOpening = expandedPoolId !== pool.id;

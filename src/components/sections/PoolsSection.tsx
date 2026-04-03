@@ -28,7 +28,7 @@ import type { ResolvedFriend } from '../../types/friends';
 
 export default function PoolsSection() {
   const { user } = useAuth();
-  const { setActiveSection } = useDashboard();
+  const { setActiveSection, reloadKey } = useDashboard();
 
   const {
     pools, members, creatorProfiles, loading,
@@ -68,6 +68,13 @@ export default function PoolsSection() {
   useEffect(() => {
     void getUserPools();
   }, [getUserPools]);
+
+  useEffect(() => {
+    if (reloadKey === 0) return;
+    void getUserPools();
+    if (pool.selectedPool) void getPoolTransactions(pool.selectedPool.id);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reloadKey]);
 
   useEffect(() => {
     if (showAddMemberModal) {
@@ -148,7 +155,7 @@ export default function PoolsSection() {
           title={pool.selectedPool.name}
           subtitle={`${pool.selectedPool.type === 'event' ? 'Event' : 'Continuous'} · ${pool.selectedPool.status}`}
           onBack={() => pool.setSelectedPool(null)}
-          onSettle={isActive ? () => setShowSettlementModal(true) : undefined}
+          onSettle={isActive && isCreator ? () => setShowSettlementModal(true) : undefined}
           onClose={isActive && isCreator && pool.selectedPool.type === 'event' ? pool.handleClosePool : undefined}
           onDelete={isCreator ? pool.handleDeletePool : undefined}
         />

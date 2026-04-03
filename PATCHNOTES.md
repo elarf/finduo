@@ -4,6 +4,46 @@
 
 ---
 
+## [1.0.7] — 2026-04-03
+
+### Bug Fixes
+
+#### Header Spinner — PoolsSection and SettlementsSection Not Refreshing
+
+- Tapping the dashboard header spinner called `reloadDashboard()`, which only invalidated TanStack Query caches; the embedded `PoolsSection` and `SettlementsSection` use independent hook instances and were never notified
+- Fix: `DashboardContext` now exposes a `reloadKey` counter that increments on every `reloadDashboard()` call
+- `PoolsSection` watches `reloadKey` and re-calls `getUserPools()` (and `getPoolTransactions()` if a pool is open) on change
+- `SettlementsSection` watches `reloadKey` and re-calls `getUserPools()` + `getUserDebts()` on change
+
+#### Pool Settlement — Members Could Initiate Settlement
+
+- The **Settle** button in `PoolHeader` was not gated by `isCreator`, unlike the Close and Delete buttons
+- Non-creator members who triggered settlement created broken debt rows (RLS rejects inserts where the settling user is not party to each debt pair) and the pool close step silently failed (creator-only RLS on `pools.update`)
+- Fix: `onSettle` now requires `isActive && isCreator` in both `PoolsSection` and `PoolScreen`, matching the existing `onClose` and `onDelete` guard pattern
+
+#### Pool Settlement — Pool Not Closed After Commit
+
+- `commitPoolSettlement` called `supabase.from('pools').update(...)` without checking the returned error, so any failure (e.g. RLS rejection) was silently swallowed and the pool remained open
+- Fix: error is now checked and thrown, surfacing the failure in the `SettlementModal` error display
+- Fix: `end_date` is now also set on settlement close, matching the behavior of the explicit `closePool` call
+
+#### Lending Badge — Broken and Confirmed Debts Inflating Count
+
+- The pending debt badge in Quick Navigation counted all `status = 'pending'` debts, including broken debts (missing/unknown counterpart name) and debts the user already confirmed (which display in "Ready to record", not "Pending")
+- Those entries are not actionable: broken debts only offer a delete button; confirmed ones are already handled
+- Fix: `pendingDebtCount` in `DashboardContext` now matches the `DebtListSection` "Pending" filter — only counts debts that are `status = 'pending'`, not yet confirmed by the current user, and not broken
+
+### Technical
+
+- `src/context/DashboardContext.tsx` — `reloadKey: number` added to context type and value; incremented inside `reloadDashboard()` after query invalidation
+- `src/components/sections/PoolsSection.tsx` — `reloadKey` consumed from `useDashboard()`; new effect reloads pool data on change
+- `src/components/sections/SettlementsSection.tsx` — `reloadKey` consumed; new effect reloads pools and debts on change
+- `src/components/sections/PoolsSection.tsx` + `src/screens/PoolScreen.tsx` — `onSettle` prop now conditional on `isCreator && isActive`
+- `src/hooks/useDebts.ts` — `commitPoolSettlement` checks `closeError` and throws; sets `end_date` alongside `status: 'closed'`
+- `src/context/DashboardContext.tsx` — `pendingDebtCount` filter tightened: excludes broken debts and debts already confirmed by the current user
+
+---
+
 ## [1.0.6] — 2026-04-03
 
 ### Features

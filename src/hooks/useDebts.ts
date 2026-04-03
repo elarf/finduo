@@ -171,7 +171,11 @@ export function useDebts(user: User | null) {
     }
 
     logAPI('supabase://pools', { source: 'settlements.pool_card.settle_button', action: 'commitPoolSettlement' });
-    await supabase.from('pools').update({ status: 'closed' }).eq('id', poolId);
+    const { error: closeError } = await supabase
+      .from('pools')
+      .update({ status: 'closed', end_date: new Date().toISOString().slice(0, 10) })
+      .eq('id', poolId);
+    if (closeError) throw closeError;
 
     await getUserDebts();
   }, [getUserDebts, user]);

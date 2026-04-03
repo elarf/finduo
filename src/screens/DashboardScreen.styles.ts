@@ -43,6 +43,7 @@ export const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
     backgroundColor: '#000000',
+    zIndex: 10,
   },
   menuButton: {
     backgroundColor: '#0E1A2B',

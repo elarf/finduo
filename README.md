@@ -6,14 +6,14 @@ Financial tracking app for couples and shared households. Track income, expenses
 
 ---
 
-## Latest Release — v1.0.4
+## Latest Release — v1.0.5
 
-- **Pool settlement redesign** — Debts and Pools in accordion sections; "Record" button converts any confirmed debt or pool transfer directly into a Dashboard transaction
-- **FinOps section** in Quick Navigation groups Pools, Lending, and Settlements; "Experimental" renamed to Settings
-- **Version indicator** in the Quick Navigation header with automatic update detection from GitHub
-- **Hard reload** now unregisters the service worker and clears all caches before fetching fresh assets
-- **Mobile viewport fix** — correct device width detected from the first paint on Samsung Galaxy and Android Chrome
-- **Bug fixes:** pool INSERT policy, pool SELECT/UPDATE/DELETE RLS granularity, external member NOT NULL, pool close visibility, settlement "Unknown" name, multi-settlement prevention, avatar overwrite on login
+- **Header spinner reload** — tap the spinner (mobile, top-right) to refresh all dashboard data in the background; shows `spinnerFAST.gif` while loading; skeleton stays visible
+- **Embedded FinOps sections** — Pools, Lending, and Settlements open as embedded sub-views inside the Dashboard (no separate navigation screens); a `ContextBar` slides in from behind the header labelling the active section; tap the label to dismiss
+- **Spinner animations** — `spinnerSMALL.gif` on auth loading, `spinnerFAST.gif` on dashboard data loading, `spinner.gif` always in the header (mobile)
+- **Universal AppHeader** — standalone header component for non-dashboard screens (LendingScreen, SettlementsScreen, PoolScreen list view, ChangelogModal)
+- **PWA maskable icon** — `icon-maskable.png` with solid `#060A14` background and safe-zone-constrained logo fixes white/black background artefacts on Android home screen and launch splash
+- **PWA cache bust** — service worker `CACHE_NAME` bumped to `finduo-v2`; manifest icon URLs versioned with `?v=2`
 
 Full history: [PATCHNOTES.md](./PATCHNOTES.md)
 
@@ -171,9 +171,9 @@ Swipe from the left edge (20 px zone) or tap the avatar to open.
 - **↔ Transfers** — tap to filter the transaction list to transfers only
 - **Tags** — expand to see all tags; tap a tag to filter the transaction list; edit mode adds edit and delete buttons
 - **FinOps** (collapsible, shows pending debt badge when collapsed):
-  - **Pools** — opens PoolScreen
-  - **Lending** — opens LendingScreen; shows pending debt count badge
-  - **Settlements** — opens SettlementsScreen
+  - **Pools** — opens as an embedded section inside the Dashboard; a ContextBar labels the view; `+` in the bar opens the create-pool modal
+  - **Lending** — opens as an embedded section; shows pending debt count badge
+  - **Settlements** — opens as an embedded section inside the Dashboard
 - **Friends** — opens the Friends modal
 - **Settings** (collapsible):
   - **Invitations** — opens the Invitations modal
@@ -184,9 +184,10 @@ Swipe from the left edge (20 px zone) or tap the avatar to open.
 
 ### Header
 
-- Centered logo (static image; pull-to-refresh replaced tap-to-refresh)
+- Centered logo (static image)
 - Avatar button (top-left) opens Quick Navigation; shows Google profile picture or email-initial fallback
-- View-mode toggle button (top-right on web) switches between desktop and mobile layout
+- View-mode toggle button (top-right, desktop only) switches between desktop and mobile layout
+- Spinner (top-right, mobile only) — always visible; tap to reload all dashboard data in the background; swaps to `spinnerFAST.gif` while loading; dashboard skeleton stays visible throughout
 
 ### Mobile UX
 
@@ -292,6 +293,7 @@ finduo/
   src/
     components/
       Icon.tsx                     Unified Lucide icon component (name -> component)
+      AppHeader.tsx                Standalone header for non-dashboard screens (avatar, logo, spinner)
       dashboard/
         AccountModal.tsx           Create/edit account modal
         AccountPickerSheet.tsx     Full-screen account picker (mobile)
@@ -312,13 +314,14 @@ finduo/
           TransactionSection.tsx   Transaction list with filter-aware header + invite card
         layout/
           DashboardLayout.tsx      Outermost frame: loading screen + assembles all sections
-          DashboardHeader.tsx      Header: avatar, logo, view-mode toggle
+          DashboardHeader.tsx      Header: avatar, logo, view-mode toggle (desktop) / spinner reload (mobile)
           DashboardBody.tsx        Desktop wrapper + edge-swipe PanResponder + sidebar
           MainScrollView.tsx       Main ScrollView + warning banner + Box components
           DesktopSidebar.tsx       Sidebar (desktop): totals, accounts, spending, transactions
           ScrollTopFab.tsx         Scroll-to-top FAB (visible when scrollY > 320)
           BottomActions.tsx        Filter bar + income/transfer/expense bottom buttons
           ModalsRoot.tsx           Renders all modal/sheet components from context
+          ContextBar.tsx           Animated section indicator bar (slides in from behind header)
       pool/
         AddMemberModal.tsx         Add member: friends tab or external tab (by name/contact)
         CreatePoolModal.tsx        Create pool modal (name + type selector)
@@ -331,6 +334,10 @@ finduo/
         TransactionList.tsx        Read-only expense list with edit/delete (creator only)
         TransactionModal.tsx       Add/edit expense with full member payer selector
         poolStyles.ts              Shared StyleSheet for all pool components
+      sections/
+        PoolsSection.tsx           Embedded pool list + detail view (no navigation header)
+        LendingSection.tsx         Embedded debt list with confirm and record actions
+        SettlementsSection.tsx     Embedded debts + pools accordion view
     context/
       AuthContext.tsx              Auth state, Google OAuth (web + native), deep link handling
       DashboardContext.tsx         All dashboard state + actions (DashboardProvider + useDashboard())

@@ -1,32 +1,34 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { TouchableOpacity, View } from 'react-native';
-import { useAuth } from '../context/AuthContext';
-import { usePools } from '../hooks/usePools';
-import { usePoolTransactions } from '../hooks/usePoolTransactions';
-import { usePool } from '../hooks/usePool';
-import { useDebts } from '../hooks/useDebts';
-import { useFriends } from '../hooks/useFriends';
-import { useContacts } from '../hooks/useContacts';
-import { poolSharedStyles as sh } from '../components/pool/poolStyles';
-import { PoolHeader } from '../components/pool/PoolHeader';
-import { PoolSummaryCard } from '../components/pool/PoolSummaryCard';
-import { PoolMemberChips } from '../components/pool/PoolMemberChips';
-import { PoolActions } from '../components/pool/PoolActions';
-import { TransactionList } from '../components/pool/TransactionList';
-import { TransactionModal } from '../components/pool/TransactionModal';
-import { AddMemberModal } from '../components/pool/AddMemberModal';
-import { CreatePoolModal } from '../components/pool/CreatePoolModal';
-import { PoolListContent } from '../components/pool/PoolListContent';
-import { SettlementModal } from '../components/pool/SettlementModal';
-import AppHeader from '../components/AppHeader';
-import Icon from '../components/Icon';
-import { uiPath, uiProps } from '../lib/devtools';
-import type { Pool, PoolTransaction } from '../types/pools';
-import type { PoolType } from '../types/pools';
-import type { ResolvedFriend } from '../types/friends';
+import { useAuth } from '../../context/AuthContext';
+import { useDashboard } from '../../context/DashboardContext';
+import { usePools } from '../../hooks/usePools';
+import { usePoolTransactions } from '../../hooks/usePoolTransactions';
+import { usePool } from '../../hooks/usePool';
+import { useDebts } from '../../hooks/useDebts';
+import { useFriends } from '../../hooks/useFriends';
+import { useContacts } from '../../hooks/useContacts';
+import { poolSharedStyles as sh } from '../pool/poolStyles';
+import { PoolHeader } from '../pool/PoolHeader';
+import { PoolSummaryCard } from '../pool/PoolSummaryCard';
+import { PoolMemberChips } from '../pool/PoolMemberChips';
+import { PoolActions } from '../pool/PoolActions';
+import { TransactionList } from '../pool/TransactionList';
+import { TransactionModal } from '../pool/TransactionModal';
+import { AddMemberModal } from '../pool/AddMemberModal';
+import { CreatePoolModal } from '../pool/CreatePoolModal';
+import { PoolListContent } from '../pool/PoolListContent';
+import { SettlementModal } from '../pool/SettlementModal';
+import ContextBar from '../dashboard/layout/ContextBar';
+import Icon from '../Icon';
+import { uiPath, uiProps } from '../../lib/devtools';
+import type { Pool, PoolTransaction } from '../../types/pools';
+import type { PoolType } from '../../types/pools';
+import type { ResolvedFriend } from '../../types/friends';
 
-export default function PoolScreen({ navigation }: { navigation: any }) {
+export default function PoolsSection() {
   const { user } = useAuth();
+  const { setActiveSection } = useDashboard();
 
   const {
     pools, members, creatorProfiles, loading,
@@ -57,20 +59,16 @@ export default function PoolScreen({ navigation }: { navigation: any }) {
     loadFriends,
   });
 
-  // Modal visibility
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showAddTxModal, setShowAddTxModal] = useState(false);
   const [showAddMemberModal, setShowAddMemberModal] = useState(false);
   const [showSettlementModal, setShowSettlementModal] = useState(false);
-
-  // Which transaction is being edited (null = create mode)
   const [editingTx, setEditingTx] = useState<PoolTransaction | null>(null);
 
   useEffect(() => {
     void getUserPools();
   }, [getUserPools]);
 
-  // Pre-load friends and contacts whenever the member modal opens
   useEffect(() => {
     if (showAddMemberModal) {
       if (friends.length === 0 && !friendsLoading) void loadFriends();
@@ -107,7 +105,6 @@ export default function PoolScreen({ navigation }: { navigation: any }) {
   const handleAddFriend = useCallback(async (friend: ResolvedFriend) => {
     if (!pool.selectedPool) return;
     const displayName = friend.profile?.display_name ?? friend.profile?.email ?? friend.userId;
-    // Auto-create contact for this friend
     const contact = await findOrCreateContactForUser(
       friend.userId,
       displayName,
@@ -121,10 +118,8 @@ export default function PoolScreen({ navigation }: { navigation: any }) {
   const handleAddExternal = useCallback(async (name: string, contactId?: string) => {
     if (!pool.selectedPool) return;
     if (contactId) {
-      // Existing contact selected
       await addPoolMember(pool.selectedPool.id, null, name, contactId);
     } else {
-      // New contact — create it first, then add to pool
       const contact = await createContact({ display_name: name });
       await addPoolMember(pool.selectedPool.id, null, name, contact?.id);
     }
@@ -148,6 +143,7 @@ export default function PoolScreen({ navigation }: { navigation: any }) {
     const creatorAvatar = creatorMember?.avatar_url ?? null;
     return (
       <View style={sh.container} {...uiProps(uiPath('pool_detail', 'screen', 'container'))}>
+        <ContextBar label="Pools" onDismiss={() => setActiveSection(null)} />
         <PoolHeader
           title={pool.selectedPool.name}
           subtitle={`${pool.selectedPool.type === 'event' ? 'Event' : 'Continuous'} · ${pool.selectedPool.status}`}
@@ -230,12 +226,13 @@ export default function PoolScreen({ navigation }: { navigation: any }) {
   // ─── Pool list view ───
   return (
     <View style={sh.container} {...uiProps(uiPath('pool_list', 'screen', 'container'))}>
-      <AppHeader
-        onBack={() => navigation.goBack()}
+      <ContextBar
+        label="Pools"
+        onDismiss={() => setActiveSection(null)}
         rightElement={
           <TouchableOpacity
             onPress={() => setShowCreateModal(true)}
-            style={{ padding: 6, zIndex: 2 }}
+            style={{ padding: 6 }}
             {...uiProps(uiPath('pool_list', 'header', 'add_button'))}
           >
             <Icon name="Plus" size={20} color="#53E3A6" />

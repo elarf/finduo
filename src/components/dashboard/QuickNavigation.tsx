@@ -94,6 +94,9 @@ type QuickNavigationProps = {
   // Debts badge
   pendingDebtCount: number;
 
+  // Section routing
+  setActiveSection: (section: 'pools' | 'lending' | 'settlements' | null) => void;
+
   // Other modals
   setShowFriendsModal: (v: boolean) => void;
   openInvitationsModal: () => Promise<void>;
@@ -128,6 +131,7 @@ function QuickNavigation({
   pendingDebtCount,
   setShowFriendsModal, openInvitationsModal, reloadDashboard,
   onFilterTransfers,
+  setActiveSection,
 }: QuickNavigationProps) {
   const [deletingCategoryIds, setDeletingCategoryIds] = useState<Set<string>>(new Set());
   const [showFinOps, setShowFinOps] = useState(false);
@@ -770,7 +774,7 @@ function QuickNavigation({
                   onPress={() => {
                     logUI(uiPath('quick_nav', 'nav', 'pools_item'), 'press');
                     onClose();
-                    navigation.navigate('Pools');
+                    setActiveSection('pools');
                   }}
                 >
                   <View style={{ flexDirection: 'row', alignItems: 'center', width: '100%' }}>
@@ -787,7 +791,7 @@ function QuickNavigation({
                   onPress={() => {
                     logUI(uiPath('quick_nav', 'nav', 'lending_item'), 'press');
                     onClose();
-                    navigation.navigate('Lending');
+                    setActiveSection('lending');
                   }}
                 >
                   <View style={{ flexDirection: 'row', alignItems: 'center', width: '100%' }}>
@@ -810,7 +814,7 @@ function QuickNavigation({
                   onPress={() => {
                     logUI(uiPath('quick_nav', 'nav', 'settlements_item'), 'press');
                     onClose();
-                    navigation.navigate('Settlements');
+                    setActiveSection('settlements');
                   }}
                 >
                   <View style={{ flexDirection: 'row', alignItems: 'center', width: '100%' }}>

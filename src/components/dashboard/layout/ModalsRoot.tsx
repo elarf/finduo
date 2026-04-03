@@ -16,6 +16,7 @@ export default function ModalsRoot() {
   const {
     user, signOut, navigation,
     height,
+    setActiveSection,
     // Data
     accounts, categories, tags, hiddenCategoryIds,
     primaryAccountId, excludedAccountIds, accountSettings,
@@ -208,6 +209,7 @@ export default function ModalsRoot() {
         onFilterTransfers={() => { setMenuOpen(false); setShowOnlyTransfers(true); }}
         selectedTagFilter={selectedTagFilter}
         onFilterTag={(id) => { setSelectedTagFilter((prev) => (prev === id ? null : id)); }}
+        setActiveSection={setActiveSection}
       />
 
       <EntryModal

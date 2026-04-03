@@ -4,6 +4,74 @@
 
 ---
 
+## [1.0.5] — 2026-04-03
+
+### Features
+
+#### Dashboard Header — Spinner Reload Button
+
+- Tapping the `spinner.gif` in the dashboard header (mobile right slot) now triggers a background data reload
+- During reload the header swaps to `spinnerFAST.gif`; the dashboard skeleton remains fully visible — no full-screen loading state
+- Double-tap prevention: button is disabled while a reload is already in progress
+- Uses the existing `reloading` flag from `DashboardContext` — TanStack Query invalidates all five query keys in parallel; `animateIn` count-up animation fires on completion
+
+#### Embedded FinOps Sections — Pools, Lending, Settlements
+
+- Pools, Lending, and Settlements are no longer separate navigation stack screens; they open as embedded sub-views inside the Dashboard
+- Tapping a FinOps item in Quick Navigation sets `activeSection` in `DashboardContext` without any `navigation.navigate` call
+- `DashboardLayout` routes to `<PoolsSection />`, `<LendingSection />`, or `<SettlementsSection />` when `activeSection` is set; the header and bottom bar stay in place
+- `convertToTransaction` in `LendingSection` and `SettlementsSection` calls `setActiveSection(null)` then navigates to Dashboard with `prefillEntry` params — entry modal pre-fills as before
+
+#### ContextBar — Animated Section Indicator
+
+- New `ContextBar` component renders below the header when a FinOps section is active
+- Slides in from behind the header (`translateY: -48 → 0`, spring animation); header has `zIndex: 10`, bar has `zIndex: 1`
+- Label (section name) is tappable to dismiss the section; a `↓` hint guides the gesture
+- Pools list view shows a `+` button in the right slot to open the create-pool modal
+- All elements instrumented with `uiProps`/`uiPath` for testID tracing
+
+#### Spinner Animations
+
+- Auth loading screen (`RootNavigator`): `ActivityIndicator` replaced with `spinnerSMALL.gif` (80×80)
+- Dashboard loading screen (`DashboardLayout`): logo + `ActivityIndicator` + text replaced with `spinnerFAST.gif` (120×120, centered)
+- Dashboard header right slot on mobile: always shows `spinner.gif` (36×36); `spinnerFAST.gif` while reloading
+
+#### Universal AppHeader
+
+- `src/components/AppHeader.tsx` — standalone header component with no `DashboardContext` dependency
+- Same visual as `DashboardHeader`: avatar left (acts as back button), logo centred, spinner.gif right on mobile
+- Props: `onBack?: () => void`, `rightElement?: React.ReactNode`
+- Used in `LendingScreen`, `SettlementsScreen`, `PoolScreen` (list view), and `ChangelogModal`
+
+### Bug Fixes
+
+#### PWA Android Home Screen Icon
+
+- Android PWA was showing a white background on the home screen icon and black/masked corners on launch
+- Root cause: a single `icon.png` served for both `"any"` and `"maskable"` purposes; `"maskable"` applies an inset safe-zone mask that cuts off the logo
+- Fix: separate `icon-maskable.png` (512×512, solid `#060A14` background, logo contained within inner 80% safe zone) for the `"maskable"` purpose entry in `manifest.json`
+
+#### PWA Android Stale Cached Icon
+
+- Android PWA continued showing the old icon after assets were updated and pushed
+- Fix: `CACHE_NAME` bumped to `'finduo-v2'` in `public/sw.js` (forces old service worker to evict and re-cache all assets); `?v=2` query param added to manifest icon URLs (forces browser to re-download the icon file)
+
+### Technical
+
+- `public/sw.js` — `CACHE_NAME` bumped from `finduo-v1` to `finduo-v2`
+- `public/manifest.json` — icon entries split by purpose; maskable entry points to `icon-maskable.png?v=1`
+- `src/context/DashboardContext.tsx` — `activeSection` / `setActiveSection` added to provider value
+- `src/navigation/index.tsx` — `PoolScreen`, `LendingScreen`, `SettlementsScreen` removed from the navigator stack; `RootStackParamList` now contains only `Login` and `Dashboard`
+- `src/components/dashboard/layout/ContextBar.tsx` — new component
+- `src/components/AppHeader.tsx` — new component
+- `src/components/sections/PoolsSection.tsx` — pool UI extracted from `PoolScreen.tsx` for embedded use
+- `src/components/sections/LendingSection.tsx` — lending UI extracted from `LendingScreen.tsx` for embedded use
+- `src/components/sections/SettlementsSection.tsx` — settlements UI extracted from `SettlementsScreen.tsx` for embedded use
+- `DashboardScreen.styles.ts` — `headerRow` gains `zIndex: 10` so header paints over the sliding ContextBar
+- All `uiPath` calls in `ContextBar` and `AppHeader` corrected from 2-arg to 3-arg format; `uiProps` spread added to every meaningful element
+
+---
+
 ## [1.0.4] — 2026-04-02
 
 ### Bug Fixes
@@ -115,10 +183,12 @@
 ### Bug Fixes
 
 #### Revoke Account Share — No Effect on Web
+
 - `Alert.alert` button callbacks are silently discarded on React Native Web — the confirm dialog appeared but tapping Revoke never called `removeFriendFromAccount`, so nothing happened and no network request was made
 - `FriendsModal.handleToggleAccount` now uses `window.confirm` on web and `Alert.alert` on native, matching the cross-platform pattern already used in `CategoryModal`
 
 #### Duplicate Transfer Categories
+
 - Creating a transfer used `findOrCreateCat` per user — multiple users each created their own "Transfer" expense and income categories, leading to duplicates across shared accounts
 - Transfer is now a global system category: two stable rows (`is_default = true`, `user_id = NULL`) with fixed UUIDs shared by all users
 - Existing per-user Transfer rows re-pointed to global IDs and deleted via migration
@@ -127,6 +197,7 @@
 ### Features
 
 #### All Lucide Icons in the Icon Picker
+
 - Icon picker expanded from a curated static list of ~280 icons to the full `lucide-react-native` library (~1,900 icons)
 - Icon list is derived dynamically from package exports — no static list to maintain; updates automatically with library upgrades
 - Lazy loading: first 60 icons shown on open (~2 screen heights); scrolling appends 60 more per page
@@ -134,9 +205,11 @@
 - Web uses `ScrollView` with `onScroll` near-bottom detection; native uses `FlatList` with `onEndReached`
 
 #### Transfer Category Icon
+
 - Global Transfer categories now use the `Replace` Lucide icon instead of the `↔` text character
 
 ### Technical
+
 - `supabase/migrations/20260402b_temp_categories_on_revoke.sql` — adds `temp_for` JSONB column to categories for future revoked-share handling
 - `supabase/migrations/20260402c_global_transfer_categories.sql` — global Transfer category migration (`user_id = NULL`, `is_default = true`, stable UUIDs, RLS updated)
 - `supabase/migrations/20260402d_cleanup_leftover_transfer_categories.sql` — cleanup of orphaned per-user Transfer rows

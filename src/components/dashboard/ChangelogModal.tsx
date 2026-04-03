@@ -13,6 +13,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import Icon from '../Icon';
+import AppHeader from '../AppHeader';
 import { uiPath, uiProps, logUI } from '../../lib/devtools';
 
 const README_URL =
@@ -105,20 +106,24 @@ export default function ChangelogModal({ visible, onClose }: ChangelogModalProps
 
         <View style={[cs.card, isWide && { width: 520, maxHeight: '88%' }]}>
           
-          {/* Header */}
-          <View style={cs.header}>
-            <Text style={cs.title}>
-              {view === 'patchnotes' ? '📋 Patch Notes' : '📖 README'}
-            </Text>
+          <AppHeader onBack={onClose} />
 
+          {/* Tab toggle */}
+          <View style={cs.tabRow}>
             <TouchableOpacity
-              style={cs.toggleBtn}
-              onPress={() =>
-                setView(view === 'patchnotes' ? 'readme' : 'patchnotes')
-              }
+              style={[cs.tabBtn, view === 'patchnotes' && cs.tabBtnActive]}
+              onPress={() => setView('patchnotes')}
             >
-              <Text style={cs.toggleBtnText}>
-                {view === 'patchnotes' ? 'Show README' : 'Show Patch Notes'}
+              <Text style={[cs.tabBtnText, view === 'patchnotes' && cs.tabBtnTextActive]}>
+                Patch Notes
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[cs.tabBtn, view === 'readme' && cs.tabBtnActive]}
+              onPress={() => setView('readme')}
+            >
+              <Text style={[cs.tabBtnText, view === 'readme' && cs.tabBtnTextActive]}>
+                README
               </Text>
             </TouchableOpacity>
           </View>
@@ -159,20 +164,23 @@ export default function ChangelogModal({ visible, onClose }: ChangelogModalProps
 
 const cs = StyleSheet.create({
   card: { flex: 1, backgroundColor: '#060A14' },
-  header: {
+  tabRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    padding: 16,
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
     borderBottomWidth: 1,
     borderBottomColor: '#1E2F49',
   },
-  title: { color: '#EDF5FF', fontSize: 17, fontWeight: '700' },
-  toggleBtn: {
-    backgroundColor: '#13253B',
-    padding: 6,
+  tabBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
     borderRadius: 8,
+    backgroundColor: '#13253B',
   },
-  toggleBtnText: { color: '#8FA8C9', fontSize: 13 },
+  tabBtnActive: { backgroundColor: '#1F3A59' },
+  tabBtnText: { color: '#8FA8C9', fontSize: 13 },
+  tabBtnTextActive: { color: '#EDF5FF', fontWeight: '600' },
   scrollContent: { padding: 20 },
   footer: { padding: 16, borderTopWidth: 1, borderTopColor: '#1E2F49' },
   closeBtn: {

@@ -1,5 +1,5 @@
 import React from 'react';
-import { ActivityIndicator, Image, Text, View } from 'react-native';
+import { Image, View } from 'react-native';
 import { useDashboard } from '../../../context/DashboardContext';
 import { styles } from '../../../screens/DashboardScreen.styles';
 import DashboardHeader from './DashboardHeader';
@@ -7,6 +7,9 @@ import DashboardBody from './DashboardBody';
 import ScrollTopFab from './ScrollTopFab';
 import BottomActions from './BottomActions';
 import ModalsRoot from './ModalsRoot';
+import PoolsSection from '../../sections/PoolsSection';
+import LendingSection from '../../sections/LendingSection';
+import SettlementsSection from '../../sections/SettlementsSection';
 import { uiPath, uiProps } from '../../../lib/devtools';
 
 export default function DashboardLayout() {
@@ -14,21 +17,18 @@ export default function DashboardLayout() {
     loading,
     desktopView,
     framedMobileView,
+    activeSection,
   } = useDashboard();
 
   if (loading) {
     return (
       <View {...uiProps(uiPath('dashboard', 'layout', 'loading_container'))} style={styles.loadingWrap}>
-        {!desktopView ? (
-          <Image
-            {...uiProps(uiPath('dashboard', 'layout', 'loading_logo'))}
-            source={require('../../../../assets/logo.png')}
-            style={{ width: '100%', height: 80, marginBottom: 24 }}
-            resizeMode="contain"
-          />
-        ) : null}
-        <ActivityIndicator {...uiProps(uiPath('dashboard', 'layout', 'loading_indicator'))} size="large" color="#53E3A6" />
-        <Text style={styles.loadingText}>Loading dashboard...</Text>
+        <Image
+          {...uiProps(uiPath('dashboard', 'layout', 'loading_indicator'))}
+          source={require('../../../../assets/spinnerFAST.gif')}
+          style={{ width: 120, height: 120 }}
+          resizeMode="contain"
+        />
       </View>
     );
   }
@@ -45,9 +45,16 @@ export default function DashboardLayout() {
       >
         <View {...uiProps(uiPath('dashboard', 'layout', 'inner_container'))} style={styles.container}>
           <DashboardHeader />
-          <DashboardBody />
-          <ScrollTopFab />
-          <BottomActions />
+          {activeSection === 'pools' && <PoolsSection />}
+          {activeSection === 'lending' && <LendingSection />}
+          {activeSection === 'settlements' && <SettlementsSection />}
+          {!activeSection && (
+            <>
+              <DashboardBody />
+              <ScrollTopFab />
+              <BottomActions />
+            </>
+          )}
         </View>
       </View>
       <ModalsRoot />

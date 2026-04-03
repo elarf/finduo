@@ -1,5 +1,7 @@
 # Finduo Database Schema
 
+<!-- markdownlint-disable MD013 MD022 MD032 MD060 -->
+
 > Auto-generated from migration analysis. Reflects the final state as of 2026-03-30.
 
 ---

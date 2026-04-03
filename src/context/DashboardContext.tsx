@@ -94,6 +94,9 @@ export type DashboardContextValue = {
   signOut: () => void;
   // Navigation
   navigation: ReturnType<typeof useNavigation<any>>;
+  // Section routing
+  activeSection: 'pools' | 'lending' | 'settlements' | null;
+  setActiveSection: (section: 'pools' | 'lending' | 'settlements' | null) => void;
   // Dimensions
   width: number;
   height: number;
@@ -728,6 +731,7 @@ export function DashboardProvider({
 
   // ── UI/layout state ──
   const [viewModeOverride, setViewModeOverride] = useState<'desktop' | 'mobile' | null>(null);
+  const [activeSection, setActiveSection] = useState<'pools' | 'lending' | 'settlements' | null>(null);
   const [showAccountOverviewPicker, setShowAccountOverviewPicker] = useState(false);
   const [visibleTransactionsCount, setVisibleTransactionsCount] = useState(12);
   const [menuAccountsExpanded, setMenuAccountsExpanded] = useState(false);
@@ -2438,6 +2442,7 @@ export function DashboardProvider({
   const value: DashboardContextValue = {
     user, avatarUrl, signOut,
     navigation,
+    activeSection, setActiveSection,
     width, height,
     isDesktopBrowser, desktopView, framedMobileView,
     // useDashboardData

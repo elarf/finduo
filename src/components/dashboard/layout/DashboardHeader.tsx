@@ -23,6 +23,8 @@ export default function DashboardHeader() {
     setMenuTagsEditMode,
     avatarImgError,
     setAvatarImgError,
+    reloading,
+    reloadDashboard,
   } = useDashboard();
 
   return (
@@ -74,7 +76,7 @@ export default function DashboardHeader() {
       </View>
       {/* Spacer so avatar and toggle don't overlap the logo */}
       <View style={{ flex: 1 }} pointerEvents="none" />
-      {isDesktopBrowser && (
+      {isDesktopBrowser ? (
         <TouchableOpacity
           style={styles.viewToggleButton}
           onPress={() => {
@@ -88,6 +90,20 @@ export default function DashboardHeader() {
             name={desktopView ? 'smartphone' : 'laptop'}
             size={18}
             color="#8FA8C9"
+          />
+        </TouchableOpacity>
+      ) : (
+        <TouchableOpacity
+          onPress={() => { void reloadDashboard(); }}
+          disabled={reloading}
+          {...uiProps(uiPath('dashboard', 'header', 'spinner'))}
+        >
+          <Image
+            source={reloading
+              ? require('../../../../assets/spinnerFAST.gif')
+              : require('../../../../assets/spinner.gif')}
+            style={{ width: 36, height: 36 }}
+            resizeMode="contain"
           />
         </TouchableOpacity>
       )}

@@ -6,22 +6,16 @@
  * re-renders when the session state changes inside AuthProvider.
  */
 import React from 'react';
-import { ActivityIndicator, View } from 'react-native';
+import { Image, View } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useAuth } from '../context/AuthContext';
 import LoginScreen from '../screens/LoginScreen';
 import DashboardScreen from '../screens/DashboardScreen';
-import PoolScreen from '../screens/PoolScreen';
-import LendingScreen from '../screens/LendingScreen';
-import SettlementsScreen from '../screens/SettlementsScreen';
 
 export type RootStackParamList = {
   Login: undefined;
-  Dashboard: undefined;
-  Pools: undefined;
-  Lending: undefined;
-  Settlements: undefined;
+  Dashboard: { prefillEntry?: object } | undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -31,8 +25,12 @@ export default function RootNavigator() {
 
   if (loading) {
     return (
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-        <ActivityIndicator size="large" color="#1A73E8" />
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#060A14' }}>
+        <Image
+          source={require('../../assets/spinnerSMALL.gif')}
+          style={{ width: 80, height: 80 }}
+          resizeMode="contain"
+        />
       </View>
     );
   }
@@ -41,12 +39,7 @@ export default function RootNavigator() {
     <NavigationContainer>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         {session ? (
-          <>
-            <Stack.Screen name="Dashboard" component={DashboardScreen} />
-            <Stack.Screen name="Pools" component={PoolScreen} />
-            <Stack.Screen name="Lending" component={LendingScreen} />
-            <Stack.Screen name="Settlements" component={SettlementsScreen} />
-          </>
+          <Stack.Screen name="Dashboard" component={DashboardScreen} />
         ) : (
           <Stack.Screen name="Login" component={LoginScreen} />
         )}

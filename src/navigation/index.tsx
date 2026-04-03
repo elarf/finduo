@@ -25,7 +25,7 @@ export default function RootNavigator() {
 
   if (loading) {
     return (
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#060A14' }}>
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#000000' }}>
         <Image
           source={require('../../assets/spinnerSMALL.gif')}
           style={{ width: 80, height: 80 }}

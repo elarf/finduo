@@ -6,14 +6,12 @@ Financial tracking app for couples and shared households. Track income, expenses
 
 ---
 
-## Latest Release — v1.0.5
+## Latest Release — v1.0.6
 
-- **Header spinner reload** — tap the spinner (mobile, top-right) to refresh all dashboard data in the background; shows `spinnerFAST.gif` while loading; skeleton stays visible
-- **Embedded FinOps sections** — Pools, Lending, and Settlements open as embedded sub-views inside the Dashboard (no separate navigation screens); a `ContextBar` slides in from behind the header labelling the active section; tap the label to dismiss
-- **Spinner animations** — `spinnerSMALL.gif` on auth loading, `spinnerFAST.gif` on dashboard data loading, `spinner.gif` always in the header (mobile)
-- **Universal AppHeader** — standalone header component for non-dashboard screens (LendingScreen, SettlementsScreen, PoolScreen list view, ChangelogModal)
-- **PWA maskable icon** — `icon-maskable.png` with solid `#060A14` background and safe-zone-constrained logo fixes white/black background artefacts on Android home screen and launch splash
-- **PWA cache bust** — service worker `CACHE_NAME` bumped to `finduo-v2`; manifest icon URLs versioned with `?v=2`
+- **Contacts section** — new embedded view in Quick Navigation (FinOps group); merges pool contacts and friends list; edit/add contacts; read-only email for app users; fallback avatar from linked friend's profile
+- **Lending redesign** — Pending (unconfirmed only) / Ready to record / Recorded / Archived (collapsed by default); Record button marks debt then pre-fills Dashboard entry; Archive on recorded debts; re-record from Archived; broken debts shown with italic styling, "broken" badge, and a delete button
+- **Avatar persistence** — OAuth avatars (Google etc.) are snapshotted to Supabase Storage on first login and re-uploaded only when the source URL changes; permanent storage URLs prevent broken avatars after OAuth CDN expiry
+- **Auth loading screen** — background changed to pure black (`#000000`)
 
 Full history: [PATCHNOTES.md](./PATCHNOTES.md)
 
@@ -94,7 +92,7 @@ Full history: [PATCHNOTES.md](./PATCHNOTES.md)
 - Blocked users cannot see the relationship or send new requests
 - Expand a friend in the Friends modal to manage which accounts they have access to
 - Share any owned account with a friend — access is non-expiring and revocable at any time
-- Friend list shows profile pictures (Google avatar or initial fallback) and the count of shared accounts
+- Friend list shows profile pictures (Google avatar snapshotted to Supabase Storage, or initial fallback) and the count of shared accounts
 
 ### Sharing & Invitations
 
@@ -119,15 +117,25 @@ Pools are shared expense pools for splitting costs among a group.
 - Pool creator can delete the pool (confirmation required via dialog)
 - RLS ensures users can only see pools they are members of; the member list is exposed via a SECURITY DEFINER RPC
 
+### Contacts (FinOps)
+
+Accessible from the FinOps section in Quick Navigation.
+
+- Unified contact list merging pool participants and accepted friends into one view
+- Friend-linked contacts show the friend's profile picture (with initial fallback if the image fails to load)
+- App user contacts (linked to a registered account) show email as read-only — email is sourced from the authentication record and cannot be changed here
+- Edit display name, phone, and notes for any contact; add new manual contacts from within the section
+
 ### Lending (FinOps)
 
 Accessible from the FinOps section in Quick Navigation.
 
-- Lists all debts involving the current user, grouped by status: Pending, Ready to record, Paid
-- Net balance card shows overall debt position at a glance (positive = others owe you, negative = you owe others)
-- Confirm a pending debt (your side of the two-sided confirmation)
-- Once both sides confirm, the debt moves to "Ready to record" with a green **Record** button
-- Tapping **Record** navigates to the Dashboard with the entry modal pre-filled (income or expense, correct amount, descriptive note)
+- Net balance card shows the overall debt position at a glance (positive = others owe you, negative = you owe others)
+- **Pending** — debts the current user has not yet confirmed; a **Confirm** button registers your side of the two-sided confirmation
+- **Ready to record** — debts where the current user has confirmed (or both sides have confirmed); a green **Record** button pre-fills the Dashboard entry modal with the correct type, amount, and note, and marks the debt as recorded
+- **Recorded** — debts that have been converted to a Dashboard transaction; an **Archive** button moves them to the Archived section
+- **Archived** — collapsed by default; expand by tapping the header; archived debts show a **Record** button to re-record in case the Dashboard entry was deleted by accident
+- Broken debts (missing or "Unknown" counterpart name) are shown in italic grey with a **broken** badge and a red delete button — record/archive actions are suppressed for unresolvable entries
 
 ### Settlements (FinOps)
 
@@ -174,6 +182,7 @@ Swipe from the left edge (20 px zone) or tap the avatar to open.
   - **Pools** — opens as an embedded section inside the Dashboard; a ContextBar labels the view; `+` in the bar opens the create-pool modal
   - **Lending** — opens as an embedded section; shows pending debt count badge
   - **Settlements** — opens as an embedded section inside the Dashboard
+  - **Contacts** — opens as an embedded section; unified list of pool contacts and friends; edit/add contacts
 - **Friends** — opens the Friends modal
 - **Settings** (collapsible):
   - **Invitations** — opens the Invitations modal
@@ -238,7 +247,7 @@ Swipe from the left edge (20 px zone) or tap the avatar to open.
 | `transaction_tags` | Many-to-many join between transactions and tags |
 | `user_preferences` | Per-user prefs (account_order, primary_account_id, excluded_account_ids) |
 | `user_hidden_categories` | Per-user category hiding (user_id, category_id) |
-| `user_profiles` | Public user discovery (display_name, email, avatar_url) for the friend system |
+| `user_profiles` | Public user discovery (display_name, email, avatar_url, avatar_source_url) for the friend system |
 | `friends` | Directional friend relationships (user_id → friend_user_id, status: pending/accepted/rejected/blocked) |
 | `contacts` | Named contacts for external pool participants (display_name, linked user optional) |
 | `pools` | Shared expense pools (name, type: event/continuous, created_by, start_date, end_date, status) |
@@ -338,6 +347,7 @@ finduo/
         PoolsSection.tsx           Embedded pool list + detail view (no navigation header)
         LendingSection.tsx         Embedded debt list with confirm and record actions
         SettlementsSection.tsx     Embedded debts + pools accordion view
+        ContactsSection.tsx        Embedded contacts list (merged pool contacts + friends; edit/add)
     context/
       AuthContext.tsx              Auth state, Google OAuth (web + native), deep link handling
       DashboardContext.tsx         All dashboard state + actions (DashboardProvider + useDashboard())

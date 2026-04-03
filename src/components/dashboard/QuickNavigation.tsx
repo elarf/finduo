@@ -95,7 +95,7 @@ type QuickNavigationProps = {
   pendingDebtCount: number;
 
   // Section routing
-  setActiveSection: (section: 'pools' | 'lending' | 'settlements' | null) => void;
+  setActiveSection: (section: 'pools' | 'lending' | 'settlements' | 'contacts' | null) => void;
 
   // Other modals
   setShowFriendsModal: (v: boolean) => void;
@@ -839,6 +839,21 @@ function QuickNavigation({
               <View style={{ flexDirection: 'row', alignItems: 'center', width: '100%' }}>
                 <View style={{ width: 20 }} />
                 <Text style={[styles.menuItemText, { flex: 1, textAlign: 'center' }]}>Friends</Text>
+                <View style={{ minWidth: 20 }} />
+              </View>
+            </TouchableOpacity>
+            <TouchableOpacity
+              {...uiProps(uiPath('quick_nav', 'nav', 'contacts_item'))}
+              style={styles.menuItem}
+              onPress={() => {
+                logUI(uiPath('quick_nav', 'nav', 'contacts_item'), 'press');
+                onClose();
+                setActiveSection('contacts');
+              }}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', width: '100%' }}>
+                <View style={{ width: 20 }} />
+                <Text style={[styles.menuItemText, { flex: 1, textAlign: 'center' }]}>Contacts</Text>
                 <View style={{ minWidth: 20 }} />
               </View>
             </TouchableOpacity>

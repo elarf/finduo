@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   ScrollView,
@@ -14,24 +14,34 @@ import AppHeader from '../components/AppHeader';
 import type { AppDebt } from '../types/pools';
 import { uiPath, uiProps, logUI } from '../lib/devtools';
 
-function DebtRow({ debt, userId, onConfirm, onConvert }: {
+function DebtRow({ debt, userId, onConfirm, onConvert, onArchive, onDelete }: {
   debt: AppDebt;
   userId: string;
   onConfirm: (id: string) => void;
   onConvert: (debt: AppDebt) => void;
+  onArchive: (id: string) => void;
+  onDelete: (id: string) => void;
 }) {
   const iOwe = debt.from_user === userId;
   const myConfirmed = iOwe ? debt.from_confirmed : debt.to_confirmed;
   const otherConfirmed = iOwe ? debt.to_confirmed : debt.from_confirmed;
-  const otherUserId = iOwe ? debt.to_user : debt.from_user;
-  const otherName = iOwe
-    ? (debt.to_participant_name ?? otherUserId.slice(0, 8))
-    : (debt.from_participant_name ?? otherUserId.slice(0, 8));
+
+  const otherParticipantName = iOwe ? debt.to_participant_name : debt.from_participant_name;
+  const isBroken = !otherParticipantName || otherParticipantName === 'Unknown';
+  const otherName = isBroken ? 'Unknown contact' : otherParticipantName;
 
   const statusColor =
-    debt.status === 'paid' ? '#4ade80' :
+    debt.status === 'archived' ? '#475569' :
+    debt.status === 'recorded' || debt.status === 'paid' ? '#4ade80' :
     debt.status === 'confirmed' ? '#53E3A6' :
     '#f59e0b';
+
+  const canConfirm = debt.status === 'pending' && !myConfirmed;
+  const canRecord =
+    (debt.status === 'pending' && myConfirmed) ||
+    debt.status === 'confirmed' ||
+    debt.status === 'archived';
+  const canArchive = debt.status === 'recorded' || debt.status === 'paid';
 
   return (
     <View style={s.debtRow} {...uiProps(uiPath('lending', 'debt_row', 'container', debt.id))}>
@@ -43,7 +53,7 @@ function DebtRow({ debt, userId, onConfirm, onConvert }: {
         />
       </View>
       <View style={{ flex: 1 }}>
-        <Text style={s.debtText} {...uiProps(uiPath('lending', 'debt_row', 'text', debt.id))}>
+        <Text style={[s.debtText, isBroken && s.debtTextBroken]} {...uiProps(uiPath('lending', 'debt_row', 'text', debt.id))}>
           {iOwe ? `You owe ${otherName}` : `${otherName} owes you`}
         </Text>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3 }}>
@@ -54,8 +64,9 @@ function DebtRow({ debt, userId, onConfirm, onConvert }: {
             <Text style={[s.statusText, { color: statusColor }]}>{debt.status}</Text>
           </View>
           {debt.pool_id && <Text style={s.debtMeta}>pool</Text>}
-          {myConfirmed && <Text style={s.debtMeta}>you confirmed</Text>}
-          {otherConfirmed && <Text style={s.debtMeta}>they confirmed</Text>}
+          {isBroken && <Text style={s.debtMetaBroken}>broken</Text>}
+          {myConfirmed && debt.status === 'pending' && <Text style={s.debtMeta}>you confirmed</Text>}
+          {otherConfirmed && debt.status === 'pending' && <Text style={s.debtMeta}>they confirmed</Text>}
         </View>
       </View>
       <Text
@@ -65,7 +76,7 @@ function DebtRow({ debt, userId, onConfirm, onConvert }: {
         {iOwe ? '-' : '+'}{Number(debt.amount).toFixed(2)}
       </Text>
       <View style={s.debtActions}>
-        {debt.status === 'pending' && !myConfirmed && (
+        {canConfirm && (
           <TouchableOpacity
             style={s.confirmBtn}
             onPress={() => {
@@ -77,7 +88,7 @@ function DebtRow({ debt, userId, onConfirm, onConvert }: {
             <Icon name="Check" size={14} color="#060A14" />
           </TouchableOpacity>
         )}
-        {debt.status === 'confirmed' && (
+        {canRecord && !isBroken && (
           <TouchableOpacity
             style={s.convertBtn}
             onPress={() => {
@@ -90,6 +101,31 @@ function DebtRow({ debt, userId, onConfirm, onConvert }: {
             <Text style={s.convertBtnText}>Record</Text>
           </TouchableOpacity>
         )}
+        {canArchive && !isBroken && (
+          <TouchableOpacity
+            style={s.archiveBtn}
+            onPress={() => {
+              logUI(uiPath('lending', 'debt_row', 'archive_button', debt.id), 'press');
+              onArchive(debt.id);
+            }}
+            {...uiProps(uiPath('lending', 'debt_row', 'archive_button', debt.id))}
+          >
+            <Icon name="Archive" size={13} color="#475569" />
+            <Text style={s.archiveBtnText}>Archive</Text>
+          </TouchableOpacity>
+        )}
+        {isBroken && (
+          <TouchableOpacity
+            style={s.deleteBtn}
+            onPress={() => {
+              logUI(uiPath('lending', 'debt_row', 'delete_button', debt.id), 'press');
+              onDelete(debt.id);
+            }}
+            {...uiProps(uiPath('lending', 'debt_row', 'delete_button', debt.id))}
+          >
+            <Icon name="Trash2" size={14} color="#f87171" />
+          </TouchableOpacity>
+        )}
       </View>
     </View>
   );
@@ -97,7 +133,8 @@ function DebtRow({ debt, userId, onConfirm, onConvert }: {
 
 export default function LendingScreen({ navigation }: { navigation: any }) {
   const { user } = useAuth();
-  const { debts, loading, getUserDebts, confirmDebt } = useDebts(user);
+  const { debts, loading, getUserDebts, confirmDebt, markRecorded, archiveDebt, deleteDebt } = useDebts(user);
+  const [archivedExpanded, setArchivedExpanded] = useState(false);
 
   useEffect(() => {
     void getUserDebts();
@@ -107,7 +144,8 @@ export default function LendingScreen({ navigation }: { navigation: any }) {
     logUI(uiPath('lending', 'scroll_view', 'root'), 'mounted');
   }, []);
 
-  const convertToTransaction = useCallback((debt: AppDebt) => {
+  const convertToTransaction = useCallback(async (debt: AppDebt) => {
+    await markRecorded(debt.id);
     const iOwe = debt.from_user === user?.id;
     const otherName = iOwe
       ? (debt.to_participant_name ?? 'counterpart')
@@ -122,16 +160,37 @@ export default function LendingScreen({ navigation }: { navigation: any }) {
         _key: debt.id,
       },
     });
-  }, [navigation, user?.id]);
+  }, [markRecorded, navigation, user?.id]);
 
-  const pendingDebts = useMemo(() => debts.filter((d) => d.status === 'pending'), [debts]);
-  const confirmedDebts = useMemo(() => debts.filter((d) => d.status === 'confirmed'), [debts]);
-  const paidDebts = useMemo(() => debts.filter((d) => d.status === 'paid'), [debts]);
+  const pendingDebts = useMemo(() => debts.filter((d) => {
+    if (d.status !== 'pending') return false;
+    const iOwe = d.from_user === user?.id;
+    const myConfirmed = iOwe ? d.from_confirmed : d.to_confirmed;
+    return !myConfirmed;
+  }), [debts, user?.id]);
+
+  const readyDebts = useMemo(() => debts.filter((d) => {
+    if (d.status === 'confirmed') return true;
+    if (d.status === 'pending') {
+      const iOwe = d.from_user === user?.id;
+      const myConfirmed = iOwe ? d.from_confirmed : d.to_confirmed;
+      return myConfirmed;
+    }
+    return false;
+  }), [debts, user?.id]);
+
+  const recordedDebts = useMemo(() =>
+    debts.filter((d) => d.status === 'recorded' || d.status === 'paid'),
+  [debts]);
+
+  const archivedDebts = useMemo(() =>
+    debts.filter((d) => d.status === 'archived'),
+  [debts]);
 
   const netBalance = useMemo(() => {
     if (!user) return 0;
     return debts
-      .filter((d) => d.status !== 'paid')
+      .filter((d) => d.status === 'pending' || d.status === 'confirmed')
       .reduce((sum, d) => {
         if (d.to_user === user.id) return sum + Number(d.amount);
         if (d.from_user === user.id) return sum - Number(d.amount);
@@ -179,29 +238,47 @@ export default function LendingScreen({ navigation }: { navigation: any }) {
               Pending ({pendingDebts.length})
             </Text>
             {pendingDebts.map((d) => (
-              <DebtRow key={d.id} debt={d} userId={user.id} onConfirm={confirmDebt} onConvert={convertToTransaction} />
+              <DebtRow key={d.id} debt={d} userId={user.id} onConfirm={confirmDebt} onConvert={convertToTransaction} onArchive={archiveDebt} onDelete={deleteDebt} />
             ))}
           </>
         )}
 
-        {confirmedDebts.length > 0 && (
+        {readyDebts.length > 0 && (
           <>
-            <Text style={s.sectionTitle} {...uiProps(uiPath('lending', 'section_title', 'confirmed'))}>
-              Ready to record ({confirmedDebts.length})
+            <Text style={s.sectionTitle} {...uiProps(uiPath('lending', 'section_title', 'ready'))}>
+              Ready to record ({readyDebts.length})
             </Text>
-            {confirmedDebts.map((d) => (
-              <DebtRow key={d.id} debt={d} userId={user.id} onConfirm={confirmDebt} onConvert={convertToTransaction} />
+            {readyDebts.map((d) => (
+              <DebtRow key={d.id} debt={d} userId={user.id} onConfirm={confirmDebt} onConvert={convertToTransaction} onArchive={archiveDebt} onDelete={deleteDebt} />
             ))}
           </>
         )}
 
-        {paidDebts.length > 0 && (
+        {recordedDebts.length > 0 && (
           <>
-            <Text style={s.sectionTitle} {...uiProps(uiPath('lending', 'section_title', 'paid'))}>
-              Paid ({paidDebts.length})
+            <Text style={s.sectionTitle} {...uiProps(uiPath('lending', 'section_title', 'recorded'))}>
+              Recorded ({recordedDebts.length})
             </Text>
-            {paidDebts.map((d) => (
-              <DebtRow key={d.id} debt={d} userId={user.id} onConfirm={confirmDebt} onConvert={convertToTransaction} />
+            {recordedDebts.map((d) => (
+              <DebtRow key={d.id} debt={d} userId={user.id} onConfirm={confirmDebt} onConvert={convertToTransaction} onArchive={archiveDebt} onDelete={deleteDebt} />
+            ))}
+          </>
+        )}
+
+        {archivedDebts.length > 0 && (
+          <>
+            <TouchableOpacity
+              style={s.collapsibleHeader}
+              onPress={() => setArchivedExpanded((v) => !v)}
+              {...uiProps(uiPath('lending', 'section_title', 'archived'))}
+            >
+              <Text style={s.sectionTitle}>
+                Archived ({archivedDebts.length})
+              </Text>
+              <Icon name={archivedExpanded ? 'ChevronUp' : 'ChevronDown'} size={14} color="#64748B" />
+            </TouchableOpacity>
+            {archivedExpanded && archivedDebts.map((d) => (
+              <DebtRow key={d.id} debt={d} userId={user.id} onConfirm={confirmDebt} onConvert={convertToTransaction} onArchive={archiveDebt} onDelete={deleteDebt} />
             ))}
           </>
         )}
@@ -242,6 +319,12 @@ const s = StyleSheet.create({
     marginTop: 20,
     marginBottom: 6,
   },
+  collapsibleHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingRight: 16,
+  },
 
   debtRow: {
     flexDirection: 'row',
@@ -254,7 +337,9 @@ const s = StyleSheet.create({
   },
   debtIcon: { width: 32, height: 32, borderRadius: 8, backgroundColor: '#0E1A2B', alignItems: 'center', justifyContent: 'center' },
   debtText: { color: '#EAF3FF', fontSize: 14 },
+  debtTextBroken: { color: '#64748B', fontStyle: 'italic' },
   debtMeta: { color: '#475569', fontSize: 10 },
+  debtMetaBroken: { color: '#f87171', fontSize: 10, fontWeight: '600' },
   debtAmount: { fontSize: 15, fontWeight: '600' },
   debtActions: { flexDirection: 'row', gap: 6 },
   statusBadge: { paddingHorizontal: 6, paddingVertical: 1, borderRadius: 4, borderWidth: 1 },
@@ -271,4 +356,15 @@ const s = StyleSheet.create({
     paddingVertical: 5,
   },
   convertBtnText: { color: '#060A14', fontSize: 11, fontWeight: '700' },
+  archiveBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#1F3A59',
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+  },
+  archiveBtnText: { color: '#64748B', fontSize: 11, fontWeight: '700' },
+  deleteBtn: { backgroundColor: '#1A0A0A', borderRadius: 6, padding: 6, borderWidth: 1, borderColor: '#f8717144' },
 });

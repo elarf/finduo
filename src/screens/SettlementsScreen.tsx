@@ -28,7 +28,7 @@ export default function SettlementsScreen({ navigation }: { navigation: any }) {
   } = usePoolTransactions(user);
   const {
     debts, loading: debtsLoading,
-    getUserDebts, computePoolSettlement, commitPoolSettlement, confirmDebt, markPaid,
+    getUserDebts, computePoolSettlement, commitPoolSettlement, confirmDebt,
   } = useDebts(user);
 
   const [debtsOpen, setDebtsOpen] = useState(false);

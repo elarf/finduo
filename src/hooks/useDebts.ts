@@ -248,21 +248,53 @@ export function useDebts(user: User | null) {
     }
   }, [getUserDebts, user]);
 
-  /** Mark a confirmed debt as paid. */
-  const markPaid = useCallback(async (debtId: string) => {
+  /** Mark a debt as recorded (user has converted it to a transaction). */
+  const markRecorded = useCallback(async (debtId: string) => {
     if (!user) return;
     try {
-      logAPI('supabase://debts', { source: 'lending.debt_row.paid_button', action: 'markPaid' });
+      logAPI('supabase://debts', { source: 'lending.debt_row.convert_button', action: 'markRecorded' });
       const { error } = await supabase
         .from('debts')
-        .update({ status: 'paid', updated_at: new Date().toISOString() })
+        .update({ status: 'recorded', updated_at: new Date().toISOString() })
         .eq('id', debtId);
       if (error) throw error;
       await getUserDebts();
     } catch (err) {
-      Alert.alert('Error', err instanceof Error ? err.message : 'Failed to mark as paid');
+      Alert.alert('Error', err instanceof Error ? err.message : 'Failed to mark as recorded');
     }
   }, [getUserDebts, user]);
+
+  /** Move a recorded debt to the archived section. */
+  const archiveDebt = useCallback(async (debtId: string) => {
+    if (!user) return;
+    try {
+      logAPI('supabase://debts', { source: 'lending.debt_row.archive_button', action: 'archiveDebt' });
+      const { error } = await supabase
+        .from('debts')
+        .update({ status: 'archived', updated_at: new Date().toISOString() })
+        .eq('id', debtId);
+      if (error) throw error;
+      await getUserDebts();
+    } catch (err) {
+      Alert.alert('Error', err instanceof Error ? err.message : 'Failed to archive debt');
+    }
+  }, [getUserDebts, user]);
+
+  /** Permanently delete a debt row. */
+  const deleteDebt = useCallback(async (debtId: string) => {
+    if (!user) return;
+    try {
+      logAPI('supabase://debts', { source: 'lending.debt_row.delete_button', action: 'deleteDebt' });
+      const { error } = await supabase
+        .from('debts')
+        .delete()
+        .eq('id', debtId);
+      if (error) throw error;
+      setDebts((prev) => prev.filter((d) => d.id !== debtId));
+    } catch (err) {
+      Alert.alert('Error', err instanceof Error ? err.message : 'Failed to delete debt');
+    }
+  }, [user]);
 
   return {
     debts,
@@ -272,6 +304,8 @@ export function useDebts(user: User | null) {
     commitPoolSettlement,
     settlePoolDebts,
     confirmDebt,
-    markPaid,
+    markRecorded,
+    archiveDebt,
+    deleteDebt,
   };
 }

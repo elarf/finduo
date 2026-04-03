@@ -16,12 +16,14 @@ export function useFriends(user: User | null) {
   const ensureProfile = useCallback(async () => {
     if (!user) return;
     logAPI('supabase://user_profiles', { source: 'friends_modal.tab.friends', action: 'ensureProfile' });
-    const newAvatarUrl =
+
+    const oauthAvatarUrl =
       (user.user_metadata?.avatar_url as string | undefined) ||
       (user.user_metadata?.picture as string | undefined) ||
       (user.identities?.[0]?.identity_data?.avatar_url as string | undefined) ||
       (user.identities?.[0]?.identity_data?.picture as string | undefined) ||
       null;
+
     const profileData: Record<string, unknown> = {
       user_id: user.id,
       display_name:
@@ -31,9 +33,40 @@ export function useFriends(user: User | null) {
         null,
       email: user.email?.toLowerCase() ?? null,
     };
-    if (newAvatarUrl) {
-      profileData.avatar_url = newAvatarUrl;
+
+    if (oauthAvatarUrl) {
+      // Only re-upload when the OAuth source URL has changed (new avatar or first login)
+      const { data: existing } = await supabase
+        .from('user_profiles')
+        .select('avatar_source_url')
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      if (oauthAvatarUrl !== existing?.avatar_source_url) {
+        try {
+          const response = await fetch(oauthAvatarUrl);
+          const arrayBuffer = await response.arrayBuffer();
+          const contentType = response.headers.get('content-type') || 'image/jpeg';
+          const { error: uploadError } = await supabase.storage
+            .from('avatars')
+            .upload(user.id, arrayBuffer, { contentType, upsert: true });
+          if (!uploadError) {
+            const { data: { publicUrl } } = supabase.storage
+              .from('avatars')
+              .getPublicUrl(user.id);
+            profileData.avatar_url = publicUrl;
+            profileData.avatar_source_url = oauthAvatarUrl;
+          } else {
+            // Upload failed — use OAuth URL as fallback
+            profileData.avatar_url = oauthAvatarUrl;
+          }
+        } catch {
+          profileData.avatar_url = oauthAvatarUrl;
+        }
+      }
+      // If source URL unchanged, our storage copy is still valid — don't overwrite avatar_url
     }
+
     await supabase.from('user_profiles').upsert(profileData, { onConflict: 'user_id' });
   }, [user]);
 

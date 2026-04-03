@@ -10,6 +10,7 @@ import ModalsRoot from './ModalsRoot';
 import PoolsSection from '../../sections/PoolsSection';
 import LendingSection from '../../sections/LendingSection';
 import SettlementsSection from '../../sections/SettlementsSection';
+import ContactsSection from '../../sections/ContactsSection';
 import { uiPath, uiProps } from '../../../lib/devtools';
 
 export default function DashboardLayout() {
@@ -48,6 +49,7 @@ export default function DashboardLayout() {
           {activeSection === 'pools' && <PoolsSection />}
           {activeSection === 'lending' && <LendingSection />}
           {activeSection === 'settlements' && <SettlementsSection />}
+          {activeSection === 'contacts' && <ContactsSection />}
           {!activeSection && (
             <>
               <DashboardBody />

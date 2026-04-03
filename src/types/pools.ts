@@ -78,7 +78,7 @@ export type SettleResult =
   | { kind: 'balanced' }
   | { kind: 'error' };
 
-export type DebtStatus = 'pending' | 'confirmed' | 'paid';
+export type DebtStatus = 'pending' | 'confirmed' | 'paid' | 'recorded' | 'archived';
 
 export type AppDebt = {
   id: string;

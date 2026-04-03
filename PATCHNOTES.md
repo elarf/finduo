@@ -4,6 +4,58 @@
 
 ---
 
+## [1.0.6] — 2026-04-03
+
+### Features
+
+#### Contacts Section
+
+- New **Contacts** item in the FinOps group of Quick Navigation; opens as an embedded section inside the Dashboard
+- Merges contacts from pool participants and the friends list into a single unified list
+- Avatar resolved from the linked friend's profile picture (if available), otherwise initials fallback with failed-image protection
+- App user contacts show email as read-only (sourced from `auth.users`, not editable)
+- Manual contacts can have display name, email, phone, and notes edited inline via a modal
+- Add new contacts directly from the Contacts section
+
+#### Lending Section Redesign
+
+- **Pending** section now only shows debts the current user has not yet confirmed (previously mixed confirmed and unconfirmed)
+- **Ready to record** — debts the user has self-confirmed (pending + my side confirmed) or both sides confirmed (`confirmed` status) are grouped here with a green **Record** button
+- Tapping **Record** marks the debt as `recorded` in the DB, then navigates to the Dashboard with the entry modal pre-filled
+- New **Recorded** section — debts that have been converted to a Dashboard transaction; shows an **Archive** button instead of Record
+- New **Archived** section — collapsed by default; tap the header to expand; shows a **Record** button to re-record debts deleted by accident
+- **Paid** section removed — status is visible on the debt row badge; a dedicated section added no value
+- Broken debts (missing or "Unknown" counterpart name) shown in italic grey with a **broken** badge; a red trash button allows deletion — no record/archive actions offered for unresolvable entries
+
+#### Avatar Persistence — Supabase Storage Snapshot
+
+- `ensureProfile()` in `useFriends.ts` now downloads the OAuth avatar URL (Google, GitHub, etc.) and uploads a permanent copy to the `avatars` Supabase Storage bucket
+- Uploaded once on first login, then only re-uploaded when the source URL changes (tracked via new `user_profiles.avatar_source_url` column)
+- Permanent storage URL replaces the ephemeral OAuth CDN URL in `user_profiles.avatar_url` — avatars remain visible after OAuth tokens or CDN URLs expire
+- Upload failure falls back gracefully to the raw OAuth URL so existing behaviour is never degraded
+
+### Bug Fixes
+
+#### Auth Loading Screen Background
+
+- Loading screen shown while the session hydrates had a `#060A14` (dark navy) background instead of the intended pure black
+- Fixed: background changed to `#000000`
+
+### Technical
+
+- `src/components/sections/ContactsSection.tsx` — new embedded contacts view (merged contacts + friends, avatar resolution, edit/add modal)
+- `src/context/DashboardContext.tsx` — `activeSection` type extended to include `'contacts'`
+- `src/components/dashboard/QuickNavigation.tsx` — Contacts button added to the FinOps sub-section
+- `src/components/dashboard/layout/DashboardLayout.tsx` — routes to `<ContactsSection />` when `activeSection === 'contacts'`
+- `src/hooks/useFriends.ts` — `ensureProfile` extended with Storage upload logic; reads `avatar_source_url` before uploading to detect changes
+- `src/screens/LendingScreen.tsx` — sections restructured (Pending / Ready to record / Recorded / Archived); broken-debt detection and delete flow added
+- `src/components/sections/LendingSection.tsx` — same section restructure and broken-debt handling as LendingScreen
+- `src/hooks/useDebts.ts` — `markRecorded`, `archiveDebt`, `deleteDebt` added alongside existing `confirmDebt` and `markPaid`
+- `src/navigation/index.tsx` — auth loading screen background changed from `#060A14` to `#000000`
+- DB: `avatars` Supabase Storage bucket created (public, 2 MB limit, JPEG/PNG/WebP/GIF); `user_profiles.avatar_source_url TEXT` column added
+
+---
+
 ## [1.0.5] — 2026-04-03
 
 ### Features

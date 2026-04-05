@@ -1140,7 +1140,7 @@ export function DashboardProvider({
   const txDisplayLabel = useCallback((tx: AppTransaction, fallback: string): React.ReactNode => {
     const txTags = (tx.tag_ids ?? []).map((id) => tagsById[id]).filter(Boolean);
     const note = tx.note?.trim() || '';
-    if (txTags.length === 0 && !note) return fallback;
+    if (txTags.length === 0 && !note) return categoriesById[tx.category_id]?.name ?? fallback;
     return (
       <>
         {txTags.map((tag) => (
@@ -1152,7 +1152,7 @@ export function DashboardProvider({
         {note ? <Text>{note}</Text> : null}
       </>
     );
-  }, [tagsById]);
+  }, [tagsById, categoriesById]);
 
   const includedAccountSummaries = useMemo((): IncludedAccountSummaryItem[] => {
     return accounts
@@ -1393,6 +1393,8 @@ export function DashboardProvider({
         if (prev.includes('.')) return prev;
         return prev ? `${prev}.` : '0.';
       }
+      if (char === '00') return prev.includes('.') ? prev : `${prev}00`;
+      if (char === '000') return prev.includes('.') ? prev : `${prev}000`;
       return `${prev}${char}`;
     });
   }, []);
@@ -2111,8 +2113,20 @@ export function DashboardProvider({
       Alert.alert('Not enough accounts', 'Create at least two accounts for transfer.');
       return;
     }
-    const from = selectedAccountId ?? accounts[0].id;
-    const to = accounts.find((a) => a.id !== from)?.id ?? null;
+
+    // Pre-populate with last transfer's accounts if available
+    const transferTxs = transactions.filter(
+      (tx) => tx.category_id != null && transferCategoryIds.includes(tx.category_id),
+    );
+    const lastExpense = transferTxs.find((tx) => tx.type === 'expense');
+    const lastIncome = transferTxs.find((tx) => tx.type === 'income');
+    const lastFromId = lastExpense?.account_id ?? null;
+    const lastToId = lastIncome?.account_id ?? null;
+    const validFrom = lastFromId && accounts.find((a) => a.id === lastFromId) ? lastFromId : null;
+    const validTo = lastToId && accounts.find((a) => a.id === lastToId) && lastToId !== validFrom ? lastToId : null;
+
+    const from = validFrom ?? selectedAccountId ?? accounts[0].id;
+    const to = validTo ?? accounts.find((a) => a.id !== from)?.id ?? null;
 
     setTransferFromId(from);
     setTransferToId(to);
@@ -2122,7 +2136,7 @@ export function DashboardProvider({
     setTransferDate(todayIso());
     setTransferNote('');
     setShowTransferModal(true);
-  }, [accounts, selectedAccountId]);
+  }, [accounts, selectedAccountId, transactions, transferCategoryIds]);
 
   const saveTransfer = useCallback(async () => {
     if (!user || !transferFromId || !transferToId) {

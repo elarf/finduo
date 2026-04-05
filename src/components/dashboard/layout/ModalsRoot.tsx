@@ -351,7 +351,8 @@ export default function ModalsRoot() {
         saving={saving}
         appendNumpad={transferAppendNumpad}
         openDatePicker={openTransferDatePicker}
-        openAcctPickerSheet={openAcctPickerSheet}
+        setTransferFromId={setTransferFromId}
+        setTransferToId={setTransferToId}
         formatCurrency={formatCurrency}
       />
 
@@ -412,7 +413,7 @@ export default function ModalsRoot() {
       />
 
       <AccountPickerSheet
-        visible={showAcctPickerSheet}
+        visible={showAcctPickerSheet && acctPickerSheetTarget !== 'transfer-from' && acctPickerSheetTarget !== 'transfer-to'}
         onClose={closeAcctPickerSheet}
         acctPickerAnim={acctPickerAnim}
         height={height}

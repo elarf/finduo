@@ -4,6 +4,48 @@
 
 ---
 
+## [1.0.8] — 2026-04-06
+
+### Features
+
+#### Transaction Search
+
+- New **Search** button in the Recent Transactions header (replaces the previous "+" quick-add button)
+- Search across transaction notes, category names, tag names, and amounts
+- Matching tags shown as colored chips above search results — tap a tag to autocomplete the search with that tag name
+- Search activates inline with a text input replacing the section title
+- Cancel button exits search mode and restores the normal view
+
+#### Entry Modal — Tag Search and Layout
+
+- Tags section redesigned to show exactly 2 rows: a fixed search box at the top + scrollable tag results below (max 66px height)
+- Search input auto-sized to match placeholder text width ("search tags…")
+- When no tags match the search, a green `+ Create "term"` chip appears — tap to create and toggle the tag
+- Numpad position locked at bottom of modal; tag area scrolls internally without pushing other elements
+
+### Bug Fixes
+
+#### Transfer Modal — Account Picker Behind Modal
+
+- AccountPickerSheet was rendered for `transfer-from` and `transfer-to` targets, appearing behind the TransferModal
+- Fixed: AccountPickerSheet visibility now excludes transfer targets — TransferModal has its own inline account picker
+
+#### Numpad Button Flash
+
+- Pressable default opacity made the flash color appear dark and muted
+- Fixed: added `opacity: 1` and `android_ripple` for vibrant, visible button feedback
+- Flash colors updated to brighter Tailwind shades: red `#ef4444`, green `#22c55e`, purple `#a855f7`
+
+### Technical
+
+- `src/components/dashboard/boxes/TransactionSection.tsx` — search state, tag filtering, and inline search UI added
+- `src/components/dashboard/EntryModal.tsx` — tag search, 2-row layout with fixed search box and scrollable results, create-from-search chip
+- `src/components/dashboard/layout/ModalsRoot.tsx` — AccountPickerSheet visibility gated to exclude `transfer-from` and `transfer-to` targets
+- `src/components/dashboard/TransferModal.tsx` — inline account picker replaces external sheet; flash colors brightened
+- `src/components/NumpadGrid.tsx` — `opacity: 1` and `android_ripple` added for visible flash feedback
+
+---
+
 ## [1.0.7] — 2026-04-03
 
 ### Bug Fixes

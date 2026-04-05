@@ -33,13 +33,20 @@ function AccountPickerSheet({
   transferToId, setTransferToId,
 }: AccountPickerSheetProps) {
   return (
-    <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="none"
+      onRequestClose={onClose}
+      presentationStyle="overFullScreen"
+      statusBarTranslucent
+    >
+      <View style={{ flex: 1, zIndex: 99999 }}>
       <Animated.View
         style={[
           { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
           {
             backgroundColor: '#060A14',
-            zIndex: 200,
             transform: [
               {
                 translateY: acctPickerAnim.interpolate({
@@ -108,6 +115,7 @@ function AccountPickerSheet({
           })}
         </ScrollView>
       </Animated.View>
+      </View>
     </Modal>
   );
 }

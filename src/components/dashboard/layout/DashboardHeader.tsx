@@ -1,5 +1,5 @@
-import React from 'react';
-import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { Image, PanResponder, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { logUI, uiPath, uiProps } from '../../../lib/devtools';
 import { useDashboard } from '../../../context/DashboardContext';
 import Icon from '../../Icon';
@@ -26,6 +26,22 @@ export default function DashboardHeader() {
     reloading,
     reloadDashboard,
   } = useDashboard();
+
+  // Keep a stable ref so PanResponder doesn't capture stale closures
+  const reloadRef = useRef({ reloading, reloadDashboard });
+  useEffect(() => { reloadRef.current = { reloading, reloadDashboard }; }, [reloading, reloadDashboard]);
+
+  const spinnerPan = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => false,
+      onMoveShouldSetPanResponder: (_, gs) => Math.abs(gs.dx) > 20 && Math.abs(gs.dy) < 30,
+      onPanResponderRelease: (_, gs) => {
+        if (gs.dx < -20 && !reloadRef.current.reloading) {
+          void reloadRef.current.reloadDashboard();
+        }
+      },
+    })
+  ).current;
 
   return (
     <View style={styles.headerRow} {...uiProps(uiPath('dashboard', 'header', 'container'))}>
@@ -93,19 +109,21 @@ export default function DashboardHeader() {
           />
         </TouchableOpacity>
       ) : (
-        <TouchableOpacity
-          onPress={() => { void reloadDashboard(); }}
-          disabled={reloading}
-          {...uiProps(uiPath('dashboard', 'header', 'spinner'))}
-        >
-          <Image
-            source={reloading
-              ? require('../../../../assets/spinnerFAST.gif')
-              : require('../../../../assets/spinner.gif')}
-            style={{ width: 36, height: 36 }}
-            resizeMode="contain"
-          />
-        </TouchableOpacity>
+        <View {...spinnerPan.panHandlers}>
+          <TouchableOpacity
+            onPress={() => { void reloadDashboard(); }}
+            disabled={reloading}
+            {...uiProps(uiPath('dashboard', 'header', 'spinner'))}
+          >
+            <Image
+              source={reloading
+                ? require('../../../../assets/spinnerFAST.gif')
+                : require('../../../../assets/spinner.gif')}
+              style={{ width: 36, height: 36 }}
+              resizeMode="contain"
+            />
+          </TouchableOpacity>
+        </View>
       )}
     </View>
   );

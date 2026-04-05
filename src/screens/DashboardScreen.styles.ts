@@ -376,7 +376,7 @@ export const styles = StyleSheet.create({
   },
   bottomBarTransfer: {
     flex: 1,
-    backgroundColor: '#214264',
+    backgroundColor: '#7c3aed',
     paddingVertical: 14,
     borderRadius: 4,
     alignItems: 'center',

@@ -17,6 +17,8 @@ import Icon from '../Icon';
 import { styles } from '../../screens/DashboardScreen.styles';
 import { AppAccount, AppCategory, AppTag, TransactionType } from '../../types/dashboard';
 import { uiPath, uiProps, logUI } from '../../lib/devtools';
+import NumpadGrid, { ENTRY_KEYS } from '../NumpadGrid';
+import DateButton from '../DateButton';
 
 type EntryModalProps = {
   visible: boolean;
@@ -124,6 +126,8 @@ const EntryModal = React.memo(function EntryModal(props: EntryModalProps) {
     onDelete,
   } = props;
 
+  const [tagSearchQuery, setTagSearchQuery] = React.useState('');
+
   useEffect(() => {
     logUI(uiPath('entry_modal', 'card', 'container'), 'mount');
   }, []);
@@ -132,7 +136,7 @@ const EntryModal = React.memo(function EntryModal(props: EntryModalProps) {
   const isWide = Platform.OS === 'web' && screenWidth >= 1024;
 
   const isIncome = entryType === 'income';
-  const amountColor = isIncome ? '#4ade80' : '#f87171';
+  const amountColor = isIncome ? '#4ade80' : '#ff5555';
   const currency = entryAccount?.currency ?? selectedCurrency;
   const currencySymbol: { prefix: string; suffix: string } = (() => {
     const map: Record<string, { prefix: string; suffix: string }> = {
@@ -149,18 +153,25 @@ const EntryModal = React.memo(function EntryModal(props: EntryModalProps) {
     return map[currency] ?? { prefix: '', suffix: currency };
   })();
 
-  const normalizeNumpadKey = (k: string) => {
-    if (k === '<') return 'backspace';
-    if (k === '.') return 'dot';
-    if (k === '00') return 'double_zero';
-    if (k === '000') return 'triple_zero';
-    return k;
-  };
-
   const sortedEntryTags = useMemo(
     () => [...entryTags].sort((a, b) => (entryTagUsage[b.id] ?? 0) - (entryTagUsage[a.id] ?? 0)),
     [entryTags, entryTagUsage],
   );
+
+  const filteredTags = useMemo(() => {
+    if (!tagSearchQuery.trim()) return sortedEntryTags;
+    const query = tagSearchQuery.toLowerCase();
+    return sortedEntryTags.filter((t) => t.name.toLowerCase().includes(query));
+  }, [sortedEntryTags, tagSearchQuery]);
+
+  const noMatchButSearching = tagSearchQuery.trim().length > 0 && filteredTags.length === 0;
+
+  const handleCreateFromSearch = async () => {
+    if (!tagSearchQuery.trim()) return;
+    setNewTagName(tagSearchQuery.trim());
+    await createTag();
+    setTagSearchQuery('');
+  };
 
   const selectedCategory = useMemo(
     () => (entryCategoryId ? entryCategories.find((c) => c.id === entryCategoryId) ?? null : null),
@@ -231,19 +242,13 @@ const EntryModal = React.memo(function EntryModal(props: EntryModalProps) {
             contentContainerStyle={[styles.entryModalScrollContent, { flexGrow: 1 }]}
           >
             {/* 1. Date picker */}
-            <TouchableOpacity
-              {...uiProps(uiPath('entry_modal', 'date_picker', 'button'))}
-              style={[styles.datePressable, { marginBottom: 6 }]}
-              onPress={() => {
-                logUI(uiPath('entry_modal', 'date_picker', 'button'), 'press');
-                openDatePicker();
-              }}
-            >
-              <Icon name="calendar" size={18} color="#8FA8C9" />
-              <Text style={styles.datePressableText}>
-                {entryDate ? (entryDate === new Date().toISOString().slice(0, 10) ? `${entryDate}, Today` : entryDate) : 'Select date'}
-              </Text>
-            </TouchableOpacity>
+            <DateButton
+              date={entryDate}
+              onPress={openDatePicker}
+              screen="entry_modal"
+              component="date_picker"
+              style={{ marginBottom: 6 }}
+            />
             {/* 2. Amount display + suggested values */}
             <View {...uiProps(uiPath('entry_modal', 'amount', 'display'))} style={[styles.entryAmountDisplay, { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'center', gap: 4, paddingHorizontal: 12 }]}>
               {currencySymbol.prefix ? (
@@ -322,70 +327,102 @@ const EntryModal = React.memo(function EntryModal(props: EntryModalProps) {
                 ))}
               </ScrollView>
             )}
-            {/* 4. Tags — wrapped rows sorted by category usage */}
-            {(sortedEntryTags.length > 0 || true) && (
-              <View {...uiProps(uiPath('entry_modal', 'tags', 'container'))} style={{ marginTop: 8 }}>
-                <View style={localStyles.tagsWrap}>
-                  {sortedEntryTags.map((tag) => (
+            {/* 4. Tags — 2 rows max with search first, scrollable results */}
+            <View {...uiProps(uiPath('entry_modal', 'tags', 'container'))} style={{ marginTop: 8, marginBottom: 8 }}>
+              {/* Search/Add field always first - fixed at top */}
+              {sortedEntryTags.length > 0 ? (
+                <View style={localStyles.tagSearchBox}>
+                  <Icon name="Search" size={12} color="#4A6280" />
+                  <TextInput
+                    placeholder="search tags…"
+                    placeholderTextColor="#4A6280"
+                    value={tagSearchQuery}
+                    onChangeText={setTagSearchQuery}
+                    style={localStyles.tagSearchInput}
+                    returnKeyType="done"
+                  />
+                  {tagSearchQuery.length > 0 && (
+                    <TouchableOpacity onPress={() => setTagSearchQuery('')} hitSlop={8}>
+                      <Icon name="X" size={12} color="#4A6280" />
+                    </TouchableOpacity>
+                  )}
+                </View>
+              ) : (
+                <View style={localStyles.newTagInline}>
+                  <TextInput
+                    placeholder="+ new tag"
+                    placeholderTextColor="#4A6280"
+                    value={newTagName}
+                    onChangeText={setNewTagName}
+                    style={localStyles.newTagInput}
+                    returnKeyType="done"
+                    onSubmitEditing={() => void createTag()}
+                  />
+                  {newTagName.trim().length > 0 && (
                     <TouchableOpacity
-                      {...uiProps(uiPath('entry_modal', 'tags', 'chip', tag.id))}
-                      key={tag.id}
-                      style={[
-                        styles.modalChip,
-                        { flexDirection: 'row', alignItems: 'center', gap: 4 },
-                        tag.color ? { borderColor: tag.color } : undefined,
-                        entryTagIds.includes(tag.id) ? [styles.modalChipActive, tag.color ? { backgroundColor: `${tag.color}22` } : undefined] : undefined,
-                      ]}
                       onPress={() => {
-                        logUI(uiPath('entry_modal', 'tags', 'chip', tag.id), 'press');
-                        toggleTag(tag.id);
+                        logUI(uiPath('entry_modal', 'tags', 'new_tag_add'), 'press');
+                        void createTag();
                       }}
                     >
-                      {tag.icon ? <Icon name={tag.icon as any} size={11} color={tag.color ?? '#EAF3FF'} /> : null}
-                      <Text style={[styles.modalChipText, { fontSize: 13 }, tag.color ? { color: tag.color } : undefined]}>#{tag.name}</Text>
+                      <Text style={localStyles.newTagAdd}>Add</Text>
                     </TouchableOpacity>
-                  ))}
-                  {/* inline new tag */}
-                  <View style={localStyles.newTagInline}>
-                    <TextInput
-                      placeholder="+ new tag"
-                      placeholderTextColor="#4A6280"
-                      value={newTagName}
-                      onChangeText={setNewTagName}
-                      style={localStyles.newTagInput}
-                      returnKeyType="done"
-                      onSubmitEditing={() => void createTag()}
-                    />
-                    {newTagName.trim().length > 0 && (
+                  )}
+                </View>
+              )}
+
+              {/* Scrollable tags area - max 2 rows */}
+              {sortedEntryTags.length > 0 && (
+                <ScrollView
+                  horizontal={false}
+                  showsVerticalScrollIndicator={false}
+                  style={localStyles.tagsScrollArea}
+                  contentContainerStyle={localStyles.tagsWrap}
+                  keyboardShouldPersistTaps="handled"
+                >
+                  {noMatchButSearching ? (
+                    <TouchableOpacity
+                      {...uiProps(uiPath('entry_modal', 'tags', 'create_new_chip'))}
+                      style={[localStyles.createNewChip]}
+                      onPress={() => {
+                        logUI(uiPath('entry_modal', 'tags', 'create_new_chip'), 'press');
+                        void handleCreateFromSearch();
+                      }}
+                    >
+                      <Icon name="Plus" size={11} color="#53E3A6" />
+                      <Text style={localStyles.createNewText}>Create "{tagSearchQuery}"</Text>
+                    </TouchableOpacity>
+                  ) : (
+                    filteredTags.map((tag) => (
                       <TouchableOpacity
+                        {...uiProps(uiPath('entry_modal', 'tags', 'chip', tag.id))}
+                        key={tag.id}
+                        style={[
+                          styles.modalChip,
+                          { flexDirection: 'row', alignItems: 'center', gap: 4 },
+                          tag.color ? { borderColor: tag.color } : undefined,
+                          entryTagIds.includes(tag.id) ? [styles.modalChipActive, tag.color ? { backgroundColor: `${tag.color}22` } : undefined] : undefined,
+                        ]}
                         onPress={() => {
-                          logUI(uiPath('entry_modal', 'tags', 'new_tag_add'), 'press');
-                          void createTag();
+                          logUI(uiPath('entry_modal', 'tags', 'chip', tag.id), 'press');
+                          toggleTag(tag.id);
                         }}
                       >
-                        <Text style={localStyles.newTagAdd}>Add</Text>
+                        {tag.icon ? <Icon name={tag.icon as any} size={11} color={tag.color ?? '#EAF3FF'} /> : null}
+                        <Text style={[styles.modalChipText, { fontSize: 13 }, tag.color ? { color: tag.color } : undefined]}>#{tag.name}</Text>
                       </TouchableOpacity>
-                    )}
-                  </View>
-                </View>
-              </View>
-            )}
-            {/* 5. Numpad */}
-            <View {...uiProps(uiPath('entry_modal', 'numpad', 'container'))} style={styles.numpadGrid}>
-              {['7', '8', '9', '4', '5', '6', '1', '2', '3', '.', '0', '00', 'C', '000', '<'].map((k) => (
-                <TouchableOpacity
-                  {...uiProps(uiPath('entry_modal', 'numpad', 'key', normalizeNumpadKey(k)))}
-                  key={k}
-                  style={styles.numpadKey}
-                  onPress={() => {
-                    logUI(uiPath('entry_modal', 'numpad', 'key', normalizeNumpadKey(k)), 'press');
-                    appendNumpad(k);
-                  }}
-                >
-                  <Text style={styles.numpadKeyText}>{k}</Text>
-                </TouchableOpacity>
-              ))}
+                    ))
+                  )}
+                </ScrollView>
+              )}
             </View>
+            {/* 5. Numpad */}
+            <NumpadGrid
+              keys={[...ENTRY_KEYS]}
+              onPress={appendNumpad}
+              flashColor={amountColor}
+              screen="entry_modal"
+            />
           </ScrollView>
 
           {/* Bottom bar — category-aware CTA */}
@@ -542,10 +579,48 @@ const localStyles = StyleSheet.create({
     fontWeight: '600',
     paddingBottom: 5,
   },
+  tagSearchBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    height: 30,
+    paddingHorizontal: 10,
+    borderWidth: 1,
+    borderColor: '#1E3250',
+    borderRadius: 999,
+    backgroundColor: '#0D1B2E',
+    alignSelf: 'flex-start',
+    marginBottom: 6,
+  },
+  tagSearchInput: {
+    color: '#8FA8C9',
+    fontSize: 12,
+    paddingVertical: 0,
+    width: 82, // Matches "search tags…" text width
+  },
+  tagsScrollArea: {
+    maxHeight: 66, // 2 rows (30px per row + 6px gap)
+  },
   tagsWrap: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 6,
+  },
+  createNewChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    height: 30,
+    paddingHorizontal: 10,
+    borderWidth: 1,
+    borderColor: '#53E3A6',
+    borderRadius: 999,
+    backgroundColor: '#0a2820',
+  },
+  createNewText: {
+    color: '#53E3A6',
+    fontSize: 13,
+    fontWeight: '600',
   },
   newTagInline: {
     flexDirection: 'row',
@@ -557,6 +632,7 @@ const localStyles = StyleSheet.create({
     borderColor: '#1E3250',
     borderRadius: 999,
     backgroundColor: '#0D1B2E',
+    marginBottom: 6,
   },
   newTagInput: {
     color: '#8FA8C9',

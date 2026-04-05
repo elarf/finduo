@@ -6,12 +6,12 @@ Financial tracking app for couples and shared households. Track income, expenses
 
 ---
 
-## Latest Release — v1.0.7
+## Latest Release — v1.0.8
 
-- **Header spinner reload** — tapping the spinner now also refreshes PoolsSection and SettlementsSection data (previously only invalidated TanStack Query caches, leaving embedded section hooks stale)
-- **Pool settlement restricted to creator** — the Settle button is now hidden for non-creator members, matching the Close and Delete button guards; prevents broken debt rows and silent pool-close failures
-- **Settlement pool close hardened** — `commitPoolSettlement` now checks the error from `pools.update`, surfaces it in the modal, and sets `end_date` alongside `status: closed`
-- **Lending badge accuracy** — the pending debt badge in Quick Navigation now only counts debts that are genuinely actionable: excludes broken debts (unknown counterpart) and debts the current user has already confirmed (those appear in "Ready to record" instead)
+- **Transaction search** — search button in Recent Transactions header; searches notes, category names, tag names, and amounts; matching tags shown as chips above results
+- **Entry modal tag improvements** — 2-row tag layout with fixed search box and scrollable results; create new tags directly from search when no matches found
+- **Transfer modal fixes** — inline account picker now works correctly; numpad flash colors are brighter and more visible
+- **Modals z-index fix** — AccountPickerSheet no longer appears behind TransferModal
 
 Full history: [PATCHNOTES.md](./PATCHNOTES.md)
 

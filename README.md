@@ -6,12 +6,12 @@ Financial tracking app for couples and shared households. Track income, expenses
 
 ---
 
-## Latest Release — v1.0.8
+## Latest Release — v1.0.9
 
-- **Transaction search** — search button in Recent Transactions header; searches notes, category names, tag names, and amounts; matching tags shown as chips above results
-- **Entry modal tag improvements** — 2-row tag layout with fixed search box and scrollable results; create new tags directly from search when no matches found
-- **Transfer modal fixes** — inline account picker now works correctly; numpad flash colors are brighter and more visible
-- **Modals z-index fix** — AccountPickerSheet no longer appears behind TransferModal
+- **Numpad animation polish** — instant color on press, smooth 400ms fade-out on release for better tactile feedback
+- **Transaction search** — search button in Recent Transactions header; searches notes, category names, tag names, and amounts
+- **Entry modal tag improvements** — 2-row tag layout with fixed search box and scrollable results; create new tags directly from search
+- **Transfer modal fixes** — inline account picker, brighter flash colors, proper z-index
 
 Full history: [PATCHNOTES.md](./PATCHNOTES.md)
 

@@ -4,6 +4,23 @@
 
 ---
 
+## [1.0.9] — 2026-04-06
+
+### Improvements
+
+#### Numpad Button Feedback
+
+- Refined numpad button press animation for better tactile feedback
+- Color now appears **instantly** on press (no delay)
+- Smooth **400ms fade-out** animation after release (previously instant disappearance)
+- Each key animates independently with Animated.View for fluid transitions
+
+### Technical
+
+- `src/components/NumpadGrid.tsx` — refactored to individual `NumpadKey` components with `Animated.Value` per key; `onPressIn`/`onPressOut` handlers with 400ms fade timing
+
+---
+
 ## [1.0.8] — 2026-04-06
 
 ### Features

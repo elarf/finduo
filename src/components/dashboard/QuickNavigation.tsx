@@ -741,7 +741,24 @@ function QuickNavigation({
               );
             })}
 
-
+            {/* ── FinBiome ── */}
+            <TouchableOpacity
+              {...uiProps(uiPath('quick_nav', 'nav', 'finbiome_item'))}
+              style={styles.menuItem}
+              onPress={() => {
+                logUI(uiPath('quick_nav', 'nav', 'finbiome_item'), 'press');
+                onClose();
+                navigation.navigate('FinBiome');
+              }}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', width: '100%' }}>
+                <View style={{ width: 20 }}>
+                  <Icon name="TreeDeciduous" size={14} color="#00F5D4" />
+                </View>
+                <Text style={[styles.menuItemText, { flex: 1, textAlign: 'center', color: '#00F5D4' }]}>FinBiome</Text>
+                <View style={{ minWidth: 20 }} />
+              </View>
+            </TouchableOpacity>
 
             {/* ── FinOps ── */}
             <TouchableOpacity

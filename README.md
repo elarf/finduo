@@ -6,12 +6,13 @@ Financial tracking app for couples and shared households. Track income, expenses
 
 ---
 
-## Latest Release — v1.0.9
+## Latest Release — v1.1.0
 
-- **Numpad animation polish** — instant color on press, smooth 400ms fade-out on release for better tactile feedback
-- **Transaction search** — search button in Recent Transactions header; searches notes, category names, tag names, and amounts
-- **Entry modal tag improvements** — 2-row tag layout with fixed search box and scrollable results; create new tags directly from search
-- **Transfer modal fixes** — inline account picker, brighter flash colors, proper z-index
+- **FinBiome** — 3D financial visualization in WebGL displaying all accounts as trees in a forest layout
+- **Forest view** — accounts appear as separate trees with auto-rotating orbital camera
+- **Access methods** — mobile: swipe avatar rightward to spinner; desktop: tree icon button in header; both: FinBiome button in Quick Navigation menu
+- **Debug overlay** — real-time data counts and scene parameters shown in glassmorphic panel
+- **Built with Three.js 0.140** — plain WebGL for React 19 compatibility (no React wrapper)
 
 Full history: [PATCHNOTES.md](./PATCHNOTES.md)
 
@@ -155,6 +156,25 @@ Accessible from the FinOps section in Quick Navigation.
 - Spending chart aggregates across all included accounts
 - Categories row and bottom action buttons are hidden in overview mode
 
+### FinBiome
+
+3D WebGL visualization system that transforms financial data into a living ecosystem.
+
+- **FinForest**: All account trees displayed side-by-side in 3D space
+  - Account spheres at tree roots (size based on absolute value, glowing cyan)
+  - Category cubes as branches (color from category, emissive glow)
+  - Transaction spheres as leaves (small, colored by transaction type)
+  - Lines connecting nodes to show hierarchical relationships
+- **Auto-rotating orbital camera** for ambient exploration of the financial forest
+- **Data transformation layer** converts accounts → categories → transactions into hierarchical 3D node structures
+- **Access methods**:
+  - Mobile web: Swipe avatar rightward to spinner (~50% screen width) as premium gesture
+  - Desktop web: Tree icon button in dashboard header (replaces view toggle)
+  - Quick Navigation: FinBiome button (cyan tree icon) above FinOps section
+- **Debug overlay**: Real-time display of account count, category count, transaction count, and forest layout positions
+- **Platform support**: Web-only (mobile and desktop); native shows "FinBiome is available on web" fallback
+- **Built with Three.js 0.140** using manual scene management for React 19 compatibility (no React wrappers)
+
 ### Date Filtering
 
 - Interval options: Day, Week, Month, Year, All, Custom
@@ -178,6 +198,7 @@ Swipe from the left edge (20 px zone) or tap the avatar to open.
 - **Expense** — expand to see expense categories; same tap and edit behaviour as Income
 - **↔ Transfers** — tap to filter the transaction list to transfers only
 - **Tags** — expand to see all tags; tap a tag to filter the transaction list; edit mode adds edit and delete buttons
+- **FinBiome** — opens the 3D financial visualization screen (web-only); displays accounts as trees in a forest layout with auto-rotating camera
 - **FinOps** (collapsible, shows pending debt badge when collapsed):
   - **Pools** — opens as an embedded section inside the Dashboard; a ContextBar labels the view; `+` in the bar opens the create-pool modal
   - **Lending** — opens as an embedded section; shows pending debt count badge

@@ -4,6 +4,39 @@
 
 ---
 
+## [1.1.0] — 2026-04-07
+
+### Features
+
+#### FinBiome — 3D Financial Visualization
+
+- New **FinBiome** screen: a 3D WebGL visualization system that transforms financial data into a living ecosystem
+- **FinForest**: All account trees displayed side-by-side in 3D space
+  - Account spheres at tree roots, category cubes as branches, transaction spheres as leaves
+  - Auto-rotating orbital camera for ambient exploration
+  - Organic forest layout with adequate spacing between account trees
+- **Data transformation layer**: Converts accounts → categories → transactions into hierarchical 3D structures
+- **Access methods**:
+  - Mobile web: Swipe avatar rightward to spinner (~50% of screen width) as premium gesture
+  - Desktop web: Tree icon button in header (replaces view toggle)
+  - Quick Navigation menu: New FinBiome button above FinOps section
+- **Platform support**: Web-only (mobile and desktop); native shows fallback message
+- **Debug overlay**: Real-time display of data counts and scene parameters
+- Built with **Three.js 0.140** using plain WebGL (no React wrappers for React 19 compatibility)
+
+### Technical
+
+- `src/screens/FinBiomeScreen.tsx` — Main 3D visualization screen with manual Three.js scene management
+- `src/lib/finbiome/dataTransforms.ts` — Data transformation functions (buildForestLayout, buildTreeHierarchy, buildFlowData, buildRiverFlows)
+- `src/lib/finbiome/types.ts` — TypeScript definitions for 3D data structures
+- `src/components/dashboard/layout/DashboardHeader.tsx` — Avatar-to-spinner PanResponder gesture + desktop tree icon button
+- `src/components/dashboard/QuickNavigation.tsx` — FinBiome menu item with tree icon
+- `src/navigation/index.tsx` — FinBiome added to RootStackParamList as proper screen
+- `metro.config.js` — ES module support (cjs, mjs extensions)
+- `package.json` — three@0.140.0 added (pre-import.meta version for Metro compatibility)
+
+---
+
 ## [1.0.9] — 2026-04-06
 
 ### Improvements

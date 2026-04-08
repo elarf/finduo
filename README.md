@@ -6,13 +6,13 @@ Financial tracking app for couples and shared households. Track income, expenses
 
 ---
 
-## Latest Release — v1.1.0
+## Latest Release — v1.1.1
 
-- **FinBiome** — 3D financial visualization in WebGL displaying all accounts as trees in a forest layout
-- **Forest view** — accounts appear as separate trees with auto-rotating orbital camera
-- **Access methods** — mobile: swipe avatar rightward to spinner; desktop: tree icon button in header; both: FinBiome button in Quick Navigation menu
-- **Debug overlay** — real-time data counts and scene parameters shown in glassmorphic panel
-- **Built with Three.js 0.140** — plain WebGL for React 19 compatibility (no React wrapper)
+- **FinBiome 2D Mode** — Simplified 2-state zoom system (FinBiome overview / FinTree detail)
+- **Enhanced minimap** — Shows current account name, realistic viewport proportions, zoom out button in FinTree mode
+- **Redesigned waterfall** — Two grey cliffs with flowing water, completely static at top-right corner
+- **Improved tree structure** — Roots grow from trunk bottom (income), branches from top (expense)
+- **Better interactions** — Fixed dragging, centering, and tap detection; branch/leaf taps show info in minimap
 
 Full history: [PATCHNOTES.md](./PATCHNOTES.md)
 

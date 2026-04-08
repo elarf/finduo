@@ -1,6 +1,6 @@
 {
   "name": "finduo",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "main": "index.js",
   "scripts": {
     "start": "expo start",
@@ -23,6 +23,7 @@
     "expo-crypto": "^55.0.10",
     "expo-dev-client": "~55.0.18",
     "expo-haptics": "^55.0.9",
+    "expo-linear-gradient": "^55.0.12",
     "expo-status-bar": "~55.0.4",
     "expo-web-browser": "^55.0.10",
     "lucide-react-native": "^1.7.0",

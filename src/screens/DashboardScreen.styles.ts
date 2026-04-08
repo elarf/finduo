@@ -932,6 +932,8 @@ export const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: '#1F3A59',
     zIndex: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   avatarImg: {
     width: '100%',

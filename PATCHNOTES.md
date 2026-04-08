@@ -4,6 +4,61 @@
 
 ---
 
+## [1.1.1] — 2026-04-08
+
+### Improvements
+
+#### FinBiome — 2D Mode Enhancements
+
+- Implemented **2-state zoom system** for clearer navigation:
+  - **FinBiome view** (default): Shows 3+ trees side-by-side with horizontal scrolling; tap trunk to zoom in
+  - **FinTree view**: Zoomed detail view focusing on branches and leaves; free X+Y panning for exploration
+- **MiniMap improvements**:
+  - Now displays current account name instead of total account count
+  - Fixed viewport indicator to show realistic proportions
+  - Trees now expand across full minimap width
+  - Zoom out button appears in FinTree mode to return to FinBiome view
+  - Positioned at top-left (10px from canvas top)
+- **Waterfall redesign**:
+  - Completely static visual element at top-right corner (50px padding)
+  - Two grey cliff blocks with cyan water flowing between them
+  - Fixed to background layer — does not move when dragging trees or river
+  - Tappable area isolated to waterfall region only
+- **Tree structure corrections**:
+  - Roots now properly grow from bottom of trunk (income categories)
+  - Branches grow from top of trunk (expense categories)
+  - Root width narrower than branch spread
+- **Interaction improvements**:
+  - Fixed horizontal drag in FinBiome view (was stuck)
+  - Tree centering now properly snaps trunk to middle of viewport
+  - Branch tap displays category name in minimap
+  - Leaf tap displays transaction description in minimap
+  - Prevented accidental FinFlow triggers when tapping tree elements
+- **Rendering optimizations**:
+  - Fixed extra tree appearing after last account
+  - River layer hidden in FinTree mode (only branches/leaves visible)
+  - Y-axis pan only available in FinTree mode
+
+### Bug Fixes
+
+#### Dashboard Header
+
+- Fixed back button icon centering in circular avatar container
+
+### Technical
+
+- `src/context/FinBiomeContext.tsx` — Simplified to 2 view modes (biome/tree); added viewport-aware tree centering, minimap title state management
+- `src/lib/finbiome/types2D.ts` — Updated ViewMode to 'biome' | 'tree'; added MiniMapTitle interface
+- `src/components/finbiome/FinBiomeCanvas.tsx` — Fixed PanResponder to recreate on viewState change; added panY support; fixed totalWidth calculation
+- `src/components/finbiome/ui/MiniMap.tsx` — Added centered tree name display; fixed viewport scaling
+- `src/components/finbiome/layers/WaterfallLayer.tsx` — Simplified to static SVG with isolated tap area
+- `src/components/finbiome/svg/WaterfallPath.tsx` — Redesigned as two cliffs with flowing water gradient
+- `src/lib/finbiome/dataTransforms2D.ts` — Fixed root positioning to grow from trunk bottom; removed waterfall layout function
+- `src/components/finbiome/layers/TreeLayer.tsx` — Added tap handlers for trunk/branch/leaf with viewMode-based behavior
+- `src/screens/DashboardScreen.styles.ts` — Added alignItems/justifyContent to avatarBtn for proper icon centering
+
+---
+
 ## [1.1.0] — 2026-04-07
 
 ### Features

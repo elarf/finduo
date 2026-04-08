@@ -23,6 +23,7 @@ const ICON_MAP: Record<string, string> = {
   'keyboard_arrow_up': 'ChevronUp',
   'close': 'X',
   'arrow_up': 'ArrowUp',
+  'arrow-left': 'ArrowLeft',
   'calendar': 'Calendar',
   'calendar_today': 'CalendarDays',
   'share': 'Share2',

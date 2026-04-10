@@ -20,7 +20,6 @@ export default function DashboardHeader({ onBack, rightElement }: DashboardHeade
     isDesktopBrowser,
     desktopView,
     setViewModeOverride,
-    setMenuOpen,
     setMenuAccountsExpanded,
     setMenuIncomeCatExpanded,
     setMenuExpenseCatExpanded,
@@ -104,7 +103,7 @@ export default function DashboardHeader({ onBack, rightElement }: DashboardHeade
               setMenuIncomeCatEditMode(false);
               setMenuExpenseCatEditMode(false);
               setMenuTagsEditMode(false);
-              setMenuOpen(true);
+              navigation.navigate('QuickNav');
             }}
             {...uiProps(uiPath('dashboard', 'header', 'avatar_button'))}
           >

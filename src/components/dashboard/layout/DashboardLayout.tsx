@@ -6,7 +6,6 @@ import DashboardHeader from './DashboardHeader';
 import DashboardBody from './DashboardBody';
 import ScrollTopFab from './ScrollTopFab';
 import BottomActions from './BottomActions';
-import ModalsRoot from './ModalsRoot';
 import PoolsSection from '../../sections/PoolsSection';
 import LendingSection from '../../sections/LendingSection';
 import SettlementsSection from '../../sections/SettlementsSection';
@@ -59,7 +58,6 @@ export default function DashboardLayout() {
           )}
         </View>
       </View>
-      <ModalsRoot />
     </View>
   );
 }

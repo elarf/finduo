@@ -1,19 +1,19 @@
 import React from 'react';
 import { Text, TouchableOpacity, View } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
 import { useDashboard } from '../../../context/DashboardContext';
 import Icon from '../../Icon';
 import { styles } from '../../../screens/DashboardScreen.styles';
 import { uiPath, uiProps, logUI } from '../../../lib/devtools';
 
 export default function CategoriesRow() {
+  const navigation = useNavigation<any>();
   const {
     showAccountOverviewPicker,
     desktopView,
     categoriesCollapsed, setCategoriesCollapsed,
     sortedSelectedCategories,
-    setEditingCategoryId,
     setCategoryName, setCategoryType, setCategoryColor, setCategoryIcon, setCategoryTagIds,
-    setShowCategoryModal,
     openEntryModal,
   } = useDashboard();
 
@@ -49,13 +49,13 @@ export default function CategoriesRow() {
               }}
               onLongPress={() => {
                 logUI(uiPath('dashboard', 'categories_row', 'category_chip', c.id), 'long_press');
-                setEditingCategoryId(c.id);
+                // Initialize form state before navigating
                 setCategoryName(c.name);
                 setCategoryType(c.type);
                 setCategoryColor(c.color ?? null);
                 setCategoryIcon(c.icon ?? null);
                 setCategoryTagIds((c.tag_ids ?? []) as string[]);
-                setShowCategoryModal(true);
+                navigation.navigate('Category', { categoryId: c.id });
               }}
             >
               <View style={styles.categoryChipInner}>

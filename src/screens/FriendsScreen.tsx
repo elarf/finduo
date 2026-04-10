@@ -1,0 +1,516 @@
+import React, { useState, useEffect } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  Image,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+  useWindowDimensions,
+} from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import { ModalShell } from '../components/ModalShell';
+import { styles } from './DashboardScreen.styles';
+import { useDashboard } from '../context/DashboardContext';
+import { useFriends } from '../hooks/useFriends';
+import { uiPath, uiProps, logUI } from '../lib/devtools';
+import type { ResolvedFriend, ResolvedRequest } from '../types/friends';
+import type { AppAccount } from '../types/dashboard';
+
+type Tab = 'friends' | 'requests' | 'add';
+
+export default function FriendsScreen() {
+  const navigation = useNavigation();
+  const { user, accounts, reloadDashboard } = useDashboard();
+  const {
+    friends,
+    pendingRequests,
+    loading: loadingFriends,
+    friendAccountMap,
+    loadFriends,
+    sendRequest,
+    acceptRequest,
+    rejectRequest,
+    cancelRequest,
+    removeFriend,
+    blockUser,
+    addFriendToAccount,
+    removeFriendFromAccount,
+  } = useFriends(user);
+
+  const ownedAccounts = accounts.filter((a) => a.created_by === user?.id);
+
+  const [tab, setTab] = useState<Tab>('friends');
+  const [addEmail, setAddEmail] = useState('');
+  const [sending, setSending] = useState(false);
+  const [friendsEditMode, setFriendsEditMode] = useState(false);
+  const [expandedFriendId, setExpandedFriendId] = useState<string | null>(null);
+  const [failedAvatars, setFailedAvatars] = useState<Set<string>>(new Set());
+
+  const { width: screenWidth } = useWindowDimensions();
+  const isWide = Platform.OS === 'web' && screenWidth >= 1024;
+
+  useEffect(() => {
+    logUI(uiPath('friends_screen', 'modal', 'container'), 'mount');
+    setTab('friends');
+    setAddEmail('');
+    setFriendsEditMode(false);
+    setExpandedFriendId(null);
+    void loadFriends();
+  }, [loadFriends]);
+
+  const onAvatarError = (id: string) =>
+    setFailedAvatars((prev) => new Set([...prev, id]));
+
+  const handleClose = () => navigation.goBack();
+
+  const handleSend = async () => {
+    if (!addEmail.trim()) return;
+    setSending(true);
+    const ok = await sendRequest(addEmail);
+    setSending(false);
+    if (ok) {
+      setAddEmail('');
+      setTab('friends');
+    }
+  };
+
+  const handleToggleAccount = async (friendUserId: string, accountId: string, hasAccess: boolean) => {
+    if (hasAccess) {
+      if (Platform.OS === 'web') {
+        if ((window as any).confirm('Remove this friend from the account?')) {
+          await removeFriendFromAccount(friendUserId, accountId);
+          void reloadDashboard();
+        }
+      } else {
+        Alert.alert('Revoke access', 'Remove this friend from the account?', [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Revoke',
+            style: 'destructive',
+            onPress: async () => {
+              await removeFriendFromAccount(friendUserId, accountId);
+              void reloadDashboard();
+            },
+          },
+        ]);
+      }
+    } else {
+      const ok = await addFriendToAccount(friendUserId, accountId);
+      if (ok) void reloadDashboard();
+    }
+  };
+
+  const incoming = pendingRequests.filter((r) => r.direction === 'received');
+  const outgoing = pendingRequests.filter((r) => r.direction === 'sent');
+
+  const getName = (r: ResolvedFriend | ResolvedRequest) =>
+    r.profile?.display_name ?? r.profile?.email ?? 'Unknown user';
+
+  const getEmail = (r: ResolvedFriend | ResolvedRequest) =>
+    r.profile?.email ?? null;
+
+  const getAvatar = (r: ResolvedFriend | ResolvedRequest) =>
+    r.profile?.avatar_url ?? null;
+
+  const avatarFallback = (r: ResolvedFriend | ResolvedRequest) =>
+    (getName(r)[0] ?? '?').toUpperCase();
+
+  return (
+    <ModalShell onDismiss={handleClose} maxWidth={500} fullscreen={false}>
+      <View style={[styles.modalCard, { padding: 20 }]}>
+        <Text style={styles.modalTitle} {...uiProps(uiPath('friends_screen', 'modal', 'title'))}>Friends</Text>
+
+        {/* Tab chips */}
+        <View style={[styles.modalChipsRow, { marginBottom: 12 }]}>
+          {(['friends', 'requests', 'add'] as Tab[]).map((t) => (
+            <TouchableOpacity
+              key={t}
+              style={[
+                styles.modalChip,
+                tab === t && styles.modalChipActive,
+                t === 'requests' && incoming.length > 0 && { borderColor: '#f87171' },
+              ]}
+              onPress={() => { logUI(uiPath('friends_screen', 'tab', t), 'press'); setTab(t); }}
+              {...uiProps(uiPath('friends_screen', 'tab', t))}
+            >
+              <Text style={styles.modalChipText}>
+                {t === 'friends' ? `Friends${friends.length > 0 ? ` (${friends.length})` : ''}` : null}
+                {t === 'requests' ? `Requests${pendingRequests.length > 0 ? ` (${pendingRequests.length})` : ''}` : null}
+                {t === 'add' ? 'Add Friend' : null}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        {loadingFriends ? (
+          <ActivityIndicator color="#53E3A6" style={{ marginVertical: 20 }} />
+        ) : (
+          <>
+            {/* Friends tab */}
+            {tab === 'friends' && (
+              <>
+                {friends.length === 0 ? (
+                  <Text style={styles.emptyText}>No friends yet. Use "Add Friend" to get started.</Text>
+                ) : (
+                  <>
+                    <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginBottom: 6 }}>
+                      <TouchableOpacity
+                        style={[styles.manageIconButton, friendsEditMode && { backgroundColor: '#2C4669' }]}
+                        onPress={() => setFriendsEditMode((p) => !p)}
+                      >
+                        <Text style={styles.manageIconText}>✎</Text>
+                      </TouchableOpacity>
+                    </View>
+                    <ScrollView style={{ maxHeight: 340 }} showsVerticalScrollIndicator={false}>
+                      {friends.map((f) => {
+                        const avatar = getAvatar(f);
+                        const isExpanded = expandedFriendId === f.userId;
+                        const sharedAccountIds = friendAccountMap[f.userId] ?? [];
+
+                        return (
+                          <View key={f.rowId}>
+                            <TouchableOpacity
+                              style={local.friendCard}
+                              activeOpacity={0.7}
+                              onPress={() => { logUI(uiPath('friends_screen', 'friends', 'friend_row', f.rowId), 'press'); setExpandedFriendId(isExpanded ? null : f.userId); }}
+                              {...uiProps(uiPath('friends_screen', 'friends', 'friend_row', f.rowId))}
+                            >
+                              {/* Avatar */}
+                              {avatar && !failedAvatars.has(f.rowId) ? (
+                                <Image
+                                  source={{ uri: avatar }}
+                                  style={local.avatar}
+                                  onError={() => onAvatarError(f.rowId)}
+                                  {...uiProps(uiPath('friends_screen', 'friends', 'friend_avatar', f.rowId))}
+                                />
+                              ) : (
+                                <View
+                                  style={local.avatarFallback}
+                                  {...uiProps(uiPath('friends_screen', 'friends', 'friend_avatar', f.rowId))}
+                                >
+                                  <Text style={local.avatarFallbackText}>{avatarFallback(f)}</Text>
+                                </View>
+                              )}
+                              {/* Name + email aligned right */}
+                              <View style={local.friendInfo}>
+                                <Text style={local.friendName} {...uiProps(uiPath('friends_screen', 'friends', 'friend_name', f.rowId))}>
+                                  {getName(f)}
+                                </Text>
+                                {getEmail(f) ? (
+                                  <Text style={local.friendEmail}>{getEmail(f)}</Text>
+                                ) : null}
+                                {sharedAccountIds.length > 0 && (
+                                  <Text style={local.sharedBadge}>
+                                    {sharedAccountIds.length} account{sharedAccountIds.length > 1 ? 's' : ''} shared
+                                  </Text>
+                                )}
+                              </View>
+                              {/* Edit mode actions */}
+                              {friendsEditMode && (
+                                <View style={{ flexDirection: 'row', gap: 4, marginLeft: 6 }}>
+                                  <TouchableOpacity
+                                    style={styles.manageIconButton}
+                                    onPress={() => {
+                                      logUI(uiPath('friends_screen', 'friends', 'remove_button', f.rowId), 'press');
+                                      Alert.alert('Remove friend', `Remove ${getName(f)} from friends?`, [
+                                        { text: 'Cancel', style: 'cancel' },
+                                        { text: 'Remove', style: 'destructive', onPress: () => void removeFriend(f.rowId) },
+                                      ]);
+                                    }}
+                                    {...uiProps(uiPath('friends_screen', 'friends', 'remove_button', f.rowId))}
+                                  >
+                                    <Text style={styles.manageIconText}>✕</Text>
+                                  </TouchableOpacity>
+                                  <TouchableOpacity
+                                    style={styles.manageIconButtonDanger}
+                                    onPress={() => {
+                                      logUI(uiPath('friends_screen', 'friends', 'block_button', f.rowId), 'press');
+                                      Alert.alert('Block user', `Block ${getName(f)}? They won't be able to find you.`, [
+                                        { text: 'Cancel', style: 'cancel' },
+                                        { text: 'Block', style: 'destructive', onPress: () => void blockUser(f.rowId) },
+                                      ]);
+                                    }}
+                                    {...uiProps(uiPath('friends_screen', 'friends', 'block_button', f.rowId))}
+                                  >
+                                    <Text style={[styles.manageIconText, { fontSize: 10 }]}>BLK</Text>
+                                  </TouchableOpacity>
+                                </View>
+                              )}
+                              {/* Expand chevron */}
+                              {!friendsEditMode && (
+                                <Text style={{ color: '#8FA8C9', fontSize: 14, marginLeft: 6 }}>
+                                  {isExpanded ? '▾' : '▸'}
+                                </Text>
+                              )}
+                            </TouchableOpacity>
+
+                            {/* Expanded: account sharing panel */}
+                            {isExpanded && !friendsEditMode && ownedAccounts.length > 0 && (
+                              <View style={local.accountPanel}>
+                                <Text style={local.accountPanelTitle}>Share accounts with {getName(f)}</Text>
+                                {ownedAccounts.map((acct: AppAccount) => {
+                                  const hasAccess = sharedAccountIds.includes(acct.id);
+                                  return (
+                                    <TouchableOpacity
+                                      key={acct.id}
+                                      style={[local.accountRow, hasAccess && local.accountRowActive]}
+                                      onPress={() => void handleToggleAccount(f.userId, acct.id, hasAccess)}
+                                    >
+                                      <Text style={local.accountCheck}>{hasAccess ? '☑' : '☐'}</Text>
+                                      <Text style={local.accountName}>{acct.name}</Text>
+                                      <Text style={local.accountCurrency}>{acct.currency}</Text>
+                                    </TouchableOpacity>
+                                  );
+                                })}
+                              </View>
+                            )}
+                          </View>
+                        );
+                      })}
+                    </ScrollView>
+                  </>
+                )}
+              </>
+            )}
+
+            {/* Requests tab */}
+            {tab === 'requests' && (
+              <ScrollView style={{ maxHeight: 300 }} showsVerticalScrollIndicator={false}>
+                {incoming.length === 0 && outgoing.length === 0 ? (
+                  <Text style={styles.emptyText}>No pending requests.</Text>
+                ) : null}
+
+                {incoming.length > 0 && (
+                  <>
+                    <Text style={[styles.modalLabel, { color: '#4ade80' }]}>Incoming</Text>
+                    {incoming.map((r) => {
+                      const avatar = getAvatar(r);
+                      return (
+                        <View key={r.rowId} style={local.friendCard} {...uiProps(uiPath('friends_screen', 'requests', 'request_row', r.rowId))}>
+                          {avatar && !failedAvatars.has(r.rowId) ? (
+                            <Image
+                              source={{ uri: avatar }}
+                              style={local.avatarSmall}
+                              onError={() => onAvatarError(r.rowId)}
+                              {...uiProps(uiPath('friends_screen', 'requests', 'request_avatar', r.rowId))}
+                            />
+                          ) : (
+                            <View
+                              style={[local.avatarFallback, local.avatarSmall]}
+                              {...uiProps(uiPath('friends_screen', 'requests', 'request_avatar', r.rowId))}
+                            >
+                              <Text style={local.avatarFallbackText}>{avatarFallback(r)}</Text>
+                            </View>
+                          )}
+                          <View style={local.friendInfo}>
+                            <Text style={local.friendName}>{getName(r)}</Text>
+                            {getEmail(r) ? <Text style={local.friendEmail}>{getEmail(r)}</Text> : null}
+                          </View>
+                          <TouchableOpacity
+                            style={[styles.manageIconButton, { borderColor: '#4ade80' }]}
+                            onPress={() => { logUI(uiPath('friends_screen', 'requests', 'accept_button', r.rowId), 'press'); void acceptRequest(r.rowId); }}
+                            {...uiProps(uiPath('friends_screen', 'requests', 'accept_button', r.rowId))}
+                          >
+                            <Text style={[styles.manageIconText, { color: '#4ade80' }]}>✓</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={styles.manageIconButtonDanger}
+                            onPress={() => { logUI(uiPath('friends_screen', 'requests', 'reject_button', r.rowId), 'press'); void rejectRequest(r.rowId); }}
+                            {...uiProps(uiPath('friends_screen', 'requests', 'reject_button', r.rowId))}
+                          >
+                            <Text style={styles.manageIconText}>✕</Text>
+                          </TouchableOpacity>
+                        </View>
+                      );
+                    })}
+                  </>
+                )}
+
+                {outgoing.length > 0 && (
+                  <>
+                    <Text style={[styles.modalLabel, { marginTop: 8 }]}>Sent</Text>
+                    {outgoing.map((r) => {
+                      const avatar = getAvatar(r);
+                      return (
+                        <View key={r.rowId} style={local.friendCard}>
+                          {avatar && !failedAvatars.has(r.rowId) ? (
+                            <Image source={{ uri: avatar }} style={local.avatarSmall} onError={() => onAvatarError(r.rowId)} />
+                          ) : (
+                            <View style={[local.avatarFallback, local.avatarSmall]}>
+                              <Text style={local.avatarFallbackText}>{avatarFallback(r)}</Text>
+                            </View>
+                          )}
+                          <View style={local.friendInfo}>
+                            <Text style={local.friendName}>{getName(r)}</Text>
+                            {getEmail(r) ? <Text style={local.friendEmail}>{getEmail(r)}</Text> : null}
+                            <Text style={{ color: '#8FA8C9', fontSize: 11 }}>Pending</Text>
+                          </View>
+                          <TouchableOpacity
+                            style={styles.manageIconButtonDanger}
+                            onPress={() =>
+                              Alert.alert('Cancel request', `Cancel request to ${getName(r)}?`, [
+                                { text: 'Keep', style: 'cancel' },
+                                { text: 'Cancel request', style: 'destructive', onPress: () => void cancelRequest(r.rowId) },
+                              ])
+                            }
+                          >
+                            <Text style={styles.manageIconText}>✕</Text>
+                          </TouchableOpacity>
+                        </View>
+                      );
+                    })}
+                  </>
+                )}
+              </ScrollView>
+            )}
+
+            {/* Add Friend tab */}
+            {tab === 'add' && (
+              <>
+                <Text style={styles.modalLabel}>Search by email</Text>
+                <TextInput
+                  placeholder="friend@example.com"
+                  placeholderTextColor="#64748B"
+                  value={addEmail}
+                  onChangeText={setAddEmail}
+                  style={styles.input}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  returnKeyType="send"
+                  onSubmitEditing={() => void handleSend()}
+                  {...uiProps(uiPath('friends_screen', 'add', 'email_input'))}
+                />
+                <Text style={[styles.manageMeta, { marginBottom: 10, marginTop: -4 }]}>
+                  The other person must have opened the app at least once.
+                </Text>
+              </>
+            )}
+          </>
+        )}
+
+        <View style={styles.modalActions}>
+          <TouchableOpacity
+            style={styles.modalSecondary}
+            onPress={() => { logUI(uiPath('friends_screen', 'actions', 'close_button'), 'press'); handleClose(); }}
+            {...uiProps(uiPath('friends_screen', 'actions', 'close_button'))}
+          >
+            <Text style={styles.modalSecondaryText}>Close</Text>
+          </TouchableOpacity>
+          {tab === 'add' && (
+            <TouchableOpacity
+              style={styles.modalPrimary}
+              onPress={() => { logUI(uiPath('friends_screen', 'actions', 'send_button'), 'press'); void handleSend(); }}
+              disabled={sending || !addEmail.trim()}
+              {...uiProps(uiPath('friends_screen', 'actions', 'send_button'))}
+            >
+              <Text style={styles.modalPrimaryText}>{sending ? 'Sending…' : 'Send Request'}</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
+    </ModalShell>
+  );
+}
+
+const local = StyleSheet.create({
+  friendCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: '#142235',
+    borderColor: '#1E3552',
+    borderWidth: 1,
+    borderRadius: 4,
+    padding: 10,
+    marginBottom: 2,
+  },
+  avatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+  },
+  avatarSmall: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+  },
+  avatarFallback: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#1E3552',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarFallbackText: {
+    color: '#8FA8C9',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  friendInfo: {
+    flex: 1,
+    alignItems: 'flex-end',
+  },
+  friendName: {
+    color: '#EAF3FF',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  friendEmail: {
+    color: '#8FA8C9',
+    fontSize: 12,
+  },
+  sharedBadge: {
+    color: '#53E3A6',
+    fontSize: 11,
+    marginTop: 2,
+  },
+  accountPanel: {
+    backgroundColor: '#0D1B2A',
+    borderColor: '#1E3552',
+    borderWidth: 1,
+    borderTopWidth: 0,
+    borderBottomLeftRadius: 4,
+    borderBottomRightRadius: 4,
+    padding: 10,
+    marginBottom: 4,
+  },
+  accountPanelTitle: {
+    color: '#8FA8C9',
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+    marginBottom: 6,
+  },
+  accountRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 4,
+    borderRadius: 3,
+  },
+  accountRowActive: {
+    backgroundColor: '#142235',
+  },
+  accountCheck: {
+    color: '#53E3A6',
+    fontSize: 16,
+  },
+  accountName: {
+    color: '#EAF3FF',
+    fontSize: 13,
+    flex: 1,
+  },
+  accountCurrency: {
+    color: '#64748B',
+    fontSize: 11,
+  },
+});

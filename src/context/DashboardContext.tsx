@@ -10,7 +10,6 @@ import React, {
 import {
   Alert,
   Animated,
-  BackHandler,
   NativeScrollEvent,
   NativeSyntheticEvent,
   Platform,
@@ -166,30 +165,6 @@ export type DashboardContextValue = {
   setIntervalVisibility: React.Dispatch<React.SetStateAction<Record<IntervalKey, boolean>>>;
   intervalLabel: string;
   navigateInterval: (dir: 'prev' | 'next') => void;
-  menuOpen: boolean;
-  setMenuOpen: React.Dispatch<React.SetStateAction<boolean>>;
-  showEntryModal: boolean;
-  setShowEntryModal: React.Dispatch<React.SetStateAction<boolean>>;
-  showCategoryModal: boolean;
-  setShowCategoryModal: React.Dispatch<React.SetStateAction<boolean>>;
-  showAccountModal: boolean;
-  setShowAccountModal: React.Dispatch<React.SetStateAction<boolean>>;
-  showTagModal: boolean;
-  setShowTagModal: React.Dispatch<React.SetStateAction<boolean>>;
-  showInvitationsModal: boolean;
-  setShowInvitationsModal: React.Dispatch<React.SetStateAction<boolean>>;
-  showTransferModal: boolean;
-  setShowTransferModal: React.Dispatch<React.SetStateAction<boolean>>;
-  showFriendsModal: boolean;
-  setShowFriendsModal: React.Dispatch<React.SetStateAction<boolean>>;
-  editingAccountId: string | null;
-  setEditingAccountId: React.Dispatch<React.SetStateAction<string | null>>;
-  editingTransactionId: string | null;
-  setEditingTransactionId: React.Dispatch<React.SetStateAction<string | null>>;
-  editingCategoryId: string | null;
-  setEditingCategoryId: React.Dispatch<React.SetStateAction<string | null>>;
-  editingTagId: string | null;
-  setEditingTagId: React.Dispatch<React.SetStateAction<string | null>>;
   viewModeOverride: 'desktop' | 'mobile' | null;
   setViewModeOverride: React.Dispatch<React.SetStateAction<'desktop' | 'mobile' | null>>;
   showAccountOverviewPicker: boolean;
@@ -281,8 +256,6 @@ export type DashboardContextValue = {
   setInviteName: React.Dispatch<React.SetStateAction<string>>;
   inviteExpiresDays: string;
   setInviteExpiresDays: React.Dispatch<React.SetStateAction<string>>;
-  editingInviteId: string | null;
-  setEditingInviteId: React.Dispatch<React.SetStateAction<string | null>>;
   managedInvites: ManagedInvite[];
   setManagedInvites: React.Dispatch<React.SetStateAction<ManagedInvite[]>>;
   // ── Transfer form state ──
@@ -353,7 +326,6 @@ export type DashboardContextValue = {
   // ── Computed values ──
   selectedAccount: AppAccount | null;
   entryAccount: AppAccount | null;
-  editingAccount: AppAccount | null;
   selectedCurrency: string;
   selectedTags: AppTag[];
   selectedCategories: AppCategory[];
@@ -410,7 +382,7 @@ export type DashboardContextValue = {
   openCreateAccount: () => void;
   openEditAccount: (account: AppAccount) => void;
   deleteAccount: (account: AppAccount) => Promise<void>;
-  saveCategory: () => Promise<void>;
+  saveCategory: (editingCategoryId?: string | null) => Promise<void>;
   deleteCategory: (categoryId: string) => Promise<void>;
   deleteTransaction: (txId: string) => Promise<void>;
   toggleCategoryHidden: (categoryId: string) => Promise<void>;
@@ -418,16 +390,16 @@ export type DashboardContextValue = {
   createTag: () => Promise<void>;
   openCreateTag: () => void;
   openEditTag: (tag: AppTag) => void;
-  saveTag: () => Promise<void>;
+  saveTag: (editingTagId?: string | null) => Promise<void>;
   deleteTag: (tagId: string) => Promise<void>;
   toggleTag: (id: string) => void;
-  saveEntry: () => Promise<void>;
-  saveAccount: () => Promise<void>;
+  saveEntry: (editingTransactionId?: string | null) => Promise<void>;
+  saveAccount: (editingAccountId?: string | null) => Promise<void>;
   openTransfer: () => void;
   saveTransfer: () => Promise<void>;
   loadManagedInvites: (accountId: string) => Promise<void>;
   openInvitationsModal: () => Promise<void>;
-  saveInviteToken: () => Promise<void>;
+  saveInviteToken: (editingInviteId?: string | null) => Promise<void>;
   removeInviteToken: (inviteId: string) => Promise<void>;
   joinByToken: () => Promise<void>;
 };
@@ -723,22 +695,6 @@ export function DashboardProvider({
     try { localStorage.setItem(INTERVAL_VIS_KEY, JSON.stringify(intervalVisibility)); } catch {}
   }, [intervalVisibility]);
 
-  // ── Modal visibility ──
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [showEntryModal, setShowEntryModal] = useState(false);
-  const [showCategoryModal, setShowCategoryModal] = useState(false);
-  const [showAccountModal, setShowAccountModal] = useState(false);
-  const [showTagModal, setShowTagModal] = useState(false);
-  const [showInvitationsModal, setShowInvitationsModal] = useState(false);
-  const [showTransferModal, setShowTransferModal] = useState(false);
-  const [showFriendsModal, setShowFriendsModal] = useState(false);
-
-  // ── Editing IDs ──
-  const [editingAccountId, setEditingAccountId] = useState<string | null>(null);
-  const [editingTransactionId, setEditingTransactionId] = useState<string | null>(null);
-  const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
-  const [editingTagId, setEditingTagId] = useState<string | null>(null);
-
   // ── UI/layout state ──
   const [viewModeOverride, setViewModeOverride] = useState<'desktop' | 'mobile' | null>(null);
   const [activeSection, setActiveSection] = useState<'pools' | 'lending' | 'settlements' | 'contacts' | null>(null);
@@ -794,7 +750,6 @@ export function DashboardProvider({
   const [invitationAccountId, setInvitationAccountId] = useState<string | null>(null);
   const [inviteName, setInviteName] = useState('');
   const [inviteExpiresDays, setInviteExpiresDays] = useState('7');
-  const [editingInviteId, setEditingInviteId] = useState<string | null>(null);
   const [managedInvites, setManagedInvites] = useState<ManagedInvite[]>([]);
 
   // ── Transfer form ──
@@ -857,11 +812,6 @@ export function DashboardProvider({
   const entryAccount = useMemo(
     () => accounts.find((a) => a.id === entryAccountId) ?? null,
     [accounts, entryAccountId],
-  );
-
-  const editingAccount = useMemo(
-    () => accounts.find((a) => a.id === editingAccountId) ?? null,
-    [accounts, editingAccountId],
   );
 
   const selectedCurrency = selectedAccount?.currency ?? 'USD';
@@ -1455,42 +1405,6 @@ export function DashboardProvider({
     });
   }, [iconPickerAnim]);
 
-  // ── Android back button ──
-  useEffect(() => {
-    if (Platform.OS !== 'android') return;
-    const onBack = () => {
-      if (isCatPickerOpen)       { closeCatPicker();               return true; }
-      if (showIconPickerSheet)   { closeIconPickerSheet();          return true; }
-      if (showAcctPickerSheet)   { closeAcctPickerSheet();          return true; }
-      if (showEntryModal)        { setShowEntryModal(false);        return true; }
-      if (showTransferModal)     { setShowTransferModal(false);     return true; }
-      if (showCategoryModal)     { setShowCategoryModal(false);     return true; }
-      if (showAccountModal)      { setShowAccountModal(false);      return true; }
-      if (showTagModal)          { setShowTagModal(false);          return true; }
-      if (showInvitationsModal)  { setShowInvitationsModal(false);  return true; }
-      if (showFriendsModal)      { setShowFriendsModal(false);      return true; }
-      if (menuOpen)              { setMenuOpen(false);              return true; }
-      Alert.alert(
-        'Exit app?',
-        'Do you want to close Finduo?',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Exit', style: 'destructive', onPress: () => BackHandler.exitApp() },
-        ],
-        { cancelable: true },
-      );
-      return true;
-    };
-    const sub = BackHandler.addEventListener('hardwareBackPress', onBack);
-    return () => sub.remove();
-  }, [
-    isCatPickerOpen, showIconPickerSheet, showAcctPickerSheet,
-    showEntryModal, showTransferModal, showCategoryModal,
-    showAccountModal, showTagModal, showInvitationsModal,
-    showFriendsModal, menuOpen,
-    closeCatPicker, closeIconPickerSheet, closeAcctPickerSheet,
-  ]);
-
   // ── Share ──
   const shareInvite = useCallback(async (token: string) => {
     const message = `Join my Finduo shared account!\nToken: ${token}`;
@@ -1510,7 +1424,6 @@ export function DashboardProvider({
 
   // ── Modal open callbacks ──
   const openEntryModal = useCallback((type: TransactionType, categoryId?: string | null) => {
-    setEditingTransactionId(null);
     setEntryType(type);
     setEntryAmount('');
     setEntryDate(todayIso());
@@ -1522,15 +1435,14 @@ export function DashboardProvider({
     isCatPickerOpenRef.current = false;
     setIsCatPickerOpen(false);
     catPickerAnim.setValue(0);
-    setShowEntryModal(true);
-  }, [catPickerAnim, selectedAccountId, setEntryAccountId]);
+    navigation.navigate('Entry' as never);
+  }, [catPickerAnim, selectedAccountId, setEntryAccountId, navigation]);
 
   const openEntryModalWithAmount = useCallback((
     type: TransactionType,
     amount: number,
     note?: string,
   ) => {
-    setEditingTransactionId(null);
     setEntryType(type);
     setEntryAmount(String(Math.round(amount * 100) / 100));
     setEntryDate(todayIso());
@@ -1542,8 +1454,8 @@ export function DashboardProvider({
     isCatPickerOpenRef.current = false;
     setIsCatPickerOpen(false);
     catPickerAnim.setValue(0);
-    setShowEntryModal(true);
-  }, [catPickerAnim, selectedAccountId, setEntryAccountId]);
+    navigation.navigate('Entry' as never);
+  }, [catPickerAnim, selectedAccountId, setEntryAccountId, navigation]);
 
   // Open the entry modal pre-filled when the Dashboard is navigated to with prefill params.
   // Uses _key (e.g. debt ID) so re-navigating with a new prefill triggers the effect again.
@@ -1555,7 +1467,6 @@ export function DashboardProvider({
   }, [(prefillEntry as any)?._key]);
 
   const openEditTransaction = useCallback((tx: AppTransaction) => {
-    setEditingTransactionId(tx.id);
     setEntryType(tx.type);
     setEntryAmount(String(Math.abs(Number(tx.amount) || 0)));
     setEntryDate(tx.date);
@@ -1566,11 +1477,10 @@ export function DashboardProvider({
     isCatPickerOpenRef.current = false;
     setIsCatPickerOpen(false);
     catPickerAnim.setValue(0);
-    setShowEntryModal(true);
-  }, [catPickerAnim, setEntryAccountId]);
+    navigation.navigate('Entry' as never, { transactionId: tx.id } as never);
+  }, [catPickerAnim, setEntryAccountId, navigation]);
 
   const openCreateAccount = useCallback(() => {
-    setEditingAccountId(null);
     setNewAccountName('');
     setNewAccountCurrency(selectedAccount?.currency ?? 'USD');
     setSettingsIncluded(true);
@@ -1579,12 +1489,11 @@ export function DashboardProvider({
     setSettingsInitialDate(todayIso());
     setAccountTagIds([]);
     setNewAccountIcon(null);
-    setShowAccountModal(true);
-  }, [selectedAccount?.currency]);
+    navigation.navigate('Account' as never);
+  }, [selectedAccount?.currency, navigation]);
 
   const openEditAccount = useCallback((account: AppAccount) => {
     const settings = accountSettings[account.id];
-    setEditingAccountId(account.id);
     setNewAccountName(account.name);
     setNewAccountCurrency(account.currency);
     setNewAccountIcon(account.icon ?? null);
@@ -1593,8 +1502,8 @@ export function DashboardProvider({
     setSettingsInitialBalance(String(settings?.initial_balance ?? 0));
     setSettingsInitialDate(settings?.initial_balance_date ?? account.created_at?.slice(0, 10) ?? todayIso());
     setAccountTagIds((account.tag_ids ?? []) as string[]);
-    setShowAccountModal(true);
-  }, [accountSettings]);
+    navigation.navigate('Account' as never, { accountId: account.id } as never);
+  }, [accountSettings, navigation]);
 
   // ── CRUD callbacks ──
   const deleteAccount = useCallback(async (account: AppAccount) => {
@@ -1623,7 +1532,6 @@ export function DashboardProvider({
 
       setAccounts((prev) => prev.filter((a) => a.id !== account.id));
       setTransactions((prev) => prev.filter((tx) => tx.account_id !== account.id));
-      setShowAccountModal(false);
     } catch (err) {
       Alert.alert('Remove account failed', err instanceof Error ? err.message : 'Unknown error');
     } finally {
@@ -1631,7 +1539,7 @@ export function DashboardProvider({
     }
   }, [accounts, selectedAccountId, user, pendingSelectedAccountIdRef, setSelectedAccountId, setAccounts, setTransactions, setSaving]);
 
-  const saveCategory = useCallback(async () => {
+  const saveCategory = useCallback(async (editingCategoryId?: string | null) => {
     if (!user) {
       Alert.alert('Not signed in', 'Sign in to create categories.');
       return;
@@ -1672,13 +1580,12 @@ export function DashboardProvider({
       setCategoryColor(null);
       setCategoryIcon(null);
       setCategoryTagIds([]);
-      setShowCategoryModal(false);
     } catch (err) {
       Alert.alert('Save category failed', err instanceof Error ? err.message : 'Unknown error');
     } finally {
       setSaving(false);
     }
-  }, [categoryColor, categoryIcon, categoryName, categoryTagIds, categoryType, editingCategoryId, user, setCategories, setSaving]);
+  }, [categoryColor, categoryIcon, categoryName, categoryTagIds, categoryType, user, setCategories, setSaving]);
 
   const deleteCategory = useCallback(async (categoryId: string) => {
     setSaving(true);
@@ -1696,7 +1603,6 @@ export function DashboardProvider({
       if (error) throw error;
       setCategories((prev) => prev.filter((c) => c.id !== categoryId));
       setTransactions((prev) => prev.map((tx) => tx.category_id === categoryId ? { ...tx, category_id: null } : tx));
-      setShowCategoryModal(false);
     } catch (err) {
       Alert.alert('Remove category failed', err instanceof Error ? err.message : 'Unknown error');
     } finally {
@@ -1719,7 +1625,6 @@ export function DashboardProvider({
         .eq('id', txId);
       if (error) throw error;
       setTransactions((prev) => prev.filter((tx) => tx.id !== txId));
-      setShowEntryModal(false);
     } catch (err) {
       Alert.alert('Delete failed', err instanceof Error ? err.message : 'Unknown error');
     } finally {
@@ -1794,22 +1699,20 @@ export function DashboardProvider({
   }, [newTagName, setTags, setSaving]);
 
   const openCreateTag = useCallback(() => {
-    setEditingTagId(null);
     setTagName('');
     setTagColor(null);
     setTagIcon(null);
-    setShowTagModal(true);
-  }, []);
+    navigation.navigate('Tag' as never);
+  }, [navigation]);
 
   const openEditTag = useCallback((tag: AppTag) => {
-    setEditingTagId(tag.id);
     setTagName(tag.name);
     setTagColor(tag.color ?? null);
     setTagIcon(tag.icon ?? null);
-    setShowTagModal(true);
-  }, []);
+    navigation.navigate('Tag' as never, { tagId: tag.id } as never);
+  }, [navigation]);
 
-  const saveTag = useCallback(async () => {
+  const saveTag = useCallback(async (editingTagId?: string | null) => {
     if (!tagName.trim()) {
       Alert.alert('Missing name', 'Provide a tag name.');
       return;
@@ -1839,13 +1742,12 @@ export function DashboardProvider({
       }
       setTagColor(null);
       setTagIcon(null);
-      setShowTagModal(false);
     } catch (err) {
       Alert.alert('Save tag failed', err instanceof Error ? err.message : 'Unknown error');
     } finally {
       setSaving(false);
     }
-  }, [editingTagId, tagColor, tagIcon, tagName, setTags, setSaving]);
+  }, [tagColor, tagIcon, tagName, setTags, setSaving]);
 
   const deleteTag = useCallback(async (tagId: string) => {
     setSaving(true);
@@ -1866,7 +1768,6 @@ export function DashboardProvider({
         ...tx,
         tag_ids: tx.tag_ids.filter((id) => id !== tagId),
       })));
-      setShowTagModal(false);
     } catch (err) {
       Alert.alert('Remove tag failed', err instanceof Error ? err.message : 'Unknown error');
     } finally {
@@ -1878,7 +1779,7 @@ export function DashboardProvider({
     setEntryTagIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   }, []);
 
-  const saveEntry = useCallback(async () => {
+  const saveEntry = useCallback(async (editingTransactionId?: string | null) => {
     if (!user || !entryAccountId) {
       Alert.alert('Missing account', 'Choose an account first.');
       return;
@@ -1964,14 +1865,12 @@ export function DashboardProvider({
         setTransactions((prev) => [newTx, ...prev].sort((a, b) => b.date.localeCompare(a.date)));
       }
 
-      setShowEntryModal(false);
     } catch (err) {
       Alert.alert('Save entry failed', err instanceof Error ? err.message : 'Unknown error');
     } finally {
       setSaving(false);
     }
   }, [
-    editingTransactionId,
     entryAccountId,
     entryAmount,
     entryCategoryId,
@@ -1984,7 +1883,7 @@ export function DashboardProvider({
     setSaving,
   ]);
 
-  const saveAccount = useCallback(async () => {
+  const saveAccount = useCallback(async (editingAccountId?: string | null) => {
     if (!user) return;
     if (!newAccountName.trim()) {
       Alert.alert('Missing name', 'Provide account name.');
@@ -2083,7 +1982,6 @@ export function DashboardProvider({
         setNewAccountName('');
       }
       setAccountTagIds([]);
-      setShowAccountModal(false);
     } catch (err) {
       Alert.alert('Save account failed', err instanceof Error ? err.message : 'Unknown error');
     } finally {
@@ -2091,7 +1989,6 @@ export function DashboardProvider({
     }
   }, [
     accountTagIds,
-    editingAccountId,
     newAccountCurrency,
     newAccountIcon,
     newAccountName,
@@ -2135,8 +2032,8 @@ export function DashboardProvider({
     setTransferTargetAmount('');
     setTransferDate(todayIso());
     setTransferNote('');
-    setShowTransferModal(true);
-  }, [accounts, selectedAccountId, transactions, transferCategoryIds]);
+    navigation.navigate('Transfer' as never);
+  }, [accounts, selectedAccountId, transactions, transferCategoryIds, navigation]);
 
   const saveTransfer = useCallback(async () => {
     if (!user || !transferFromId || !transferToId) {
@@ -2241,7 +2138,6 @@ export function DashboardProvider({
         return [...newTxs, ...prev].sort((a, b) => b.date.localeCompare(a.date));
       });
 
-      setShowTransferModal(false);
       Alert.alert('Transfer saved', `${formatCurrency(sourceAmount, fromAccount.currency)} -> ${formatCurrency(targetAmount, toAccount.currency)}`);
     } catch (err) {
       Alert.alert('Transfer failed', err instanceof Error ? err.message : 'Unknown error');
@@ -2308,9 +2204,8 @@ export function DashboardProvider({
     setInvitationAccountId(nextAccountId);
     setInviteName('');
     setInviteExpiresDays('7');
-    setEditingInviteId(null);
     setJoinToken('');
-    setShowInvitationsModal(true);
+    navigation.navigate('Invitations' as never);
 
     if (!nextAccountId) {
       setManagedInvites([]);
@@ -2322,9 +2217,9 @@ export function DashboardProvider({
     } catch (err) {
       Alert.alert('Invitations error', err instanceof Error ? err.message : 'Unknown error');
     }
-  }, [accounts, loadManagedInvites, selectedAccountId]);
+  }, [accounts, loadManagedInvites, selectedAccountId, navigation]);
 
-  const saveInviteToken = useCallback(async () => {
+  const saveInviteToken = useCallback(async (editingInviteId?: string | null) => {
     if (!user || !invitationAccountId) {
       Alert.alert('No account selected', 'Select an account first.');
       return;
@@ -2378,14 +2273,13 @@ export function DashboardProvider({
 
       setInviteName('');
       setInviteExpiresDays('7');
-      setEditingInviteId(null);
       await loadManagedInvites(invitationAccountId);
     } catch (err) {
       Alert.alert('Invite save failed', err instanceof Error ? err.message : 'Unknown error');
     } finally {
       setSaving(false);
     }
-  }, [editingInviteId, invitationAccountId, inviteExpiresDays, inviteName, loadManagedInvites, shareInvite, user, setSaving]);
+  }, [invitationAccountId, inviteExpiresDays, inviteName, loadManagedInvites, shareInvite, user, setSaving]);
 
   const removeInviteToken = useCallback(async (inviteId: string) => {
     setSaving(true);
@@ -2501,18 +2395,6 @@ export function DashboardProvider({
     intervalVisibility, setIntervalVisibility,
     intervalLabel,
     navigateInterval,
-    menuOpen, setMenuOpen,
-    showEntryModal, setShowEntryModal,
-    showCategoryModal, setShowCategoryModal,
-    showAccountModal, setShowAccountModal,
-    showTagModal, setShowTagModal,
-    showInvitationsModal, setShowInvitationsModal,
-    showTransferModal, setShowTransferModal,
-    showFriendsModal, setShowFriendsModal,
-    editingAccountId, setEditingAccountId,
-    editingTransactionId, setEditingTransactionId,
-    editingCategoryId, setEditingCategoryId,
-    editingTagId, setEditingTagId,
     viewModeOverride, setViewModeOverride,
     showAccountOverviewPicker, setShowAccountOverviewPicker,
     visibleTransactionsCount, setVisibleTransactionsCount,
@@ -2561,7 +2443,6 @@ export function DashboardProvider({
     invitationAccountId, setInvitationAccountId,
     inviteName, setInviteName,
     inviteExpiresDays, setInviteExpiresDays,
-    editingInviteId, setEditingInviteId,
     managedInvites, setManagedInvites,
     // Transfer form
     transferFromId, setTransferFromId,
@@ -2605,7 +2486,6 @@ export function DashboardProvider({
     // Computed
     selectedAccount,
     entryAccount,
-    editingAccount,
     selectedCurrency,
     selectedTags,
     selectedCategories,

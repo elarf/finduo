@@ -4,6 +4,73 @@
 
 ---
 
+## [1.2.0] — 2026-04-10
+
+### Architecture
+
+#### Navigation Refactor — Modal Routes
+
+- **Complete modal-to-route migration**: All modal-based screens converted to proper React Navigation routes
+  - Removes 48 lines of modal state management from DashboardContext
+  - Eliminates 35-line manual BackHandler with cascading if-checks
+  - React Navigation now handles hardware/browser back buttons automatically
+- **New route-based screens**:
+  - `EntryScreen` — Income/expense entry form
+  - `CategoryScreen` — Category create/edit
+  - `TagScreen` — Tag create/edit
+  - `AccountScreen` — Account create/edit
+  - `TransferScreen` — Account transfers
+  - `InvitationsScreen` — Account sharing invitations
+  - `FriendsScreen` — Friends management
+  - `QuickNavScreen` — Navigation menu
+  - `PoolsScreen`, `LendingScreen`, `SettlementsScreen`, `ContactsScreen` — FinOps sections
+- **Single DashboardProvider**: All authenticated screens share context instance for consistent state
+- **Route params**: Editing IDs now passed via navigation params instead of context state
+  - `navigation.navigate('Entry', { transactionId: '123' })`
+  - Save functions accept editing IDs as parameters: `saveEntry(transactionId)`
+
+### UI Improvements
+
+#### Entry Modal
+
+- **Transaction type gradients** on save button:
+  - Income: Teal to blue (top-left to bottom-right)
+  - Expense: Blue to orange (bottom-right to top-left)
+- **Icon colors** updated to white for better contrast on gradients
+- **Category picker** preserved as embedded fullscreen overlay (not a route)
+
+#### Transfer Modal
+
+- **Three-color gradient** on save button: Teal → Blue → Purple (bottom-left to top-right)
+
+### Technical
+
+- **Deleted**:
+  - `ModalsRoot.tsx` (450 lines) — No longer needed
+  - All modal visibility state flags (`showEntryModal`, `showCategoryModal`, etc.)
+  - All editing ID state (`editingTransactionId`, `editingCategoryId`, etc.)
+  - Manual BackHandler useEffect (35 lines)
+- **Created**:
+  - `ModalShell.tsx` — Reusable modal-style wrapper component
+  - 13 new screen files in `src/screens/`
+- **Updated**:
+  - `src/navigation/index.tsx` — Wrapped all authenticated routes with single `DashboardProvider`
+  - `DashboardContext.tsx` — Removed modal state, updated helpers to use navigation
+  - `DashboardLayout.tsx` — Removed `<ModalsRoot />` component
+  - `DashboardHeader.tsx` — Avatar tap navigates to `QuickNav` route
+  - `CategoriesRow.tsx` — Long-press navigates to `Category` route
+  - All modal screens now use `LinearGradient` from `expo-linear-gradient`
+
+### Benefits
+
+- ✅ Android hardware back button works correctly on all modals
+- ✅ Browser back/forward navigation works correctly
+- ✅ Deep linking ready (can navigate directly to modals via URLs)
+- ✅ Cleaner architecture with navigation as single source of truth
+- ✅ Better testability (test navigation state instead of boolean flags)
+
+---
+
 ## [1.1.2] — 2026-04-10
 
 ### UI Improvements

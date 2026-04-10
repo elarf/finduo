@@ -1,11 +1,11 @@
 import React from 'react';
 import { View } from 'react-native';
-import LendingSection from '../components/sections/LendingSection';
+import ContactsSection from '../components/sections/ContactsSection';
 
-export default function LendingScreen() {
+export default function ContactsScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: '#000000' }}>
-      <LendingSection />
+      <ContactsSection />
     </View>
   );
 }

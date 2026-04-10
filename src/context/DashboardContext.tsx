@@ -50,6 +50,7 @@ import type { AccountsQueryData } from '../hooks/useAccountsQuery';
 import { useTransactionsQuery, transactionsQueryKey, sortedKey } from '../hooks/useTransactionsQuery';
 import DatePickerModal from '../components/dashboard/DatePickerModal';
 import AccountPickerSheet from '../components/dashboard/AccountPickerSheet';
+import IconPickerSheet from '../components/dashboard/IconPickerSheet';
 import { useCategoriesQuery, categoriesQueryKey } from '../hooks/useCategoriesQuery';
 import type { CategoriesQueryData } from '../hooks/useCategoriesQuery';
 import { useTagsQuery, tagsQueryKey } from '../hooks/useTagsQuery';
@@ -2604,6 +2605,23 @@ export function DashboardProvider({
         setTransferFromId={setTransferFromId}
         transferToId={transferToId}
         setTransferToId={setTransferToId}
+      />
+
+      <IconPickerSheet
+        visible={showIconPickerSheet}
+        onClose={closeIconPickerSheet}
+        iconPickerAnim={iconPickerAnim}
+        height={height}
+        iconSearchQuery={iconSearchQuery}
+        setIconSearchQuery={setIconSearchQuery}
+        filteredIconNames={filteredIconNames}
+        iconPickerTarget={iconPickerTarget}
+        categoryIcon={categoryIcon}
+        setCategoryIcon={setCategoryIcon}
+        newAccountIcon={newAccountIcon}
+        setNewAccountIcon={setNewAccountIcon}
+        tagIcon={tagIcon}
+        setTagIcon={setTagIcon}
       />
     </DashboardContext.Provider>
   );

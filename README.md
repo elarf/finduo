@@ -217,7 +217,7 @@ Swipe from the left edge (20 px zone) or tap the avatar to open.
 - Centered logo (static image)
 - Avatar button (top-left) opens Quick Navigation; shows Google profile picture or email-initial fallback
 - View-mode toggle button (top-right, desktop only) switches between desktop and mobile layout
-- Spinner (top-right, mobile only) — always visible; tap to reload all dashboard data in the background; swaps to `spinnerFAST.gif` while loading; dashboard skeleton stays visible throughout
+- Spinner (top-right, mobile only) — always visible; tap to reload all dashboard data in the background; swaps to `fdstar.gif` while loading; dashboard skeleton stays visible throughout
 
 ### Mobile UX
 

@@ -25,7 +25,7 @@ export default function DashboardLayout() {
       <View {...uiProps(uiPath('dashboard', 'layout', 'loading_container'))} style={styles.loadingWrap}>
         <Image
           {...uiProps(uiPath('dashboard', 'layout', 'loading_indicator'))}
-          source={require('../../../../assets/spinnerFAST.gif')}
+          source={require('../../../../assets/fdstar.gif')}
           style={{ width: 120, height: 120 }}
           resizeMode="contain"
         />

@@ -353,7 +353,7 @@
 #### Dashboard Header — Spinner Reload Button
 
 - Tapping the `spinner.gif` in the dashboard header (mobile right slot) now triggers a background data reload
-- During reload the header swaps to `spinnerFAST.gif`; the dashboard skeleton remains fully visible — no full-screen loading state
+- During reload the header swaps to `fdstar.gif`; the dashboard skeleton remains fully visible — no full-screen loading state
 - Double-tap prevention: button is disabled while a reload is already in progress
 - Uses the existing `reloading` flag from `DashboardContext` — TanStack Query invalidates all five query keys in parallel; `animateIn` count-up animation fires on completion
 
@@ -375,8 +375,8 @@
 #### Spinner Animations
 
 - Auth loading screen (`RootNavigator`): `ActivityIndicator` replaced with `spinnerSMALL.gif` (80×80)
-- Dashboard loading screen (`DashboardLayout`): logo + `ActivityIndicator` + text replaced with `spinnerFAST.gif` (120×120, centered)
-- Dashboard header right slot on mobile: always shows `spinner.gif` (36×36); `spinnerFAST.gif` while reloading
+- Dashboard loading screen (`DashboardLayout`): logo + `ActivityIndicator` + text replaced with `fdstar.gif` (120×120, centered)
+- Dashboard header right slot on mobile: always shows `spinner.gif` (36×36); `fdstar.gif` while reloading
 
 #### Universal AppHeader
 

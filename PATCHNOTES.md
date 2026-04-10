@@ -4,6 +4,22 @@
 
 ---
 
+## [1.2.1] — 2026-04-11
+
+### UI Improvements
+
+#### Quick Navigation — Add Button Asset
+
+- Section header add buttons (Accounts, Income, Expense, Tags) now use the `new.png` custom asset instead of a text `＋` character
+- Both the add and edit buttons are absolutely positioned side by side on the right of each section header — add button flush to the right edge, edit button with a 6px gap to its left
+- Both buttons use identical sizing and full-height proportions (`width: 36, height: 100%`) for visual consistency
+
+### Assets
+
+- Added `new.png` — Custom add/create button asset for section headers in Quick Navigation
+
+---
+
 ## [1.2.0] — 2026-04-10
 
 ### Architecture

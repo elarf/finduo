@@ -1,5 +1,5 @@
 /** Current app version — bump this alongside package.json when releasing. */
-export const APP_VERSION = '1.2.0';
+export const APP_VERSION = '1.2.1';
 
 const REMOTE_PACKAGE_URL =
   'https://raw.githubusercontent.com/elarf/finduo/main/package.json';

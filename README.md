@@ -6,13 +6,9 @@ Financial tracking app for couples and shared households. Track income, expenses
 
 ---
 
-## Latest Release — v1.1.1
+## Latest Release — v1.2.1
 
-- **FinBiome 2D Mode** — Simplified 2-state zoom system (FinBiome overview / FinTree detail)
-- **Enhanced minimap** — Shows current account name, realistic viewport proportions, zoom out button in FinTree mode
-- **Redesigned waterfall** — Two grey cliffs with flowing water, completely static at top-right corner
-- **Improved tree structure** — Roots grow from trunk bottom (income), branches from top (expense)
-- **Better interactions** — Fixed dragging, centering, and tap detection; branch/leaf taps show info in minimap
+- **Quick Navigation add buttons** — section header add buttons (Accounts, Income, Expense, Tags) now use the `new.png` custom asset, positioned side by side with the edit button (add flush right, edit to its left with a 6px gap)
 
 Full history: [PATCHNOTES.md](./PATCHNOTES.md)
 

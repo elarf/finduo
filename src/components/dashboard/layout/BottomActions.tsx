@@ -1,5 +1,5 @@
 import React from 'react';
-import { Animated, Text, TouchableOpacity, View } from 'react-native';
+import { Animated, Image, Text, TouchableOpacity, View } from 'react-native';
 import { logUI, uiPath, uiProps } from '../../../lib/devtools';
 import { useDashboard } from '../../../context/DashboardContext';
 import Icon from '../../Icon';
@@ -15,6 +15,7 @@ export default function BottomActions() {
     filterIsExpense,
     openEntryModal,
     openTransfer,
+    desktopView,
   } = useDashboard();
 
   if (showAccountOverviewPicker) return null;
@@ -59,9 +60,13 @@ export default function BottomActions() {
           <Text style={{ color: '#f87171', fontSize: 12, fontWeight: '600' }}>✕ Clear all</Text>
         </TouchableOpacity>
       </Animated.View>
-      <View style={[styles.bottomBar, { position: 'relative' }]} {...uiProps(uiPath('dashboard', 'bottom_actions', 'bar'))}>
+      <View style={[styles.bottomBar, !desktopView && { gap: 0 }, { position: 'relative' }]} {...uiProps(uiPath('dashboard', 'bottom_actions', 'bar'))}>
         <TouchableOpacity
-          style={[styles.bottomBarIncome, filterIsExpense && styles.bottomBarDisabled]}
+          style={[
+            styles.bottomBarIncome,
+            !desktopView && styles.bottomBarMobile,
+            filterIsExpense && styles.bottomBarDisabled
+          ]}
           onPress={() => {
             if (!filterIsExpense) {
               logUI(uiPath('dashboard', 'bottom_actions', 'income_button'), 'press');
@@ -71,10 +76,22 @@ export default function BottomActions() {
           accessibilityLabel="Add income"
           {...uiProps(uiPath('dashboard', 'bottom_actions', 'income_button'))}
         >
-          <Icon name="add" size={28} color="#EAF2FF" />
+          {!desktopView ? (
+            <Image
+              source={require('../../../../assets/addincome.png')}
+              style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, width: '100%', height: '100%' }}
+              resizeMode="contain"
+            />
+          ) : (
+            <Icon name="add" size={28} color="#EAF2FF" />
+          )}
         </TouchableOpacity>
         <TouchableOpacity
-          style={[styles.bottomBarTransfer, filterIsExpense && styles.bottomBarDisabled]}
+          style={[
+            styles.bottomBarTransfer,
+            !desktopView && styles.bottomBarMobile,
+            filterIsExpense && styles.bottomBarDisabled
+          ]}
           onPress={() => {
             if (!filterIsExpense) {
               logUI(uiPath('dashboard', 'bottom_actions', 'transfer_button'), 'press');
@@ -84,10 +101,21 @@ export default function BottomActions() {
           accessibilityLabel="Transfer between accounts"
           {...uiProps(uiPath('dashboard', 'bottom_actions', 'transfer_button'))}
         >
-          <Icon name={"swap_horiz" as any} size={28} color="#EAF2FF" />
+          {!desktopView ? (
+            <Image
+              source={require('../../../../assets/addtransfer.png')}
+              style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, width: '100%', height: '100%' }}
+              resizeMode="contain"
+            />
+          ) : (
+            <Icon name={"swap_horiz" as any} size={28} color="#EAF2FF" />
+          )}
         </TouchableOpacity>
         <TouchableOpacity
-          style={styles.bottomBarExpense}
+          style={[
+            styles.bottomBarExpense,
+            !desktopView && styles.bottomBarMobile,
+          ]}
           onPress={() => {
             logUI(uiPath('dashboard', 'bottom_actions', 'expense_button'), 'press');
             openEntryModal('expense', filterIsExpense ? selectedCategoryFilter : null);
@@ -95,7 +123,15 @@ export default function BottomActions() {
           accessibilityLabel="Add expense"
           {...uiProps(uiPath('dashboard', 'bottom_actions', 'expense_button'))}
         >
-          <Icon name="remove" size={28} color="#EAF2FF" />
+          {!desktopView ? (
+            <Image
+              source={require('../../../../assets/addexpensee.png')}
+              style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, width: '100%', height: '100%' }}
+              resizeMode="contain"
+            />
+          ) : (
+            <Icon name="remove" size={28} color="#EAF2FF" />
+          )}
         </TouchableOpacity>
       </View>
     </View>

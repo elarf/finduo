@@ -1,5 +1,6 @@
 import React, { useRef, useState, useEffect } from 'react';
 import {
+  Image,
   Modal,
   NativeScrollEvent,
   NativeSyntheticEvent,
@@ -150,10 +151,14 @@ export default function ChangelogModal({ visible, onClose }: ChangelogModalProps
           {/* FAB */}
           {scrollY > 200 && (
             <TouchableOpacity
-              style={cs.fab}
+              style={{ position: 'absolute', bottom: 80, right: 16 }}
               onPress={() => scrollRef.current?.scrollTo({ y: 0, animated: true })}
             >
-              <Icon name="arrow_up" size={20} color="#060A14" />
+              <Image
+                source={require('../../../assets/tothetop.png')}
+                style={{ width: 48, height: 48 }}
+                resizeMode="contain"
+              />
             </TouchableOpacity>
           )}
         </View>
@@ -190,18 +195,6 @@ const cs = StyleSheet.create({
     alignItems: 'center',
   },
   closeBtnText: { color: '#8FA8C9' },
-
-  fab: {
-    position: 'absolute',
-    bottom: 80,
-    right: 16,
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#53E3A6',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
 
   h2: { color: '#53E3A6', marginTop: 8 },
   h3: { color: '#EDF5FF', marginTop: 6 },

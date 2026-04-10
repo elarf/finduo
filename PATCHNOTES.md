@@ -4,6 +4,42 @@
 
 ---
 
+## [1.1.2] — 2026-04-10
+
+### UI Improvements
+
+#### Mobile Dashboard Enhancements
+
+- **Bottom action buttons** now use custom PNG assets on mobile view
+  - Income, Transfer, and Expense buttons display full-width image assets
+  - Background changed to black for better visual integration
+  - No gaps between buttons for seamless appearance
+  - Desktop view retains original icon-based buttons
+- **Search icon** in Recent Transactions header replaced with custom asset (50×50px)
+  - Recent Transactions header background changed to black with rounded corners
+- **Scroll to top button** now uses custom asset throughout the app
+  - Applied to main dashboard scroll view
+  - Applied to changelog modal
+  - Asset replaces the previous green circular FAB
+
+### Assets
+
+- Added `addincome.png` — Custom income button asset
+- Added `addexpensee.png` — Custom expense button asset
+- Added `addtransfer.png` — Custom transfer button asset
+- Added `searchicon.png` — Custom search icon asset
+- Added `tothetop.png` — Custom scroll to top button asset
+
+### Technical
+
+- `src/components/dashboard/layout/BottomActions.tsx` — Conditional asset rendering for mobile vs desktop; transparent backgrounds on mobile
+- `src/components/dashboard/layout/ScrollTopFab.tsx` — Replaced icon with image asset
+- `src/components/dashboard/ChangelogModal.tsx` — Updated FAB to use image asset
+- `src/components/dashboard/boxes/TransactionSection.tsx` — Search button now uses image asset
+- `src/screens/DashboardScreen.styles.ts` — Updated bottomBar and sectionHeader backgrounds; added bottomBarMobile style
+
+---
+
 ## [1.1.1] — 2026-04-08
 
 ### Improvements

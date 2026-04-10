@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Image, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { logUI, uiPath, uiProps } from '../../../lib/devtools';
 import { useDashboard } from '../../../context/DashboardContext';
 import Icon from '../../Icon';
@@ -159,9 +159,14 @@ export default function TransactionSection() {
                 logUI(uiPath('dashboard', 'tx_section', 'search_button'), 'press');
                 setSearchMode(true);
               }}
+              style={{ alignSelf: 'stretch', justifyContent: 'center' }}
               {...uiProps(uiPath('dashboard', 'tx_section', 'search_button'))}
             >
-              <Icon name="Search" size={20} color="#6ED8A5" />
+              <Image
+                source={require('../../../../assets/searchicon.png')}
+                style={{ height: 50, width: 50 }}
+                resizeMode="contain"
+              />
             </TouchableOpacity>
           )}
         </View>

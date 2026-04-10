@@ -48,6 +48,8 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useAccountsQuery, accountsQueryKey } from '../hooks/useAccountsQuery';
 import type { AccountsQueryData } from '../hooks/useAccountsQuery';
 import { useTransactionsQuery, transactionsQueryKey, sortedKey } from '../hooks/useTransactionsQuery';
+import DatePickerModal from '../components/dashboard/DatePickerModal';
+import AccountPickerSheet from '../components/dashboard/AccountPickerSheet';
 import { useCategoriesQuery, categoriesQueryKey } from '../hooks/useCategoriesQuery';
 import type { CategoriesQueryData } from '../hooks/useCategoriesQuery';
 import { useTagsQuery, tagsQueryKey } from '../hooks/useTagsQuery';
@@ -2567,6 +2569,42 @@ export function DashboardProvider({
   return (
     <DashboardContext.Provider value={value}>
       {children}
+
+      {/* Global shared modals */}
+      <DatePickerModal
+        visible={showDatePicker}
+        onClose={() => setShowDatePicker(false)}
+        entryDate={datePickerTarget === 'entry' ? entryDate : transferDate}
+        setEntryDate={(date) => {
+          if (datePickerTarget === 'entry') {
+            setEntryDate(date);
+          } else {
+            setTransferDate(date);
+          }
+        }}
+        dpYear={dpYear}
+        setDpYear={setDpYear}
+        dpMonth={dpMonth}
+        setDpMonth={setDpMonth}
+      />
+
+      <AccountPickerSheet
+        visible={showAcctPickerSheet}
+        onClose={() => setShowAcctPickerSheet(false)}
+        acctPickerAnim={acctPickerAnim}
+        height={height}
+        accounts={accounts}
+        acctPickerSheetTarget={acctPickerSheetTarget}
+        entryAccountId={entryAccountId}
+        setEntryAccountId={setEntryAccountId}
+        invitationAccountId={invitationAccountId}
+        setInvitationAccountId={setInvitationAccountId}
+        loadManagedInvites={loadManagedInvites}
+        transferFromId={transferFromId}
+        setTransferFromId={setTransferFromId}
+        transferToId={transferToId}
+        setTransferToId={setTransferToId}
+      />
     </DashboardContext.Provider>
   );
 }

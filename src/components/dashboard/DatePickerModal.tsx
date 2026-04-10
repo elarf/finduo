@@ -25,9 +25,16 @@ const DatePickerModal: React.FC<DatePickerModalProps> = ({
   dpMonth,
   setDpMonth,
 }) => (
-  <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+  <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+      presentationStyle="overFullScreen"
+      statusBarTranslucent
+    >
     <Pressable
-      style={styles.modalBackdrop}
+      style={[styles.modalBackdrop, { zIndex: 99999 }]}
       onPress={() => { logUI(uiPath('date_picker', 'modal', 'backdrop'), 'press'); onClose(); }}
       {...uiProps(uiPath('date_picker', 'modal', 'backdrop'))}
     >

@@ -167,7 +167,7 @@ export default function DashboardHeader({ onBack, rightElement }: DashboardHeade
           >
             <Image
               source={reloading
-                ? require('../../../../assets/fdstar.gif')
+                ? require('../../../../assets/spinnerFAST.gif')
                 : require('../../../../assets/spinner.gif')}
               style={{ width: 36, height: 36 }}
               resizeMode="contain"

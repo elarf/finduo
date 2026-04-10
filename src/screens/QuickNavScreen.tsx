@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   Alert,
+  Image,
   Platform,
   Pressable,
   ScrollView,
@@ -147,7 +148,7 @@ export default function QuickNavScreen() {
             {/* Accounts */}
             <TouchableOpacity
               {...uiProps(uiPath('quick_nav_screen', 'accounts', 'section_header'))}
-              style={styles.menuItem}
+              style={[styles.menuItem, { position: 'relative' }]}
               onPress={() => {
                 logUI(uiPath('quick_nav_screen', 'accounts', 'section_header'), 'press');
                 setMenuAccountsExpanded((prev) => !prev);
@@ -160,15 +161,7 @@ export default function QuickNavScreen() {
                 <Text style={[styles.menuItemText, { flex: 1, textAlign: 'center' }]}>Accounts</Text>
                 <View style={{ minWidth: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 6 }}>
                   {menuAccountsExpanded && (
-                    <TouchableOpacity
-                      style={[styles.menuIconAction, menuAccountsEditMode && { backgroundColor: '#2C4669' }]}
-                      onPress={() => {
-                        logUI(uiPath('quick_nav_screen', 'accounts', 'edit_mode_toggle'), 'press');
-                        setMenuAccountsEditMode((p) => !p);
-                      }}
-                    >
-                      <Text style={styles.manageIconText}>✎</Text>
-                    </TouchableOpacity>
+                    <View style={{ width: 36 }} />
                   )}
                   {(menuAccountsExpanded || accounts.length === 0) && (
                     <TouchableOpacity
@@ -185,6 +178,31 @@ export default function QuickNavScreen() {
                   )}
                 </View>
               </View>
+              {menuAccountsExpanded && (
+                <TouchableOpacity
+                  style={{
+                    position: 'absolute',
+                    right: 40,
+                    top: 0,
+                    bottom: 0,
+                    width: 36,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backgroundColor: menuAccountsEditMode ? '#2C4669' : 'transparent',
+                  }}
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    logUI(uiPath('quick_nav_screen', 'accounts', 'edit_mode_toggle'), 'press');
+                    setMenuAccountsEditMode((p) => !p);
+                  }}
+                >
+                  <Image
+                    source={require('../../assets/edit.png')}
+                    style={{ height: '100%', aspectRatio: 1 }}
+                    resizeMode="contain"
+                  />
+                </TouchableOpacity>
+              )}
             </TouchableOpacity>
             {menuAccountsExpanded && accounts.map((account, accountIdx) => {
               const isOwned = account.created_by === user?.id;
@@ -193,7 +211,7 @@ export default function QuickNavScreen() {
                 <View
                   {...uiProps(uiPath('quick_nav_screen', 'accounts', 'row', account.id))}
                   key={account.id}
-                  style={styles.manageRow}
+                  style={[styles.manageRow, { position: 'relative' }]}
                 >
                   {!menuAccountsEditMode && account.icon && (
                     <Icon name={account.icon as any} size={36} color="#8FA8C9" />
@@ -207,7 +225,6 @@ export default function QuickNavScreen() {
                     }}
                   >
                     <View style={styles.manageNameRow}>
-                      {isPrimary && <Text style={styles.managePrimaryBadge}>★ </Text>}
                       <Text style={styles.manageTitle}>{account.name}</Text>
                     </View>
                     <Text style={styles.manageMeta}>
@@ -218,6 +235,17 @@ export default function QuickNavScreen() {
                       {(accountSettings[account.id]?.carry_over_balance ?? true) ? 'Carry over' : 'No carry over'}
                     </Text>
                   </TouchableOpacity>
+
+                  {/* Primary account indicator */}
+                  {!menuAccountsEditMode && isPrimary && (
+                    <View style={{ position: 'absolute', right: 0, top: 0, bottom: 0, aspectRatio: 1, borderTopRightRadius: 4, borderBottomRightRadius: 4, overflow: 'hidden' }}>
+                      <Image
+                        source={require('../../assets/primacc.gif')}
+                        style={{ width: '100%', height: '100%' }}
+                        resizeMode="cover"
+                      />
+                    </View>
+                  )}
 
                   {menuAccountsEditMode && (
                     <>
@@ -256,33 +284,41 @@ export default function QuickNavScreen() {
 
                       <TouchableOpacity
                         {...uiProps(uiPath('quick_nav_screen', 'accounts', 'include_toggle', account.id))}
-                        style={[styles.manageSmallButton, excludedAccountIds.includes(account.id) && styles.manageSmallButtonActive]}
+                        style={[styles.manageIconButton, { backgroundColor: '#000000' }]}
                         onPress={() => {
                           logUI(uiPath('quick_nav_screen', 'accounts', 'include_toggle', account.id), 'press');
                           toggleAccountExclusion(account.id);
                         }}
                       >
-                        <Text style={[styles.manageSmallText, excludedAccountIds.includes(account.id) && { color: '#f87171' }]}>
-                          {excludedAccountIds.includes(account.id) ? '⊘' : '◉'}
-                        </Text>
+                        <Image
+                          source={excludedAccountIds.includes(account.id)
+                            ? require('../../assets/invisible.png')
+                            : require('../../assets/visible.png')}
+                          style={{ width: 20, height: 20 }}
+                          resizeMode="contain"
+                        />
                       </TouchableOpacity>
 
                       {isOwned ? (
                         <>
                           <TouchableOpacity
                             {...uiProps(uiPath('quick_nav_screen', 'accounts', 'edit_button', account.id))}
-                            style={styles.manageIconButton}
+                            style={[styles.manageIconButton, { backgroundColor: '#000000' }]}
                             onPress={() => {
                               logUI(uiPath('quick_nav_screen', 'accounts', 'edit_button', account.id), 'press');
                               handleClose();
                               openEditAccount(account);
                             }}
                           >
-                            <Text style={styles.manageIconText}>✎</Text>
+                            <Image
+                              source={require('../../assets/edit.png')}
+                              style={{ width: 20, height: 20 }}
+                              resizeMode="contain"
+                            />
                           </TouchableOpacity>
                           <TouchableOpacity
                             {...uiProps(uiPath('quick_nav_screen', 'accounts', 'delete_button', account.id))}
-                            style={styles.manageIconButtonDanger}
+                            style={[styles.manageIconButton, { backgroundColor: '#000000' }]}
                             onPress={() => {
                               logUI(uiPath('quick_nav_screen', 'accounts', 'delete_button', account.id), 'press');
                               if (Platform.OS === 'web') {
@@ -305,7 +341,11 @@ export default function QuickNavScreen() {
                               }
                             }}
                           >
-                            <Text style={styles.manageIconText}>✕</Text>
+                            <Image
+                              source={require('../../assets/delete.png')}
+                              style={{ width: 20, height: 20 }}
+                              resizeMode="contain"
+                            />
                           </TouchableOpacity>
                         </>
                       ) : (
@@ -320,7 +360,7 @@ export default function QuickNavScreen() {
             {/* Income Categories */}
             <TouchableOpacity
               {...uiProps(uiPath('quick_nav_screen', 'income_cats', 'section_header'))}
-              style={styles.menuItem}
+              style={[styles.menuItem, { position: 'relative' }]}
               onPress={() => {
                 logUI(uiPath('quick_nav_screen', 'income_cats', 'section_header'), 'press');
                 setMenuIncomeCatExpanded((prev) => !prev);
@@ -333,15 +373,7 @@ export default function QuickNavScreen() {
                 <Text style={[styles.menuItemText, { flex: 1, textAlign: 'center', color: '#4ade80' }]}>Income</Text>
                 <View style={{ minWidth: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 6 }}>
                   {menuIncomeCatExpanded && (
-                    <TouchableOpacity
-                      style={[styles.menuIconAction, menuIncomeCatEditMode && { backgroundColor: '#2C4669' }]}
-                      onPress={() => {
-                        logUI(uiPath('quick_nav_screen', 'income_cats', 'edit_mode_toggle'), 'press');
-                        setMenuIncomeCatEditMode((p) => !p);
-                      }}
-                    >
-                      <Text style={styles.manageIconText}>✎</Text>
-                    </TouchableOpacity>
+                    <View style={{ width: 36 }} />
                   )}
                   {(menuIncomeCatExpanded || !categories.some((c) => c.type === 'income' && c.name !== 'Transfer')) && (
                     <TouchableOpacity
@@ -357,6 +389,31 @@ export default function QuickNavScreen() {
                   )}
                 </View>
               </View>
+              {menuIncomeCatExpanded && (
+                <TouchableOpacity
+                  style={{
+                    position: 'absolute',
+                    right: 40,
+                    top: 0,
+                    bottom: 0,
+                    width: 36,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backgroundColor: menuIncomeCatEditMode ? '#2C4669' : 'transparent',
+                  }}
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    logUI(uiPath('quick_nav_screen', 'income_cats', 'edit_mode_toggle'), 'press');
+                    setMenuIncomeCatEditMode((p) => !p);
+                  }}
+                >
+                  <Image
+                    source={require('../../assets/edit.png')}
+                    style={{ height: '100%', aspectRatio: 1 }}
+                    resizeMode="contain"
+                  />
+                </TouchableOpacity>
+              )}
             </TouchableOpacity>
             {menuIncomeCatExpanded && (menuIncomeCatEditMode ? categories : selectedCategories).filter((c) => c.type === 'income' && c.name !== 'Transfer').map((category) => {
               const isHidden = hiddenCategoryIds.has(category.id);
@@ -386,28 +443,38 @@ export default function QuickNavScreen() {
                   {menuIncomeCatEditMode && (
                     <>
                       <TouchableOpacity
-                        style={styles.manageIconButton}
+                        style={[styles.manageIconButton, { backgroundColor: '#000000' }]}
                         onPress={() => {
                           logUI(uiPath('quick_nav_screen', 'income_cats', 'visibility_toggle', category.id), 'press');
                           void toggleCategoryHidden(category.id);
                         }}
                       >
-                        <Icon name={hiddenCategoryIds.has(category.id) ? 'EyeOff' : 'Eye'} size={14} color="#94a3b8" />
+                        <Image
+                          source={hiddenCategoryIds.has(category.id)
+                            ? require('../../assets/invisible.png')
+                            : require('../../assets/visible.png')}
+                          style={{ width: 20, height: 20 }}
+                          resizeMode="contain"
+                        />
                       </TouchableOpacity>
                       {isMine && (
                         <TouchableOpacity
-                          style={styles.manageIconButton}
+                          style={[styles.manageIconButton, { backgroundColor: '#000000' }]}
                           onPress={() => {
                             logUI(uiPath('quick_nav_screen', 'income_cats', 'edit_button', category.id), 'press');
                             handleOpenCategory(category.id);
                           }}
                         >
-                          <Text style={styles.manageIconText}>✎</Text>
+                          <Image
+                            source={require('../../assets/edit.png')}
+                            style={{ width: 20, height: 20 }}
+                            resizeMode="contain"
+                          />
                         </TouchableOpacity>
                       )}
                       {isMine && (
                         <TouchableOpacity
-                          style={styles.manageIconButtonDanger}
+                          style={[styles.manageIconButton, { backgroundColor: '#000000' }]}
                           onPress={() => {
                             logUI(uiPath('quick_nav_screen', 'income_cats', 'delete_button', category.id), 'press');
                             if (Platform.OS === 'web') {
@@ -420,7 +487,11 @@ export default function QuickNavScreen() {
                             }
                           }}
                         >
-                          <Text style={styles.manageIconText}>✕</Text>
+                          <Image
+                            source={require('../../assets/delete.png')}
+                            style={{ width: 20, height: 20 }}
+                            resizeMode="contain"
+                          />
                         </TouchableOpacity>
                       )}
                     </>
@@ -432,7 +503,7 @@ export default function QuickNavScreen() {
             {/* Expense Categories */}
             <TouchableOpacity
               {...uiProps(uiPath('quick_nav_screen', 'expense_cats', 'section_header'))}
-              style={styles.menuItem}
+              style={[styles.menuItem, { position: 'relative' }]}
               onPress={() => {
                 logUI(uiPath('quick_nav_screen', 'expense_cats', 'section_header'), 'press');
                 setMenuExpenseCatExpanded((prev) => !prev);
@@ -445,15 +516,7 @@ export default function QuickNavScreen() {
                 <Text style={[styles.menuItemText, { flex: 1, textAlign: 'center', color: '#f87171' }]}>Expense</Text>
                 <View style={{ minWidth: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 6 }}>
                   {menuExpenseCatExpanded && (
-                    <TouchableOpacity
-                      style={[styles.menuIconAction, menuExpenseCatEditMode && { backgroundColor: '#2C4669' }]}
-                      onPress={() => {
-                        logUI(uiPath('quick_nav_screen', 'expense_cats', 'edit_mode_toggle'), 'press');
-                        setMenuExpenseCatEditMode((p) => !p);
-                      }}
-                    >
-                      <Text style={styles.manageIconText}>✎</Text>
-                    </TouchableOpacity>
+                    <View style={{ width: 36 }} />
                   )}
                   {(menuExpenseCatExpanded || !categories.some((c) => c.type === 'expense' && c.name !== 'Transfer')) && (
                     <TouchableOpacity
@@ -469,6 +532,31 @@ export default function QuickNavScreen() {
                   )}
                 </View>
               </View>
+              {menuExpenseCatExpanded && (
+                <TouchableOpacity
+                  style={{
+                    position: 'absolute',
+                    right: 40,
+                    top: 0,
+                    bottom: 0,
+                    width: 36,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backgroundColor: menuExpenseCatEditMode ? '#2C4669' : 'transparent',
+                  }}
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    logUI(uiPath('quick_nav_screen', 'expense_cats', 'edit_mode_toggle'), 'press');
+                    setMenuExpenseCatEditMode((p) => !p);
+                  }}
+                >
+                  <Image
+                    source={require('../../assets/edit.png')}
+                    style={{ height: '100%', aspectRatio: 1 }}
+                    resizeMode="contain"
+                  />
+                </TouchableOpacity>
+              )}
             </TouchableOpacity>
             {menuExpenseCatExpanded && (menuExpenseCatEditMode ? categories : selectedCategories).filter((c) => c.type === 'expense' && c.name !== 'Transfer').map((category) => {
               const isHidden = hiddenCategoryIds.has(category.id);
@@ -498,28 +586,38 @@ export default function QuickNavScreen() {
                   {menuExpenseCatEditMode && (
                     <>
                       <TouchableOpacity
-                        style={styles.manageIconButton}
+                        style={[styles.manageIconButton, { backgroundColor: '#000000' }]}
                         onPress={() => {
                           logUI(uiPath('quick_nav_screen', 'expense_cats', 'visibility_toggle', category.id), 'press');
                           void toggleCategoryHidden(category.id);
                         }}
                       >
-                        <Icon name={hiddenCategoryIds.has(category.id) ? 'EyeOff' : 'Eye'} size={14} color="#94a3b8" />
+                        <Image
+                          source={hiddenCategoryIds.has(category.id)
+                            ? require('../../assets/invisible.png')
+                            : require('../../assets/visible.png')}
+                          style={{ width: 20, height: 20 }}
+                          resizeMode="contain"
+                        />
                       </TouchableOpacity>
                       {isMine && (
                         <TouchableOpacity
-                          style={styles.manageIconButton}
+                          style={[styles.manageIconButton, { backgroundColor: '#000000' }]}
                           onPress={() => {
                             logUI(uiPath('quick_nav_screen', 'expense_cats', 'edit_button', category.id), 'press');
                             handleOpenCategory(category.id);
                           }}
                         >
-                          <Text style={styles.manageIconText}>✎</Text>
+                          <Image
+                            source={require('../../assets/edit.png')}
+                            style={{ width: 20, height: 20 }}
+                            resizeMode="contain"
+                          />
                         </TouchableOpacity>
                       )}
                       {isMine && (
                         <TouchableOpacity
-                          style={styles.manageIconButtonDanger}
+                          style={[styles.manageIconButton, { backgroundColor: '#000000' }]}
                           onPress={() => {
                             logUI(uiPath('quick_nav_screen', 'expense_cats', 'delete_button', category.id), 'press');
                             if (Platform.OS === 'web') {
@@ -532,7 +630,11 @@ export default function QuickNavScreen() {
                             }
                           }}
                         >
-                          <Text style={styles.manageIconText}>✕</Text>
+                          <Image
+                            source={require('../../assets/delete.png')}
+                            style={{ width: 20, height: 20 }}
+                            resizeMode="contain"
+                          />
                         </TouchableOpacity>
                       )}
                     </>
@@ -546,7 +648,7 @@ export default function QuickNavScreen() {
             {/* Tags */}
             <TouchableOpacity
               {...uiProps(uiPath('quick_nav_screen', 'tags', 'section_header'))}
-              style={styles.menuItem}
+              style={[styles.menuItem, { position: 'relative' }]}
               onPress={() => {
                 logUI(uiPath('quick_nav_screen', 'tags', 'section_header'), 'press');
                 setMenuTagsExpanded((prev) => !prev);
@@ -559,15 +661,7 @@ export default function QuickNavScreen() {
                 <Text style={[styles.menuItemText, { flex: 1, textAlign: 'center' }]}>Tags</Text>
                 <View style={{ minWidth: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 6 }}>
                   {menuTagsExpanded && (
-                    <TouchableOpacity
-                      style={[styles.menuIconAction, menuTagsEditMode && { backgroundColor: '#2C4669' }]}
-                      onPress={() => {
-                        logUI(uiPath('quick_nav_screen', 'tags', 'edit_mode_toggle'), 'press');
-                        setMenuTagsEditMode((p) => !p);
-                      }}
-                    >
-                      <Text style={styles.manageIconText}>✎</Text>
-                    </TouchableOpacity>
+                    <View style={{ width: 36 }} />
                   )}
                   {(menuTagsExpanded || selectedTags.length === 0) && (
                     <TouchableOpacity
@@ -584,6 +678,31 @@ export default function QuickNavScreen() {
                   )}
                 </View>
               </View>
+              {menuTagsExpanded && (
+                <TouchableOpacity
+                  style={{
+                    position: 'absolute',
+                    right: 40,
+                    top: 0,
+                    bottom: 0,
+                    width: 36,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backgroundColor: menuTagsEditMode ? '#2C4669' : 'transparent',
+                  }}
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    logUI(uiPath('quick_nav_screen', 'tags', 'edit_mode_toggle'), 'press');
+                    setMenuTagsEditMode((p) => !p);
+                  }}
+                >
+                  <Image
+                    source={require('../../assets/edit.png')}
+                    style={{ height: '100%', aspectRatio: 1 }}
+                    resizeMode="contain"
+                  />
+                </TouchableOpacity>
+              )}
             </TouchableOpacity>
             {menuTagsExpanded && selectedTags.map((tag) => {
               const isActive = selectedTagFilter === tag.id;
@@ -610,17 +729,21 @@ export default function QuickNavScreen() {
                 {menuTagsEditMode && (
                   <>
                     <TouchableOpacity
-                      style={styles.manageIconButton}
+                      style={[styles.manageIconButton, { backgroundColor: '#000000' }]}
                       onPress={() => {
                         logUI(uiPath('quick_nav_screen', 'tags', 'edit_button', tag.id), 'press');
                         handleClose();
                         openEditTag(tag);
                       }}
                     >
-                      <Text style={styles.manageIconText}>✎</Text>
+                      <Image
+                        source={require('../../assets/edit.png')}
+                        style={{ width: 20, height: 20 }}
+                        resizeMode="contain"
+                      />
                     </TouchableOpacity>
                     <TouchableOpacity
-                      style={styles.manageIconButtonDanger}
+                      style={[styles.manageIconButton, { backgroundColor: '#000000' }]}
                       onPress={() => {
                         logUI(uiPath('quick_nav_screen', 'tags', 'delete_button', tag.id), 'press');
                         if (Platform.OS === 'web') {
@@ -633,7 +756,11 @@ export default function QuickNavScreen() {
                         }
                       }}
                     >
-                      <Text style={styles.manageIconText}>✕</Text>
+                      <Image
+                        source={require('../../assets/delete.png')}
+                        style={{ width: 20, height: 20 }}
+                        resizeMode="contain"
+                      />
                     </TouchableOpacity>
                   </>
                 )}

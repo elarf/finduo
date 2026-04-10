@@ -26,7 +26,7 @@ export default function DashboardLayout() {
         <Image
           {...uiProps(uiPath('dashboard', 'layout', 'loading_indicator'))}
           source={require('../../../../assets/fdstar.gif')}
-          style={{ width: 120, height: 120 }}
+          style={{ width: '100%', aspectRatio: 1 }}
           resizeMode="contain"
         />
       </View>

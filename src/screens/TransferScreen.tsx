@@ -59,7 +59,7 @@ export default function TransferScreen() {
     transferDate,
     transferNote,
     setTransferNote,
-    appendNumpad,
+    transferAppendNumpad,
     openDatePicker,
     saving,
     saveTransfer,
@@ -99,7 +99,7 @@ export default function TransferScreen() {
 
   function handleNumpad(k: string) {
     if (activeField === 'source') {
-      appendNumpad(k);
+      transferAppendNumpad(k);
     } else if (activeField === 'rate') {
       localAppend(transferRate, setTransferRate, k, false);
     } else {

@@ -28,6 +28,7 @@ export type AppCategory = {
 
 export type AppTag = {
   id: string;
+  user_id: string;
   account_id: string | null;
   name: string;
   color?: string | null;

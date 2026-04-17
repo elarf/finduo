@@ -164,14 +164,14 @@ export default function QuickNavScreen() {
               {(menuAccountsExpanded || accounts.length === 0) && (
                 <TouchableOpacity
                   {...uiProps(uiPath('quick_nav_screen', 'accounts', 'add_button'))}
-                  style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: 36, alignItems: 'center', justifyContent: 'center' }}
+                  style={{ position: 'absolute', right: 0, top: 0, bottom: 0, aspectRatio: 1, alignItems: 'center', justifyContent: 'center' }}
                   onPress={() => {
                     logUI(uiPath('quick_nav_screen', 'accounts', 'add_button'), 'press');
                     handleClose();
                     openCreateAccount();
                   }}
                 >
-                  <Image source={require('../../assets/new.png')} style={{ height: '100%', aspectRatio: 1 }} resizeMode="contain" />
+                  <Image source={require('../../assets/new.png')} style={{ width: '90%', aspectRatio: 1 }} resizeMode="contain" />
                 </TouchableOpacity>
               )}
               {menuAccountsExpanded && (
@@ -181,7 +181,7 @@ export default function QuickNavScreen() {
                     right: 42,
                     top: 0,
                     bottom: 0,
-                    width: 36,
+                    aspectRatio: 1,
                     alignItems: 'center',
                     justifyContent: 'center',
                     backgroundColor: menuAccountsEditMode ? '#2C4669' : 'transparent',
@@ -194,7 +194,7 @@ export default function QuickNavScreen() {
                 >
                   <Image
                     source={require('../../assets/edit.png')}
-                    style={{ height: '100%', aspectRatio: 1 }}
+                    style={{ width: '90%', aspectRatio: 1 }}
                     resizeMode="contain"
                   />
                 </TouchableOpacity>
@@ -372,13 +372,13 @@ export default function QuickNavScreen() {
               {(menuIncomeCatExpanded || !categories.some((c) => c.type === 'income' && c.name !== 'Transfer')) && (
                 <TouchableOpacity
                   {...uiProps(uiPath('quick_nav_screen', 'income_cats', 'add_button'))}
-                  style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: 36, alignItems: 'center', justifyContent: 'center' }}
+                  style={{ position: 'absolute', right: 0, top: 0, bottom: 0, aspectRatio: 1, alignItems: 'center', justifyContent: 'center' }}
                   onPress={() => {
                     logUI(uiPath('quick_nav_screen', 'income_cats', 'add_button'), 'press');
                     handleOpenCategory(null);
                   }}
                 >
-                  <Image source={require('../../assets/new.png')} style={{ height: '100%', aspectRatio: 1 }} resizeMode="contain" />
+                  <Image source={require('../../assets/new.png')} style={{ width: '90%', aspectRatio: 1 }} resizeMode="contain" />
                 </TouchableOpacity>
               )}
               {menuIncomeCatExpanded && (
@@ -388,7 +388,7 @@ export default function QuickNavScreen() {
                     right: 42,
                     top: 0,
                     bottom: 0,
-                    width: 36,
+                    aspectRatio: 1,
                     alignItems: 'center',
                     justifyContent: 'center',
                     backgroundColor: menuIncomeCatEditMode ? '#2C4669' : 'transparent',
@@ -401,7 +401,7 @@ export default function QuickNavScreen() {
                 >
                   <Image
                     source={require('../../assets/edit.png')}
-                    style={{ height: '100%', aspectRatio: 1 }}
+                    style={{ width: '90%', aspectRatio: 1 }}
                     resizeMode="contain"
                   />
                 </TouchableOpacity>
@@ -511,13 +511,13 @@ export default function QuickNavScreen() {
               {(menuExpenseCatExpanded || !categories.some((c) => c.type === 'expense' && c.name !== 'Transfer')) && (
                 <TouchableOpacity
                   {...uiProps(uiPath('quick_nav_screen', 'expense_cats', 'add_button'))}
-                  style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: 36, alignItems: 'center', justifyContent: 'center' }}
+                  style={{ position: 'absolute', right: 0, top: 0, bottom: 0, aspectRatio: 1, alignItems: 'center', justifyContent: 'center' }}
                   onPress={() => {
                     logUI(uiPath('quick_nav_screen', 'expense_cats', 'add_button'), 'press');
                     handleOpenCategory(null);
                   }}
                 >
-                  <Image source={require('../../assets/new.png')} style={{ height: '100%', aspectRatio: 1 }} resizeMode="contain" />
+                  <Image source={require('../../assets/new.png')} style={{ width: '90%', aspectRatio: 1 }} resizeMode="contain" />
                 </TouchableOpacity>
               )}
               {menuExpenseCatExpanded && (
@@ -527,7 +527,7 @@ export default function QuickNavScreen() {
                     right: 42,
                     top: 0,
                     bottom: 0,
-                    width: 36,
+                    aspectRatio: 1,
                     alignItems: 'center',
                     justifyContent: 'center',
                     backgroundColor: menuExpenseCatEditMode ? '#2C4669' : 'transparent',
@@ -540,7 +540,7 @@ export default function QuickNavScreen() {
                 >
                   <Image
                     source={require('../../assets/edit.png')}
-                    style={{ height: '100%', aspectRatio: 1 }}
+                    style={{ width: '90%', aspectRatio: 1 }}
                     resizeMode="contain"
                   />
                 </TouchableOpacity>
@@ -652,14 +652,14 @@ export default function QuickNavScreen() {
               {(menuTagsExpanded || selectedTags.length === 0) && (
                 <TouchableOpacity
                   {...uiProps(uiPath('quick_nav_screen', 'tags', 'add_button'))}
-                  style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: 36, alignItems: 'center', justifyContent: 'center' }}
+                  style={{ position: 'absolute', right: 0, top: 0, bottom: 0, aspectRatio: 1, alignItems: 'center', justifyContent: 'center' }}
                   onPress={() => {
                     logUI(uiPath('quick_nav_screen', 'tags', 'add_button'), 'press');
                     handleClose();
                     openCreateTag();
                   }}
                 >
-                  <Image source={require('../../assets/new.png')} style={{ height: '100%', aspectRatio: 1 }} resizeMode="contain" />
+                  <Image source={require('../../assets/new.png')} style={{ width: '90%', aspectRatio: 1 }} resizeMode="contain" />
                 </TouchableOpacity>
               )}
               {menuTagsExpanded && (
@@ -669,7 +669,7 @@ export default function QuickNavScreen() {
                     right: 42,
                     top: 0,
                     bottom: 0,
-                    width: 36,
+                    aspectRatio: 1,
                     alignItems: 'center',
                     justifyContent: 'center',
                     backgroundColor: menuTagsEditMode ? '#2C4669' : 'transparent',
@@ -682,7 +682,7 @@ export default function QuickNavScreen() {
                 >
                   <Image
                     source={require('../../assets/edit.png')}
-                    style={{ height: '100%', aspectRatio: 1 }}
+                    style={{ width: '90%', aspectRatio: 1 }}
                     resizeMode="contain"
                   />
                 </TouchableOpacity>

@@ -466,7 +466,7 @@ export function DashboardProvider({
   const transactionsQ = useTransactionsQuery(accountIds);
   const transactions: AppTransaction[] = transactionsQ.data ?? [];
 
-  const tagsQ = useTagsQuery(accountIds);
+  const tagsQ = useTagsQuery(user?.id ?? '');
   const tags: AppTag[] = tagsQ.data ?? [];
 
   const settingsQ = useAccountSettingsQuery(accounts);
@@ -521,7 +521,7 @@ export function DashboardProvider({
   const setTags: React.Dispatch<React.SetStateAction<AppTag[]>> = useCallback(
     (action) => {
       queryClient.setQueryData(
-        tagsQueryKey(_sortedAccountKeyRef.current),
+        tagsQueryKey(user?.id ?? ''),
         (old: AppTag[] | undefined) => {
           if (old === undefined) return old;
           return typeof action === 'function' ? action(old) : action;
@@ -642,7 +642,7 @@ export function DashboardProvider({
       queryClient.invalidateQueries({ queryKey: ['accounts', user.id] }),
       queryClient.invalidateQueries({ queryKey: ['categories', user.id] }),
       queryClient.invalidateQueries({ queryKey: ['transactions', key] }),
-      queryClient.invalidateQueries({ queryKey: ['tags', key] }),
+      queryClient.invalidateQueries({ queryKey: ['tags', user.id] }),
       queryClient.invalidateQueries({ queryKey: ['account_settings', key] }),
     ]);
     setReloadKey((k) => k + 1);
@@ -1684,8 +1684,8 @@ export function DashboardProvider({
     try {
       const { data, error } = await supabase
         .from('tags')
-        .insert({ account_id: null, name: newTagName.trim() })
-        .select('id,account_id,name,color')
+        .insert({ account_id: null, user_id: user!.id, name: newTagName.trim() })
+        .select('id,user_id,account_id,name,color')
         .single();
 
       if (error) throw error;
@@ -1735,8 +1735,8 @@ export function DashboardProvider({
       } else {
         const { data: newTag, error } = await supabase
           .from('tags')
-          .insert({ account_id: null, name: tagName.trim(), color: tagColor, icon: tagIcon })
-          .select('id,account_id,name,color,icon')
+          .insert({ account_id: null, user_id: user!.id, name: tagName.trim(), color: tagColor, icon: tagIcon })
+          .select('id,user_id,account_id,name,color,icon')
           .single();
         if (error) throw error;
         if (newTag) {
@@ -2348,7 +2348,7 @@ export function DashboardProvider({
       await queryClient.invalidateQueries({ queryKey: ['categories', user.id] });
       if (_sortedAccountKey) {
         await queryClient.invalidateQueries({ queryKey: ['transactions', _sortedAccountKey] });
-        await queryClient.invalidateQueries({ queryKey: ['tags', _sortedAccountKey] });
+        await queryClient.invalidateQueries({ queryKey: ['tags', user.id] });
         await queryClient.invalidateQueries({ queryKey: ['account_settings', _sortedAccountKey] });
       }
       Alert.alert('Joined', 'Shared account added.');

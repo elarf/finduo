@@ -25,10 +25,12 @@ export default function TagScreen() {
     openIconPickerSheet,
     saving,
     tags,
+    user,
   } = useDashboard();
 
   const editingTagId = tagId ?? null;
   const currentTag = editingTagId ? tags.find((t) => t.id === editingTagId) : null;
+  const isOwner = !editingTagId || !currentTag || currentTag.user_id === user?.id;
 
   // Initialize form state when editing
   useEffect(() => {
@@ -59,13 +61,14 @@ export default function TagScreen() {
     <ModalShell onDismiss={handleClose} maxWidth={440}>
       <View style={styles.modalCard} {...uiProps(uiPath('tag_screen', 'modal', 'card'))}>
         <Text style={styles.modalTitle} {...uiProps(uiPath('tag_screen', 'modal', 'title'))}>
-          {editingTagId ? 'Edit tag' : 'Create tag'}
+          {editingTagId ? (isOwner ? 'Edit tag' : 'View tag') : 'Create tag'}
         </Text>
           <TextInput
             placeholder="Tag name"
             placeholderTextColor="#64748B"
             value={tagName}
-            onChangeText={setTagName}
+            onChangeText={isOwner ? setTagName : undefined}
+            editable={isOwner}
             style={styles.input}
             {...uiProps(uiPath('tag_screen', 'form', 'name_input'))}
           />
@@ -77,7 +80,8 @@ export default function TagScreen() {
               <TouchableOpacity
                 key={preset}
                 style={[styles.colorPresetDot, { backgroundColor: preset }, tagColor === preset && styles.colorPresetDotActive]}
-                onPress={() => { logUI(uiPath('tag_screen', 'form', 'color_dot', String(index)), 'press'); setTagColor(tagColor === preset ? null : preset); }}
+                onPress={isOwner ? () => { logUI(uiPath('tag_screen', 'form', 'color_dot', String(index)), 'press'); setTagColor(tagColor === preset ? null : preset); } : undefined}
+                disabled={!isOwner}
                 {...uiProps(uiPath('tag_screen', 'form', 'color_dot', String(index)))}
               />
             ))}
@@ -88,7 +92,8 @@ export default function TagScreen() {
           <View style={styles.iconPickerRow}>
             <TouchableOpacity
               style={[styles.iconPickerPreview, tagIcon ? { borderColor: tagColor ?? '#53E3A6' } : undefined]}
-              onPress={() => { logUI(uiPath('tag_screen', 'form', 'icon_picker_button'), 'press'); openIconPickerSheet('tag'); }}
+              onPress={isOwner ? () => { logUI(uiPath('tag_screen', 'form', 'icon_picker_button'), 'press'); openIconPickerSheet('tag'); } : undefined}
+              disabled={!isOwner}
               {...uiProps(uiPath('tag_screen', 'form', 'icon_picker_button'))}
             >
               {tagIcon ? (
@@ -96,9 +101,9 @@ export default function TagScreen() {
               ) : (
                 <Icon name="Tag" size={24} color="#64748B" />
               )}
-              <Icon name="expand_more" size={16} color="#64748B" style={{ marginLeft: 4 }} />
+              {isOwner && <Icon name="expand_more" size={16} color="#64748B" style={{ marginLeft: 4 }} />}
             </TouchableOpacity>
-            {tagIcon && (
+            {isOwner && tagIcon && (
               <TouchableOpacity onPress={() => setTagIcon(null)}>
                 <Text style={styles.linkAction}>Clear</Text>
               </TouchableOpacity>
@@ -106,7 +111,7 @@ export default function TagScreen() {
           </View>
 
           <View style={styles.modalActions}>
-            {editingTagId && (
+            {editingTagId && isOwner && (
               <TouchableOpacity
                 style={styles.modalDanger}
                 onPress={() => {
@@ -135,6 +140,7 @@ export default function TagScreen() {
             >
               <Text style={styles.modalSecondaryText}>Cancel</Text>
             </TouchableOpacity>
+            {isOwner && (
             <TouchableOpacity
               style={styles.modalPrimary}
               onPress={() => { logUI(uiPath('tag_screen', 'actions', 'save_button'), 'press'); void handleSave(); }}
@@ -143,6 +149,7 @@ export default function TagScreen() {
             >
               <Text style={styles.modalPrimaryText}>{editingTagId ? 'Save' : 'Create'}</Text>
             </TouchableOpacity>
+            )}
           </View>
         </View>
     </ModalShell>

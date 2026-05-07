@@ -7,6 +7,7 @@ import { DashboardProvider } from '../context/DashboardContext';
 import LoginScreen from '../screens/LoginScreen';
 import DashboardScreen from '../screens/DashboardScreen';
 import FinBiomeScreen from '../screens/FinBiomeScreen';
+import FinGoScreen from '../screens/FinGoScreen';
 import EntryScreen from '../screens/EntryScreen';
 import CategoryScreen from '../screens/CategoryScreen';
 import TagScreen from '../screens/TagScreen';
@@ -27,6 +28,7 @@ export type RootStackParamList = {
   // Main screens
   Dashboard: { prefillEntry?: object } | undefined;
   FinBiome: undefined;
+  FinGo: undefined;
 
   // Modal screens
   Entry: { transactionId?: string } | undefined;
@@ -70,6 +72,7 @@ export default function RootNavigator() {
             {/* Main screens */}
             <Stack.Screen name="Dashboard" component={DashboardScreen} />
             <Stack.Screen name="FinBiome" component={FinBiomeScreen} />
+            <Stack.Screen name="FinGo" component={FinGoScreen} />
 
             {/* Modal screens - presentation handled per-platform */}
             <Stack.Group screenOptions={{

@@ -1,0 +1,673 @@
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  View, Text, ScrollView, TouchableOpacity,
+  StyleSheet, Modal, TextInput, Platform, Alert,
+} from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import { useAuth } from '../context/AuthContext';
+import { useAssets } from '../hooks/useAssets';
+import { useAssetParts } from '../hooks/useAssetParts';
+import { useUsageLogs } from '../hooks/useUsageLogs';
+import { useAssetTransactions } from '../hooks/useAssetTransactions';
+import { useComponents } from '../hooks/useComponents';
+import { useServiceIntervals } from '../hooks/useServiceIntervals';
+import { useServiceRecords } from '../hooks/useServiceRecords';
+import ServiceDashboard from '../components/fingo/ServiceDashboard';
+import AssetAccordion from '../components/fingo/AssetAccordion';
+import GoButton from '../components/fingo/GoButton';
+import DashboardHeader from '../components/dashboard/layout/DashboardHeader';
+import ComponentLibrarySheet from '../components/fingo/ComponentLibrarySheet';
+import ComponentFormSheet from '../components/fingo/ComponentFormSheet';
+import ServiceIntervalSheet from '../components/fingo/ServiceIntervalSheet';
+import ServiceRecordSheet from '../components/fingo/ServiceRecordSheet';
+import type { ComponentActionType } from '../components/fingo/ComponentActionSheet';
+import type {
+  FinGoAsset, AssetPart, AssetType, FinGoSortOrder,
+  Component, ComponentServiceInterval, ComponentTemplate, UsageEntry,
+} from '../types/fingo';
+import type { AppCategory } from '../types/dashboard';
+import { supabase } from '../lib/supabase';
+import { uiPath, uiProps, logUI } from '../lib/devtools';
+
+const ASSET_TYPES: AssetType[] = ['vehicle', 'bike', 'shoe', 'other'];
+
+export default function FinGoScreen() {
+  const navigation = useNavigation();
+  const { session } = useAuth();
+  const user = session?.user ?? null;
+
+  // ─── Existing hooks ──────────────────────────────────────────────────────────
+  const { assets, loading, loadAssets, createAsset, updateAsset, deleteAsset } = useAssets(user);
+  const { parts, loadParts, servicePart } = useAssetParts();
+  const { logs, loadLogs, addUsageLog } = useUsageLogs(user);
+  const { categoryLinks, transactions, loadAssetStats, linkCategory, unlinkCategory } = useAssetTransactions();
+
+  // ─── New component hooks ──────────────────────────────────────────────────────
+  const {
+    componentsByAsset, storageComponents, getTree, getAllComponents,
+    loadComponents, loadStorageComponents,
+    createComponent, updateComponent,
+    installComponent, uninstallComponent,
+    retireComponent, deleteComponent, replaceComponent,
+  } = useComponents(user);
+  const { intervals, loadIntervals, createInterval } = useServiceIntervals();
+  const { createRecord } = useServiceRecords(user);
+
+  // ─── UI state ─────────────────────────────────────────────────────────────────
+  const [categories, setCategories] = useState<AppCategory[]>([]);
+  const [sortOrder, setSortOrder] = useState<FinGoSortOrder>('deadline');
+  const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
+  const [expandedAssetId, setExpandedAssetId] = useState<string | null>(null);
+
+  // Asset create/edit modal
+  const [showAssetModal, setShowAssetModal] = useState(false);
+  const [editingAsset, setEditingAsset] = useState<FinGoAsset | null>(null);
+  const [assetName, setAssetName] = useState('');
+  const [assetType, setAssetType] = useState<AssetType>('vehicle');
+  const [assetSaving, setAssetSaving] = useState(false);
+
+  // Component sheet state
+  const [showLibrary, setShowLibrary] = useState(false);
+  const [showComponentForm, setShowComponentForm] = useState(false);
+  const [showIntervalSheet, setShowIntervalSheet] = useState(false);
+  const [showRecordSheet, setShowRecordSheet] = useState(false);
+
+  // Pending context for sheets
+  const [pendingAsset, setPendingAsset] = useState<FinGoAsset | null>(null);
+  const [pendingParentId, setPendingParentId] = useState<string | null>(null);
+  const [pendingTemplate, setPendingTemplate] = useState<ComponentTemplate | null>(null);
+  const [pendingCustomName, setPendingCustomName] = useState('');
+  const [activeComponent, setActiveComponent] = useState<Component | null>(null);
+  const [editingInterval, setEditingInterval] = useState<ComponentServiceInterval | null>(null);
+  const [libraryForReplace, setLibraryForReplace] = useState(false);
+
+  // ─── Load data on mount ───────────────────────────────────────────────────────
+  useEffect(() => {
+    void loadAssets();
+    void loadCategories();
+  }, [loadAssets]);
+
+  useEffect(() => {
+    for (const asset of assets) {
+      void loadParts(asset.id);
+      void loadAssetStats(asset.id);
+      void loadComponents(asset.id);
+      void loadLogs(asset.id);
+    }
+  }, [assets, loadParts, loadAssetStats, loadComponents, loadLogs]);
+
+  // Load intervals for all components as they come in
+  const componentIdStr = useMemo(
+    () => Object.values(componentsByAsset).flat().map((c) => c.id).join(','),
+    [componentsByAsset],
+  );
+  useEffect(() => {
+    for (const id of componentIdStr.split(',').filter(Boolean)) {
+      void loadIntervals(id);
+    }
+  }, [componentIdStr, loadIntervals]);
+
+  const loadCategories = async () => {
+    const { data } = await supabase.from('categories').select('*');
+    setCategories((data ?? []) as AppCategory[]);
+  };
+
+  // ─── Asset CRUD ───────────────────────────────────────────────────────────────
+  const openCreateAsset = useCallback(() => {
+    setEditingAsset(null);
+    setAssetName('');
+    setAssetType('vehicle');
+    setShowAssetModal(true);
+  }, []);
+
+  const openEditAsset = useCallback((asset: FinGoAsset) => {
+    setEditingAsset(asset);
+    setAssetName(asset.name);
+    setAssetType(asset.type);
+    setShowAssetModal(true);
+  }, []);
+
+  const handleSaveAsset = async () => {
+    if (!assetName.trim()) return;
+    setAssetSaving(true);
+    try {
+      if (editingAsset) {
+        await updateAsset(editingAsset.id, { name: assetName.trim(), type: assetType });
+      } else {
+        await createAsset(assetName.trim(), assetType);
+      }
+      setShowAssetModal(false);
+    } finally {
+      setAssetSaving(false);
+    }
+  };
+
+  const handleDeleteAsset = useCallback(async (assetId: string) => {
+    await deleteAsset(assetId);
+    if (selectedAssetId === assetId) setSelectedAssetId(null);
+    if (expandedAssetId === assetId) setExpandedAssetId(null);
+  }, [deleteAsset, selectedAssetId, expandedAssetId]);
+
+  const handleServicePart = useCallback(async (part: AssetPart, asset: FinGoAsset) => {
+    await servicePart(part.id, asset.id, asset.current_usage);
+  }, [servicePart]);
+
+  // ─── Component handlers ───────────────────────────────────────────────────────
+
+  /** "Add Component" / "Add sub-component" tapped on an asset accordion */
+  const handleAddComponent = useCallback((asset: FinGoAsset, parentId: string | null) => {
+    setPendingAsset(asset);
+    setPendingParentId(parentId);
+    setPendingTemplate(null);
+    setLibraryForReplace(false);
+    void loadStorageComponents(asset.type);
+    setShowLibrary(true);
+  }, [loadStorageComponents]);
+
+  /** User picked something from the library */
+  const handleLibrarySelect = useCallback(async (selection: { type: 'template'; template: ComponentTemplate } | { type: 'storage'; component: Component } | { type: 'custom'; name: string }) => {
+    if (!pendingAsset) return;
+
+    if (selection.type === 'storage') {
+      // Reinstall directly
+      await installComponent(selection.component.id, pendingAsset.id, pendingParentId);
+      return;
+    }
+
+    if (selection.type === 'custom') {
+      setPendingTemplate(null);
+      setPendingCustomName(selection.name);
+      setShowComponentForm(true);
+      return;
+    }
+
+    if (libraryForReplace && activeComponent) {
+      // Replace: retire old, create new with selected template
+      await replaceComponent(
+        activeComponent,
+        pendingAsset.id,
+        pendingParentId,
+        selection.template.key,
+        selection.template.name,
+      );
+      setActiveComponent(null);
+      setLibraryForReplace(false);
+      return;
+    }
+
+    // New component: open form pre-filled with template
+    setPendingTemplate(selection.template);
+    setPendingCustomName('');
+    setShowComponentForm(true);
+  }, [pendingAsset, pendingParentId, libraryForReplace, activeComponent, installComponent, replaceComponent]);
+
+  /** Save from ComponentFormSheet */
+  const handleComponentFormSave = useCallback(async (name: string, notes: string | null) => {
+    if (!pendingAsset) return;
+    if (activeComponent && !libraryForReplace) {
+      // Edit mode
+      await updateComponent(activeComponent.id, pendingAsset.id, { name, notes });
+    } else {
+      await createComponent(
+        pendingAsset.id,
+        pendingAsset.type,
+        pendingParentId,
+        pendingTemplate?.key ?? null,
+        name,
+        notes,
+      );
+    }
+    setActiveComponent(null);
+    setPendingTemplate(null);
+  }, [pendingAsset, pendingParentId, pendingTemplate, activeComponent, libraryForReplace, updateComponent, createComponent]);
+
+  /** Action sheet fired */
+  const handleComponentAction = useCallback((action: ComponentActionType, component: Component, asset: FinGoAsset) => {
+    setActiveComponent(component);
+    setPendingAsset(asset);
+    setPendingParentId(component.parent_component_id ?? null);
+
+    switch (action) {
+      case 'edit':
+        setPendingTemplate(null);
+        setShowComponentForm(true);
+        break;
+
+      case 'set_picture':
+        // For now same as edit (picture_url field)
+        setPendingTemplate(null);
+        setShowComponentForm(true);
+        break;
+
+      case 'add_sub':
+        setPendingParentId(component.id);
+        setPendingTemplate(null);
+        setLibraryForReplace(false);
+        void loadStorageComponents(asset.type);
+        setShowLibrary(true);
+        break;
+
+      case 'add_interval':
+        setEditingInterval(null);
+        setShowIntervalSheet(true);
+        break;
+
+      case 'log_service':
+        setShowRecordSheet(true);
+        break;
+
+      case 'uninstall':
+        void uninstallComponent(component.id, asset.id);
+        break;
+
+      case 'install':
+        void installComponent(component.id, asset.id, null);
+        break;
+
+      case 'replace_same':
+        void replaceComponent(
+          component,
+          asset.id,
+          component.parent_component_id ?? null,
+          component.template_key ?? null,
+          component.name,
+        );
+        break;
+
+      case 'replace_new':
+        setLibraryForReplace(true);
+        setPendingParentId(component.parent_component_id ?? null);
+        void loadStorageComponents(asset.type);
+        setShowLibrary(true);
+        break;
+
+      case 'retire':
+        void retireComponent(component.id, asset.id);
+        break;
+
+      case 'delete': {
+        const doDelete = () => void deleteComponent(component.id, asset.id);
+        if (Platform.OS === 'web') {
+          if (window.confirm(`Delete "${component.name}"? This cannot be undone.`)) doDelete();
+        } else {
+          Alert.alert('Delete component', `Delete "${component.name}"?`, [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Delete', style: 'destructive', onPress: doDelete },
+          ]);
+        }
+        break;
+      }
+    }
+  }, [
+    loadStorageComponents, uninstallComponent, installComponent,
+    replaceComponent, retireComponent, deleteComponent,
+  ]);
+
+  return (
+    <View {...uiProps(uiPath('fingo', 'screen', 'container'))} style={styles.screen}>
+      {/* Header */}
+      <DashboardHeader
+        onBack={() => {
+          logUI(uiPath('fingo', 'header', 'back_button'), 'press');
+          navigation.goBack();
+        }}
+        rightElement={
+          <TouchableOpacity
+            {...uiProps(uiPath('fingo', 'header', 'add_button'))}
+            onPress={() => {
+              logUI(uiPath('fingo', 'header', 'add_button'), 'press');
+              openCreateAsset();
+            }}
+            style={styles.addButton}
+          >
+            <Text style={styles.addButtonText}>＋</Text>
+          </TouchableOpacity>
+        }
+      />
+
+      {/* Main scroll area */}
+      <ScrollView
+        {...uiProps(uiPath('fingo', 'screen', 'scroll_view'))}
+        style={styles.scroll}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        {loading && assets.length === 0 ? (
+          <Text style={styles.loadingText}>Loading assets…</Text>
+        ) : assets.length === 0 ? (
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyTitle}>No assets yet</Text>
+            <Text style={styles.emptyHint}>
+              Tap + to add your first asset — a car, bike, shoe, or anything with wearable parts.
+            </Text>
+            <TouchableOpacity style={styles.emptyButton} onPress={openCreateAsset}>
+              <Text style={styles.emptyButtonText}>Add Asset</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <>
+            <ServiceDashboard
+              assets={assets}
+              partsByAsset={parts}
+              sortOrder={sortOrder}
+              onSortChange={setSortOrder}
+              onServicePart={handleServicePart}
+            />
+
+            <Text style={styles.sectionLabel}>Your Assets</Text>
+            {assets.map((asset) => (
+              <AssetAccordion
+                key={asset.id}
+                asset={asset}
+                user={user}
+                parts={parts[asset.id] ?? []}
+                componentTree={getTree(asset.id)}
+                intervals={intervals}
+                linkedCategoryIds={categoryLinks[asset.id] ?? []}
+                transactions={transactions[asset.id] ?? []}
+                usageLogs={logs[asset.id] ?? []}
+                categories={categories}
+                onLogUsage={async (entry) => {
+                  await addUsageLog(asset, entry);
+                  await loadAssets();
+                }}
+                onServicePart={(part) => void handleServicePart(part, asset)}
+                onLinkCategory={(catId) => void linkCategory(asset.id, catId)}
+                onUnlinkCategory={(catId) => void unlinkCategory(asset.id, catId)}
+                onDeleteAsset={(id) => void handleDeleteAsset(id)}
+                onEditAsset={openEditAsset}
+                onComponentAction={(action, component) => {
+                  handleComponentAction(action, component, asset);
+                }}
+                onAddComponent={(parentId) => handleAddComponent(asset, parentId)}
+                expanded={expandedAssetId === asset.id}
+                onToggle={() => setExpandedAssetId(expandedAssetId === asset.id ? null : asset.id)}
+              />
+            ))}
+          </>
+        )}
+      </ScrollView>
+
+      {/* Bottom bar */}
+      <View {...uiProps(uiPath('fingo', 'bottom_bar', 'container'))} style={styles.bottomBar}>
+        <View style={styles.bottomBarSide} />
+        <GoButton assetId={selectedAssetId} />
+        <TouchableOpacity
+          {...uiProps(uiPath('fingo', 'bottom_bar', 'stats_button'))}
+          style={styles.bottomBarButton}
+          onPress={() => logUI(uiPath('fingo', 'bottom_bar', 'stats_button'), 'press')}
+        >
+          <Text style={styles.bottomBarIcon}>📊</Text>
+          <Text style={styles.bottomBarLabel}>Stats</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* ─── Asset Create/Edit Modal ────────────────────────────────────────────── */}
+      <Modal visible={showAssetModal} transparent animationType="slide" onRequestClose={() => setShowAssetModal(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalSheet}>
+            <Text style={styles.modalTitle}>{editingAsset ? 'Edit Asset' : 'New Asset'}</Text>
+
+            <TextInput
+              {...uiProps(uiPath('fingo', 'asset_modal', 'name_input'))}
+              style={styles.input}
+              value={assetName}
+              onChangeText={setAssetName}
+              placeholder="Asset name (e.g. My Civic)"
+              placeholderTextColor="#475569"
+            />
+
+            <Text style={styles.fieldLabel}>Type</Text>
+            <View style={styles.optionRow}>
+              {ASSET_TYPES.map((t) => (
+                <TouchableOpacity
+                  {...uiProps(uiPath('fingo', 'asset_modal', 'type_option', t))}
+                  key={t}
+                  style={[styles.optionButton, assetType === t && styles.optionButtonActive]}
+                  onPress={() => { logUI(uiPath('fingo', 'asset_modal', 'type_option', t), 'press'); setAssetType(t); }}
+                >
+                  <Text style={[styles.optionText, assetType === t && styles.optionTextActive]}>{t}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity style={styles.cancelButton} onPress={() => setShowAssetModal(false)}>
+                <Text style={styles.cancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.submitButton, (!assetName.trim() || assetSaving) && styles.submitDisabled]}
+                onPress={() => void handleSaveAsset()}
+                disabled={!assetName.trim() || assetSaving}
+              >
+                <Text style={styles.submitText}>{assetSaving ? 'Saving…' : 'Save'}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ─── Component sheets ────────────────────────────────────────────────────── */}
+      <ComponentLibrarySheet
+        visible={showLibrary}
+        assetType={pendingAsset?.type ?? 'other'}
+        installedComponents={pendingAsset ? getAllComponents(pendingAsset.id) : []}
+        storageComponents={storageComponents}
+        onSelect={(sel) => void handleLibrarySelect(sel)}
+        onClose={() => { setShowLibrary(false); setLibraryForReplace(false); }}
+      />
+
+      <ComponentFormSheet
+        visible={showComponentForm}
+        template={pendingTemplate}
+        editingComponent={activeComponent && !libraryForReplace ? activeComponent : null}
+        initialName={pendingCustomName}
+        onSave={handleComponentFormSave}
+        onClose={() => { setShowComponentForm(false); setActiveComponent(null); setPendingTemplate(null); setPendingCustomName(''); }}
+      />
+
+      <ServiceIntervalSheet
+        visible={showIntervalSheet}
+        componentName={activeComponent?.name}
+        editingInterval={editingInterval}
+        onSave={async (name, method, value) => {
+          if (!activeComponent) return;
+          await createInterval(activeComponent.id, name, method, value);
+        }}
+        onClose={() => { setShowIntervalSheet(false); setEditingInterval(null); }}
+      />
+
+      <ServiceRecordSheet
+        visible={showRecordSheet}
+        componentName={activeComponent?.name}
+        onSave={async (name, servicedAt, notes, cost) => {
+          if (!pendingAsset) return;
+          await createRecord(pendingAsset.id, activeComponent?.id ?? null, name, servicedAt, notes, cost);
+        }}
+        onClose={() => { setShowRecordSheet(false); }}
+      />
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  screen: {
+    flex: 1,
+    backgroundColor: '#060D18',
+  },
+  addButton: {
+    width: 32,
+    alignItems: 'flex-end',
+  },
+  addButtonText: {
+    color: '#4ade80',
+    fontSize: 22,
+    fontWeight: '400',
+    lineHeight: 24,
+  },
+  scroll: { flex: 1 },
+  scrollContent: {
+    padding: 16,
+    paddingBottom: 100,
+  },
+  loadingText: {
+    color: '#475569',
+    textAlign: 'center',
+    marginTop: 40,
+  },
+  emptyState: {
+    alignItems: 'center',
+    paddingTop: 60,
+    gap: 10,
+  },
+  emptyTitle: {
+    color: '#CBD5E1',
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  emptyHint: {
+    color: '#475569',
+    fontSize: 13,
+    textAlign: 'center',
+    maxWidth: 280,
+  },
+  emptyButton: {
+    marginTop: 10,
+    backgroundColor: '#053d1e',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#4ade80',
+    paddingHorizontal: 24,
+    paddingVertical: 10,
+  },
+  emptyButtonText: {
+    color: '#4ade80',
+    fontWeight: '700',
+  },
+  sectionLabel: {
+    color: '#475569',
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginBottom: 8,
+    marginTop: 4,
+  },
+  bottomBar: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 80,
+    backgroundColor: '#07111F',
+    borderTopWidth: 1,
+    borderColor: '#1F3A59',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 32,
+    paddingBottom: 12,
+  },
+  bottomBarSide: { width: 48 },
+  bottomBarButton: {
+    alignItems: 'center',
+    width: 48,
+  },
+  bottomBarIcon: { fontSize: 20 },
+  bottomBarLabel: {
+    color: '#475569',
+    fontSize: 10,
+    marginTop: 2,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'flex-end',
+  },
+  modalSheet: {
+    backgroundColor: '#0B1728',
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    padding: 20,
+    paddingBottom: 40,
+    borderTopWidth: 1,
+    borderColor: '#1F3A59',
+  },
+  modalTitle: {
+    color: '#CBD5E1',
+    fontSize: 16,
+    fontWeight: '700',
+    marginBottom: 14,
+  },
+  input: {
+    backgroundColor: '#0E1A2B',
+    borderWidth: 1,
+    borderColor: '#1F3A59',
+    borderRadius: 8,
+    color: '#CBD5E1',
+    fontSize: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 4,
+  },
+  fieldLabel: {
+    color: '#475569',
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginTop: 10,
+    marginBottom: 6,
+  },
+  optionRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  optionButton: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#1F3A59',
+    backgroundColor: '#0E1A2B',
+  },
+  optionButtonActive: {
+    backgroundColor: '#0D2137',
+    borderColor: '#3B6A9E',
+  },
+  optionText: {
+    color: '#475569',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  optionTextActive: { color: '#8FA8C9' },
+  modalActions: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 18,
+  },
+  cancelButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#1F3A59',
+    alignItems: 'center',
+  },
+  cancelText: { color: '#64748B', fontWeight: '600' },
+  submitButton: {
+    flex: 2,
+    paddingVertical: 12,
+    borderRadius: 8,
+    backgroundColor: '#053d1e',
+    borderWidth: 1,
+    borderColor: '#4ade80',
+    alignItems: 'center',
+  },
+  submitDisabled: {
+    backgroundColor: '#0E1A2B',
+    borderColor: '#1F3A59',
+  },
+  submitText: { color: '#4ade80', fontWeight: '700' },
+});

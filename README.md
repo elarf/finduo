@@ -6,9 +6,9 @@ Financial tracking app for couples and shared households. Track income, expenses
 
 ---
 
-## Latest Release — v1.2.1
+## Latest Release — v1.2.2
 
-- **Quick Navigation add buttons** — section header add buttons (Accounts, Income, Expense, Tags) now use the `new.png` custom asset, positioned side by side with the edit button (add flush right, edit to its left with a 6px gap)
+- **FinGo — Asset Lifecycle Manager** — new screen for tracking physical assets (vehicles, bikes, shoes); manage components with service intervals and warn-at-percentage thresholds, log usage, record service events, and link Dashboard categories for spending summaries. Accessible from Quick Navigation (Wrench icon)
 
 Full history: [PATCHNOTES.md](./PATCHNOTES.md)
 

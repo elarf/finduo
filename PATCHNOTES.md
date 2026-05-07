@@ -4,6 +4,42 @@
 
 ---
 
+## [1.2.2] — 2026-05-07
+
+### Features
+
+#### FinGo — Asset Lifecycle Manager
+
+- New **FinGo** screen: asset lifecycle tracking for vehicles, bikes, shoes, and other physical assets
+- **Assets** — create and manage assets with type, icon, notes, and multi-metric usage tracking (distance, moving time, elevation, rides, steps)
+- **Parts / components** — attach components to assets with service intervals, warn-at-percentage thresholds, and priority levels; components can be installed, stored, retired, or replaced
+- **Usage logs** — log usage entries per asset from odometer, GPS, or Health Connect sources
+- **Service records** — record service events per component with date and notes
+- **Service dashboard** — at-a-glance overview of upcoming and overdue service deadlines across all assets
+- **Component library** — reusable component templates that can be installed onto any asset
+- **Category linking** — link Dashboard spending categories to an asset for financial summary within FinGo
+- **Sort orders** — sort asset list by deadline, name, or priority
+- **Access**: Quick Navigation menu (Wrench icon, amber color) and dedicated `FinGo` navigation route
+
+### Technical
+
+- `src/screens/FinGoScreen.tsx` — main FinGo screen with asset accordion, service dashboard, and all sheet modals
+- `src/types/fingo.ts` — TypeScript definitions (FinGoAsset, AssetPart, Component, ComponentServiceInterval, UsageEntry, etc.)
+- `src/hooks/useAssets.ts` — asset CRUD (create, update, delete, load)
+- `src/hooks/useAssetParts.ts` — part CRUD and service tracking
+- `src/hooks/useUsageLogs.ts` — usage log add and load
+- `src/hooks/useAssetTransactions.ts` — category link and transaction stats
+- `src/hooks/useComponents.ts` — component lifecycle (install, uninstall, retire, replace, storage)
+- `src/hooks/useServiceIntervals.ts` — service interval CRUD
+- `src/hooks/useServiceRecords.ts` — service record creation
+- `src/components/fingo/` — ServiceDashboard, AssetAccordion, GoButton, ComponentLibrarySheet, ComponentFormSheet, ServiceIntervalSheet, ServiceRecordSheet, ComponentActionSheet
+- `src/navigation/index.tsx` — `FinGo` added to RootStackParamList and navigator
+- `src/components/dashboard/QuickNavigation.tsx` — FinGo menu item (Wrench icon, amber `#FBBF24`)
+- `src/screens/QuickNavScreen.tsx` — FinGo menu item added
+- `supabase/migrations/20260507_fingo_*.sql` — DB schema for assets, components, usage logs, service intervals, records, and RLS policies
+
+---
+
 ## [1.2.1] — 2026-04-11
 
 ### UI Improvements

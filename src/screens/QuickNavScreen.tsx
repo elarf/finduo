@@ -752,6 +752,25 @@ export default function QuickNavScreen() {
               );
             })}
 
+            {/* FinGo */}
+            <TouchableOpacity
+              {...uiProps(uiPath('quick_nav_screen', 'nav', 'fingo_item'))}
+              style={styles.menuItem}
+              onPress={() => {
+                logUI(uiPath('quick_nav_screen', 'nav', 'fingo_item'), 'press');
+                handleClose();
+                (navigation as any).navigate('FinGo');
+              }}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', width: '100%' }}>
+                <View style={{ width: 20 }}>
+                  <Icon name="Wrench" size={14} color="#FBBF24" />
+                </View>
+                <Text style={[styles.menuItemText, { flex: 1, textAlign: 'center', color: '#FBBF24' }]}>FinGo</Text>
+                <View style={{ minWidth: 20 }} />
+              </View>
+            </TouchableOpacity>
+
             {/* FinBiome */}
             <TouchableOpacity
               {...uiProps(uiPath('quick_nav_screen', 'nav', 'finbiome_item'))}

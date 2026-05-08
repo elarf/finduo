@@ -38,7 +38,9 @@ function formatMinutes(mins: number): string {
 }
 
 export default function UsageLogModal({ visible, asset, onClose, onSubmit }: Props) {
+  const [inputMode, setInputMode] = useState<'distance' | 'odometer'>('distance');
   const [distance, setDistance] = useState('');
+  const [odometer, setOdometer] = useState('');
   const [movingTime, setMovingTime] = useState('');
   const [elevation, setElevation] = useState('');
   const [steps, setSteps] = useState('');
@@ -48,8 +50,15 @@ export default function UsageLogModal({ visible, asset, onClose, onSubmit }: Pro
   if (!asset) return null;
 
   const type = asset.type;
+  const isVehicle = type === 'vehicle' || type === 'motorbike';
 
-  const distNum = parseNum(distance);
+  const odomNum = parseNum(odometer);
+  const rawDistNum = parseNum(distance);
+  // In odometer mode, delta = new reading minus current total
+  const distNum = isVehicle && inputMode === 'odometer'
+    ? Math.max(0, odomNum - asset.current_usage)
+    : rawDistNum;
+
   const timeMin = parseTime(movingTime);
   const elevNum = parseNum(elevation);
   const stepsNum = Math.round(parseNum(steps));
@@ -59,7 +68,22 @@ export default function UsageLogModal({ visible, asset, onClose, onSubmit }: Pro
     : distNum > 0;
 
   const reset = () => {
-    setDistance(''); setMovingTime(''); setElevation(''); setSteps(''); setNotes('');
+    setInputMode('distance');
+    setDistance(''); setOdometer(''); setMovingTime(''); setElevation(''); setSteps(''); setNotes('');
+  };
+
+  const handleOdometerChange = (val: string) => {
+    setOdometer(val);
+    // Sync distance field
+    const delta = Math.max(0, parseNum(val) - asset.current_usage);
+    setDistance(delta > 0 ? String(delta) : '');
+  };
+
+  const handleDistanceChange = (val: string) => {
+    setDistance(val);
+    // Sync odometer field
+    const total = asset.current_usage + parseNum(val);
+    setOdometer(total > 0 ? String(total) : '');
   };
 
   const handleSubmit = async () => {
@@ -108,20 +132,69 @@ export default function UsageLogModal({ visible, asset, onClose, onSubmit }: Pro
             </>
           ) : (
             <>
-              <Text style={styles.label}>Distance (km)</Text>
-              <TextInput
-                {...uiProps(uiPath('fingo', 'usage_log_modal', 'distance_input'))}
-                style={styles.input}
-                value={distance}
-                onChangeText={setDistance}
-                placeholder="e.g. 42.5"
-                placeholderTextColor="#475569"
-                keyboardType="numeric"
-              />
-              {distNum > 0 && (
-                <Text style={styles.preview}>
-                  +{distNum.toLocaleString()} km — total: {((asset.total_distance ?? 0) + distNum).toLocaleString()} km
-                </Text>
+              {isVehicle && (
+                <View style={styles.modeToggle}>
+                  {(['distance', 'odometer'] as const).map((mode) => (
+                    <TouchableOpacity
+                      {...uiProps(uiPath('fingo', 'usage_log_modal', 'mode_toggle', mode))}
+                      key={mode}
+                      style={[styles.modeChip, inputMode === mode && styles.modeChipActive]}
+                      onPress={() => {
+                        logUI(uiPath('fingo', 'usage_log_modal', 'mode_toggle', mode), 'press');
+                        setInputMode(mode);
+                      }}
+                    >
+                      <Text style={[styles.modeChipText, inputMode === mode && styles.modeChipTextActive]}>
+                        {mode === 'distance' ? 'Distance travelled' : 'Odometer reading'}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+
+              {isVehicle && inputMode === 'odometer' ? (
+                <>
+                  <Text style={styles.label}>Odometer reading (km)</Text>
+                  <TextInput
+                    {...uiProps(uiPath('fingo', 'usage_log_modal', 'odometer_input'))}
+                    style={styles.input}
+                    value={odometer}
+                    onChangeText={handleOdometerChange}
+                    placeholder={`current: ${asset.current_usage.toLocaleString()} km`}
+                    placeholderTextColor="#475569"
+                    keyboardType="numeric"
+                    autoFocus
+                  />
+                  {distNum > 0 && (
+                    <Text style={styles.preview}>
+                      +{distNum.toLocaleString()} km travelled — total: {odomNum.toLocaleString()} km
+                    </Text>
+                  )}
+                  {odomNum > 0 && odomNum <= asset.current_usage && (
+                    <Text style={styles.previewWarn}>
+                      Reading must be above current {asset.current_usage.toLocaleString()} km
+                    </Text>
+                  )}
+                </>
+              ) : (
+                <>
+                  <Text style={styles.label}>Distance (km)</Text>
+                  <TextInput
+                    {...uiProps(uiPath('fingo', 'usage_log_modal', 'distance_input'))}
+                    style={styles.input}
+                    value={distance}
+                    onChangeText={isVehicle ? handleDistanceChange : setDistance}
+                    placeholder="e.g. 42.5"
+                    placeholderTextColor="#475569"
+                    keyboardType="numeric"
+                  />
+                  {distNum > 0 && (
+                    <Text style={styles.preview}>
+                      +{distNum.toLocaleString()} km — total: {((asset.total_distance ?? 0) + distNum).toLocaleString()} km
+                      {isVehicle && ` (odometer: ${(asset.current_usage + distNum).toLocaleString()} km)`}
+                    </Text>
+                  )}
+                </>
               )}
 
               <Text style={styles.label}>Moving time <Text style={styles.labelHint}>(h:mm or decimal hours, optional)</Text></Text>
@@ -242,6 +315,38 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     marginTop: 5,
+  },
+  previewWarn: {
+    color: '#f87171',
+    fontSize: 12,
+    fontWeight: '600',
+    marginTop: 5,
+  },
+  modeToggle: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 4,
+    marginBottom: 4,
+  },
+  modeChip: {
+    flex: 1,
+    paddingVertical: 7,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#1F3A59',
+    alignItems: 'center',
+  },
+  modeChipActive: {
+    borderColor: '#3B6A9E',
+    backgroundColor: '#0D2137',
+  },
+  modeChipText: {
+    color: '#475569',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  modeChipTextActive: {
+    color: '#8FA8C9',
   },
   actions: {
     flexDirection: 'row',

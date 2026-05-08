@@ -81,6 +81,7 @@ export function useComponents(user: User | null) {
     templateKey: string | null,
     name: string,
     notes?: string | null,
+    installedAt?: string | null,
   ): Promise<boolean> => {
     if (!user) return false;
     try {
@@ -95,7 +96,7 @@ export function useComponents(user: User | null) {
           installed_on_asset_id: assetId,
           parent_component_id: parentId,
           status: 'installed' as ComponentStatus,
-          installed_at: new Date().toISOString(),
+          installed_at: installedAt ?? new Date().toISOString(),
           notes: notes ?? null,
         });
       if (error) throw error;
@@ -110,7 +111,7 @@ export function useComponents(user: User | null) {
   const updateComponent = useCallback(async (
     id: string,
     assetId: string,
-    patch: Partial<Pick<Component, 'name' | 'notes' | 'picture_url' | 'position'>>,
+    patch: Partial<Pick<Component, 'name' | 'notes' | 'picture_url' | 'position' | 'installed_at'>>,
   ): Promise<boolean> => {
     try {
       logAPI('supabase://components', { source: 'fingo.component_form', action: 'updateComponent' });
@@ -194,6 +195,39 @@ export function useComponents(user: User | null) {
     }
   }, [loadComponents]);
 
+  const moveComponent = useCallback(async (
+    componentId: string,
+    oldAssetId: string,
+    newAssetId: string,
+  ): Promise<boolean> => {
+    try {
+      logAPI('supabase://components', { source: 'fingo.component_form', action: 'moveComponent' });
+      const allComps = componentsByAsset[oldAssetId] ?? [];
+
+      // Collect the full subtree rooted at componentId
+      const subtreeIds: string[] = [];
+      const collect = (id: string) => {
+        subtreeIds.push(id);
+        allComps.filter((c) => c.parent_component_id === id).forEach((c) => collect(c.id));
+      };
+      collect(componentId);
+
+      await Promise.all(
+        subtreeIds.map((id) => {
+          const patch: Record<string, string | null> = { installed_on_asset_id: newAssetId };
+          if (id === componentId) patch.parent_component_id = null;
+          return supabase.from('components').update(patch).eq('id', id);
+        }),
+      );
+
+      await Promise.all([loadComponents(oldAssetId), loadComponents(newAssetId)]);
+      return true;
+    } catch (err) {
+      webAlert('Error', err instanceof Error ? err.message : 'Failed to move component');
+      return false;
+    }
+  }, [componentsByAsset, loadComponents]);
+
   const replaceComponent = useCallback(async (
     oldComponent: Component,
     assetId: string,
@@ -254,6 +288,7 @@ export function useComponents(user: User | null) {
     uninstallComponent,
     retireComponent,
     deleteComponent,
+    moveComponent,
     replaceComponent,
   };
 }

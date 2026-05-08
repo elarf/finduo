@@ -1,10 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet,
-  ScrollView, Alert, Platform,
+  ScrollView, Alert, Platform, Image, ImageSourcePropType,
 } from 'react-native';
 import type { User } from '@supabase/supabase-js';
-import type { FinGoAsset, AssetPart, ComponentNode, ComponentServiceInterval, Component, UsageLog, UsageEntry } from '../../types/fingo';
+import type { FinGoAsset, AssetPart, AssetType, ComponentNode, ComponentServiceInterval, Component, UsageLog, UsageEntry } from '../../types/fingo';
+
+const ASSET_ICONS: Record<AssetType, ImageSourcePropType> = {
+  vehicle:   require('../../../assets/car.png'),
+  motorbike: require('../../../assets/emoto.png'),
+  bike:      require('../../../assets/ebike.png'),
+  shoe:      require('../../../assets/shoes.png'),
+  other:     require('../../../assets/car.png'),
+};
 import type { AppCategory, AppTransaction } from '../../types/dashboard';
 import { useDashboard } from '../../context/DashboardContext';
 import PartHealthBar from './PartHealthBar';
@@ -33,12 +41,20 @@ type Props = {
   onDeleteAsset: (assetId: string) => void;
   onEditAsset: (asset: FinGoAsset) => void;
   onComponentAction: (action: ComponentActionType, component: Component) => void;
+  onIntervalAction: (action: 'edit' | 'delete', interval: ComponentServiceInterval, component: Component) => void;
   onAddComponent: (parentId: string | null) => void;
   expanded: boolean;
   onToggle: () => void;
 };
 
 type ActiveTab = 'parts' | 'stats' | 'logs';
+
+function formatMovingTime(minutes: number): string {
+  if (minutes < 60) return `${minutes}m`;
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return m > 0 ? `${h}h ${m}m` : `${h}h`;
+}
 
 export default function AssetAccordion({
   asset,
@@ -57,6 +73,7 @@ export default function AssetAccordion({
   onDeleteAsset,
   onEditAsset,
   onComponentAction,
+  onIntervalAction,
   onAddComponent,
   expanded,
   onToggle,
@@ -98,13 +115,42 @@ export default function AssetAccordion({
           onToggle();
         }}
       >
-        <Text style={styles.chevron}>{expanded ? '▾' : '▸'}</Text>
+        <Image
+          source={ASSET_ICONS[asset.type]}
+          style={styles.assetTypeIcon}
+          resizeMode="contain"
+        />
         <View style={styles.headerInfo}>
           <Text style={styles.assetName}>{asset.name}</Text>
-          <Text style={styles.assetMeta}>
-            {asset.type} · {asset.current_usage.toLocaleString()} {asset.usage_unit}
-          </Text>
+          <View style={styles.statsRow}>
+            {asset.type === 'shoe' ? (
+              <>
+                {asset.total_steps > 0 && (
+                  <Text style={styles.statChip}>👟 {asset.total_steps.toLocaleString()} steps</Text>
+                )}
+                {asset.total_moving_time > 0 && (
+                  <Text style={styles.statChip}>⏱ {formatMovingTime(asset.total_moving_time)}</Text>
+                )}
+              </>
+            ) : (
+              <>
+                {asset.total_distance > 0 && (
+                  <Text style={styles.statChip}>↔ {asset.total_distance.toLocaleString()} km</Text>
+                )}
+                {asset.total_moving_time > 0 && (
+                  <Text style={styles.statChip}>⏱ {formatMovingTime(asset.total_moving_time)}</Text>
+                )}
+                {asset.total_rides > 0 && (
+                  <Text style={styles.statChip}>↺ {asset.total_rides.toLocaleString()} rides</Text>
+                )}
+                {asset.total_elevation > 0 && (
+                  <Text style={styles.statChip}>▲ {asset.total_elevation.toLocaleString()} m</Text>
+                )}
+              </>
+            )}
+          </View>
         </View>
+        <Text style={styles.chevron}>{expanded ? '▾' : '▸'}</Text>
         <TouchableOpacity
           {...uiProps(uiPath('fingo', 'asset_accordion', 'log_button', asset.id))}
           style={styles.logButton}
@@ -156,6 +202,7 @@ export default function AssetAccordion({
                     intervals={intervals}
                     onShowActions={setActionSheetComp}
                     onAddChild={(parentId) => onAddComponent(parentId)}
+                    onIntervalAction={onIntervalAction}
                   />
                 ))
               )}
@@ -207,15 +254,19 @@ export default function AssetAccordion({
                 </Text>
               </TouchableOpacity>
 
-              {transactions.slice(0, 10).map((tx) => (
-                <View key={tx.id} style={styles.txRow}>
-                  <Text style={styles.txDate}>{tx.date}</Text>
-                  <Text style={styles.txNote} numberOfLines={1}>{tx.note ?? '—'}</Text>
-                  <Text style={[styles.txAmount, tx.type === 'income' ? styles.income : styles.expense]}>
-                    {tx.type === 'expense' ? '-' : '+'}{formatCurrency(tx.amount)}
-                  </Text>
-                </View>
-              ))}
+              {transactions.length === 0 ? (
+                <Text style={styles.emptyText}>No transactions linked yet.</Text>
+              ) : (
+                transactions.map((tx) => (
+                  <View key={tx.id} style={styles.txRow}>
+                    <Text style={styles.txDate}>{tx.date}</Text>
+                    <Text style={styles.txNote} numberOfLines={1}>{tx.note ?? '—'}</Text>
+                    <Text style={[styles.txAmount, tx.type === 'income' ? styles.income : styles.expense]}>
+                      {tx.type === 'expense' ? '-' : '+'}{formatCurrency(tx.amount)}
+                    </Text>
+                  </View>
+                ))
+              )}
             </View>
           )}
 
@@ -321,33 +372,51 @@ export default function AssetAccordion({
 const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#0E1A2B',
+    alignItems: 'stretch',
+    backgroundColor: '#000000',
     borderRadius: 10,
     borderWidth: 1,
     borderColor: '#1F3A59',
-    padding: 12,
     marginBottom: 2,
-    gap: 8,
+    gap: 0,
+    overflow: 'hidden',
+    maxHeight: 80,
   },
   chevron: {
     color: '#8FA8C9',
     fontSize: 12,
     fontWeight: '700',
     width: 14,
+    textAlign: 'center',
+    alignSelf: 'center',
+    marginRight: 4,
+  },
+  assetTypeIcon: {
+    width: 64,
+    alignSelf: 'stretch',
+    maxHeight: 80,
   },
   headerInfo: {
     flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 10,
+    gap: 4,
+    justifyContent: 'center',
   },
   assetName: {
-    color: '#CBD5E1',
+    color: '#FFFFFF',
     fontSize: 14,
     fontWeight: '700',
   },
-  assetMeta: {
-    color: '#475569',
+  statsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  statChip: {
+    color: '#FFFFFF',
     fontSize: 11,
-    marginTop: 1,
+    fontWeight: '500',
   },
   logButton: {
     width: 28,
@@ -358,6 +427,8 @@ const styles = StyleSheet.create({
     borderColor: '#1F3A59',
     alignItems: 'center',
     justifyContent: 'center',
+    alignSelf: 'center',
+    marginRight: 10,
   },
   logButtonText: {
     color: '#4ade80',

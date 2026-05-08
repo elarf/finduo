@@ -6,9 +6,9 @@ Financial tracking app for couples and shared households. Track income, expenses
 
 ---
 
-## Latest Release — v1.2.2
+## Latest Release — v1.2.3
 
-- **FinGo — Asset Lifecycle Manager** — new screen for tracking physical assets (vehicles, bikes, shoes); manage components with service intervals and warn-at-percentage thresholds, log usage, record service events, and link Dashboard categories for spending summaries. Accessible from Quick Navigation (Wrench icon)
+- **FinGo improvements** — header redesigned (black background, full-height asset icon, white stats with semantic icons); accordion expand moves asset to top and hides Upcoming Services; all service intervals listed per component with individual progress bars; component move between assets; odometer vs distance toggle for vehicle usage logs; all transactions visible in Stats tab; show 3 / show all in Upcoming Services
 
 Full history: [PATCHNOTES.md](./PATCHNOTES.md)
 

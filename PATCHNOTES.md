@@ -1,6 +1,70 @@
 # Finduo – Patch Notes
 
-<!-- markdownlint-disable MD013 MD024 -->
+<!-- markdownlint-disable MD013 MD024 MD036 -->
+
+---
+
+## [1.2.3] — 2026-05-08
+
+### Improvements
+
+#### FinGo — Asset Lifecycle Manager
+
+**Asset Accordion — Header Redesign**
+
+- Header background changed to black; asset type icon is full-height (max 80 px) and fully visible (no cropping)
+- Asset type text label removed — the icon communicates the type
+- All tracked stats shown in white with semantic icons: `↔` distance, `⏱` moving time, `▲` elevation, `↺` rides, `👟` steps; only non-zero values displayed
+
+**Asset Accordion — Expand Behaviour**
+
+- Tapping a header hides Upcoming Services, moves the selected asset to the top of the list, and scrolls there
+- Opening a different accordion replaces the first position (only one open at a time)
+- Closing reverts the list order and restores Upcoming Services
+
+**Upcoming Services**
+
+- Shows 3 items by default; "Show all (N)" / "Show less" toggle appears when more exist
+
+**Component Service Intervals**
+
+- All service intervals shown per component/sub-component (previously only the worst was shown)
+- Each interval has its own progress bar rendered directly below it
+- Intervals can be edited inline; each has its own delete button
+
+**Component Tracking Fix**
+
+- Fixed `track_elapsed_time` never updating on usage log — the field was missing from the pre-insert SELECT and the component UPDATE
+- Removed a redundant `.eq('status', 'installed')` filter on the UPDATE that could silently skip components between read and write
+
+**Component Forms**
+
+- Asset name shown as a context tag when adding or editing a component
+- In edit mode with multiple assets, a chip picker allows moving the component (and its full subtree) to a different asset
+
+**Stats Tab**
+
+- All linked transactions are now shown (previously capped at 10)
+
+**Log Usage — Vehicles and Motorbikes**
+
+- Toggle between "Distance travelled" and "Odometer reading" input modes
+- Both fields stay in sync: entering one auto-calculates the other
+- Odometer mode shows a warning if the entered reading is below the current total
+
+### Technical
+
+- `src/types/fingo.ts` — added `'motorbike'` to `AssetType`
+- `src/hooks/useUsageLogs.ts` — `track_elapsed_time` added to component SELECT and UPDATE; redundant status filter removed
+- `src/hooks/useComponents.ts` — `moveComponent` added: collects full subtree via client-side traversal, batch-updates `installed_on_asset_id`, clears `parent_component_id` on the root node
+- `src/components/fingo/AssetAccordion.tsx` — header redesign; full-height asset type icon; white stats row with semantic icons; accordion scroll and list-reorder behaviour
+- `src/components/fingo/ComponentRow.tsx` — all intervals listed with individual progress bars; `worstIntervalHealth` single bar removed
+- `src/components/fingo/ComponentFormSheet.tsx` — asset context tag; asset chip picker in edit mode; `targetAssetId` parameter in `onSave`
+- `src/components/fingo/ServiceDashboard.tsx` — show 3 / show all toggle
+- `src/components/fingo/UsageLogModal.tsx` — odometer vs distance toggle for vehicles/motorbikes with cross-field sync
+- `src/screens/FinGoScreen.tsx` — expanded asset floats to top of list via `displayedAssets` memo; `moveComponent` and interval editing wired
+- `supabase/migrations/20260508_fingo_fix_component_tracking.sql` — fixes component tracking columns
+- `supabase/migrations/20260508b_fingo_fix_component_trigger.sql` — fixes component tracking trigger
 
 ---
 

@@ -15,6 +15,7 @@ export type LibrarySelection =
 interface Props {
   visible: boolean;
   assetType: AssetType;
+  assetName?: string | null;
   installedComponents: Component[];
   storageComponents: Component[];
   onSelect: (selection: LibrarySelection) => void;
@@ -22,7 +23,7 @@ interface Props {
 }
 
 export default function ComponentLibrarySheet({
-  visible, assetType, installedComponents, storageComponents, onSelect, onClose,
+  visible, assetType, assetName, installedComponents, storageComponents, onSelect, onClose,
 }: Props) {
   const [query, setQuery] = useState('');
 
@@ -65,6 +66,10 @@ export default function ComponentLibrarySheet({
         <View style={styles.sheet}>
           <View style={styles.handle} />
           <Text style={styles.title}>Add Component</Text>
+
+          {assetName && (
+            <Text style={styles.assetTag}>{assetName}</Text>
+          )}
 
           <TextInput
             {...uiProps(uiPath('fingo', 'component_library', 'search'))}
@@ -187,7 +192,14 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     paddingHorizontal: 20,
-    marginBottom: 10,
+    marginBottom: 4,
+  },
+  assetTag: {
+    color: '#4ade80',
+    fontSize: 11,
+    fontWeight: '600',
+    paddingHorizontal: 20,
+    marginBottom: 8,
   },
   search: {
     backgroundColor: '#0E1A2B',

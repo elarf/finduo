@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import type { AssetType, Component, ComponentNode, ComponentServiceInterval } from '../../types/fingo';
 import {
-  worstIntervalHealth, formatIntervalRemaining, healthColor,
+  computeIntervalHealth, formatIntervalRemaining, healthColor,
 } from '../../lib/fingo/health';
 import { findTemplate } from '../../lib/fingo/componentTemplates';
 import { uiPath, uiProps, logUI } from '../../lib/devtools';
@@ -15,17 +15,17 @@ interface Props {
   intervals: Record<string, ComponentServiceInterval[]>;
   onShowActions: (component: Component) => void;
   onAddChild: (parentId: string) => void;
+  onIntervalAction?: (action: 'edit' | 'delete', interval: ComponentServiceInterval, component: Component) => void;
 }
 
 export default function ComponentRow({
-  node, depth = 0, assetId, assetType, intervals, onShowActions, onAddChild,
+  node, depth = 0, assetId, assetType, intervals, onShowActions, onAddChild, onIntervalAction,
 }: Props) {
   const [expanded, setExpanded] = useState(true);
   const { component, children } = node;
   const indent = depth * 16;
 
   const componentIntervals = intervals[component.id] ?? [];
-  const worst = worstIntervalHealth(componentIntervals, component);
   const template = component.template_key ? findTemplate(component.template_key) : null;
 
   return (
@@ -37,6 +37,7 @@ export default function ComponentRow({
         {/* Expand / collapse toggle */}
         {children.length > 0 ? (
           <TouchableOpacity
+            {...uiProps(uiPath('fingo', 'component_row', 'expand', component.id))}
             style={styles.expandBtn}
             onPress={() => {
               logUI(uiPath('fingo', 'component_row', 'expand', component.id), 'press');
@@ -62,19 +63,54 @@ export default function ComponentRow({
             )}
           </View>
 
-          {/* Worst service interval badge */}
-          {worst && (
-            <View style={styles.healthRow}>
-              <View style={[styles.healthDot, { backgroundColor: healthColor(
-                worst.isOverdue ? 0 : 1 - worst.totalSinceService / worst.interval.interval_value,
-              ) }]} />
-              <Text style={[styles.healthText, worst.isOverdue && styles.overdueText]}>
-                {worst.isOverdue
-                  ? `${worst.interval.name} — Overdue`
-                  : `${worst.interval.name} — ${formatIntervalRemaining(worst)} left`}
-              </Text>
+          {/* All service interval badges */}
+          {componentIntervals.length > 0 ? (
+            <View style={styles.intervalList}>
+              {componentIntervals.map((interval) => {
+                const health = computeIntervalHealth(interval, component);
+                const ratio = health.isOverdue ? 0 : 1 - health.totalSinceService / interval.interval_value;
+                const color = healthColor(ratio);
+                return (
+                  <View key={interval.id}>
+                    <View style={styles.intervalRow}>
+                      <View style={[styles.healthDot, { backgroundColor: color }]} />
+                      <TouchableOpacity
+                        {...uiProps(uiPath('fingo', 'component_row', 'interval_edit', interval.id))}
+                        style={styles.intervalLabel}
+                        onPress={() => onIntervalAction?.('edit', interval, component)}
+                      >
+                        <Text style={styles.intervalName} numberOfLines={1}>
+                          {interval.name}
+                        </Text>
+                        <Text style={[styles.intervalRemaining, health.isOverdue && styles.overdueText]}>
+                          {health.isOverdue ? 'Overdue' : `${formatIntervalRemaining(health)} left`}
+                        </Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        {...uiProps(uiPath('fingo', 'component_row', 'interval_delete', interval.id))}
+                        style={styles.intervalDeleteBtn}
+                        onPress={() => onIntervalAction?.('delete', interval, component)}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      >
+                        <Text style={styles.intervalDeleteText}>✕</Text>
+                      </TouchableOpacity>
+                    </View>
+                    <View style={styles.healthBar}>
+                      <View
+                        style={[
+                          styles.healthBarFill,
+                          {
+                            width: `${Math.min(100, (health.totalSinceService / interval.interval_value) * 100)}%`,
+                            backgroundColor: color,
+                          },
+                        ]}
+                      />
+                    </View>
+                  </View>
+                );
+              })}
             </View>
-          )}
+          ) : null}
         </View>
 
         {/* Actions button */}
@@ -94,23 +130,6 @@ export default function ComponentRow({
         </TouchableOpacity>
       </View>
 
-      {/* Thin health bar at the bottom of the row */}
-      {worst && (
-        <View style={[styles.healthBar, { marginLeft: indent + 40 }]}>
-          <View
-            style={[
-              styles.healthBarFill,
-              {
-                width: `${Math.min(100, (worst.totalSinceService / worst.interval.interval_value) * 100)}%`,
-                backgroundColor: healthColor(
-                  worst.isOverdue ? 0 : 1 - worst.totalSinceService / worst.interval.interval_value,
-                ),
-              },
-            ]}
-          />
-        </View>
-      )}
-
       {/* Children */}
       {expanded && children.length > 0 && (
         <View>
@@ -124,6 +143,7 @@ export default function ComponentRow({
               intervals={intervals}
               onShowActions={onShowActions}
               onAddChild={onAddChild}
+              onIntervalAction={onIntervalAction}
             />
           ))}
         </View>
@@ -149,7 +169,7 @@ export default function ComponentRow({
 const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     paddingVertical: 10,
     paddingRight: 12,
     paddingLeft: 12,
@@ -160,6 +180,7 @@ const styles = StyleSheet.create({
     height: 20,
     alignItems: 'center',
     justifyContent: 'center',
+    marginTop: 2,
   },
   expandIcon: {
     color: '#3B6A9E',
@@ -173,7 +194,7 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    gap: 3,
+    gap: 4,
   },
   titleRow: {
     flexDirection: 'row',
@@ -200,26 +221,50 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '600',
   },
-  healthRow: {
+  intervalList: {
+    gap: 3,
+  },
+  intervalRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
+    gap: 6,
   },
   healthDot: {
     width: 6,
     height: 6,
     borderRadius: 3,
+    flexShrink: 0,
   },
-  healthText: {
+  intervalLabel: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  intervalName: {
     color: '#64748B',
     fontSize: 11,
+    flexShrink: 1,
+  },
+  intervalRemaining: {
+    color: '#64748B',
+    fontSize: 11,
+    flexShrink: 0,
   },
   overdueText: {
     color: '#f87171',
   },
+  intervalDeleteBtn: {
+    paddingLeft: 4,
+  },
+  intervalDeleteText: {
+    color: '#334155',
+    fontSize: 10,
+  },
   actionBtn: {
     paddingHorizontal: 8,
     paddingVertical: 6,
+    marginTop: -2,
   },
   actionBtnText: {
     color: '#475569',
@@ -230,8 +275,8 @@ const styles = StyleSheet.create({
   healthBar: {
     height: 2,
     backgroundColor: '#0E1A2B',
-    marginRight: 12,
-    marginBottom: 2,
+    marginTop: 3,
+    marginBottom: 3,
     borderRadius: 1,
     overflow: 'hidden',
   },

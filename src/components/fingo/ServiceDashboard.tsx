@@ -1,44 +1,102 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { View, Text, FlatList, TouchableOpacity, StyleSheet } from 'react-native';
-import { computePartHealth, healthColor, formatRemaining } from '../../lib/fingo/health';
-import type { FinGoAsset, AssetPart, FinGoSortOrder, PartHealth } from '../../types/fingo';
+import {
+  computePartHealth, computeIntervalHealth,
+  formatRemaining, formatIntervalRemaining, healthColor,
+} from '../../lib/fingo/health';
+import type {
+  FinGoAsset, AssetPart, Component, ComponentServiceInterval,
+  FinGoSortOrder, PartHealth,
+} from '../../types/fingo';
 import { uiPath, uiProps, logUI } from '../../lib/devtools';
 
-type ServiceItem = PartHealth & { asset: FinGoAsset };
+type DisplayItem = {
+  id: string;
+  assetName: string;
+  label: string;
+  remaining: string;
+  healthRatio: number;
+  isOverdue: boolean;
+  onService: () => void;
+};
 
 type Props = {
   assets: FinGoAsset[];
   partsByAsset: Record<string, AssetPart[]>;
+  componentsByAsset?: Record<string, Component[]>;
+  intervals?: Record<string, ComponentServiceInterval[]>;
   sortOrder: FinGoSortOrder;
   onSortChange: (order: FinGoSortOrder) => void;
   onServicePart: (part: AssetPart, asset: FinGoAsset) => void;
+  onLogServiceInterval?: (interval: ComponentServiceInterval, component: Component, asset: FinGoAsset) => void;
 };
 
 export default function ServiceDashboard({
   assets,
   partsByAsset,
+  componentsByAsset,
+  intervals,
   sortOrder,
   onSortChange,
   onServicePart,
+  onLogServiceInterval,
 }: Props) {
-  const items = useMemo<ServiceItem[]>(() => {
-    const all: ServiceItem[] = [];
+  const [showAll, setShowAll] = useState(false);
+  const items = useMemo<DisplayItem[]>(() => {
+    const all: DisplayItem[] = [];
+
+    // Legacy asset parts
     for (const asset of assets) {
       const parts = partsByAsset[asset.id] ?? [];
       for (const part of parts) {
-        all.push({ ...computePartHealth(part, asset.current_usage), asset });
+        const health = computePartHealth(part, asset.current_usage);
+        all.push({
+          id: `part-${part.id}`,
+          assetName: asset.name,
+          label: part.name,
+          remaining: formatRemaining(health.remaining, part.usage_unit),
+          healthRatio: Math.max(0, health.healthRatio),
+          isOverdue: health.isOverdue,
+          onService: () => onServicePart(part, asset),
+        });
+      }
+    }
+
+    // Component service intervals
+    if (componentsByAsset && intervals) {
+      for (const asset of assets) {
+        const comps = componentsByAsset[asset.id] ?? [];
+        for (const comp of comps) {
+          if (comp.status !== 'installed') continue;
+          const compIntervals = intervals[comp.id] ?? [];
+          for (const interval of compIntervals) {
+            const health = computeIntervalHealth(interval, comp);
+            all.push({
+              id: `interval-${interval.id}`,
+              assetName: asset.name,
+              label: `${comp.name} · ${interval.name}`,
+              remaining: formatIntervalRemaining(health),
+              healthRatio: health.isOverdue ? 0 : Math.max(0, 1 - health.totalSinceService / interval.interval_value),
+              isOverdue: health.isOverdue,
+              onService: () => onLogServiceInterval?.(interval, comp, asset),
+            });
+          }
+        }
       }
     }
 
     switch (sortOrder) {
       case 'deadline':
-        return [...all].sort((a, b) => a.remaining - b.remaining);
+        return [...all].sort((a, b) => a.healthRatio - b.healthRatio);
       case 'name':
-        return [...all].sort((a, b) => a.part.name.localeCompare(b.part.name));
+        return [...all].sort((a, b) => a.label.localeCompare(b.label));
       case 'priority':
-        return [...all].sort((a, b) => b.part.priority - a.part.priority);
+        return [...all].sort((a, b) => {
+          if (a.isOverdue !== b.isOverdue) return a.isOverdue ? -1 : 1;
+          return a.healthRatio - b.healthRatio;
+        });
     }
-  }, [assets, partsByAsset, sortOrder]);
+  }, [assets, partsByAsset, componentsByAsset, intervals, sortOrder, onServicePart, onLogServiceInterval]);
 
   return (
     <View {...uiProps(uiPath('fingo', 'service_dashboard', 'container'))} style={styles.container}>
@@ -66,44 +124,47 @@ export default function ServiceDashboard({
 
       {items.length === 0 ? (
         <View style={styles.empty}>
-          <Text style={styles.emptyText}>No parts configured yet.</Text>
-          <Text style={styles.emptyHint}>Add parts to your assets to track service intervals.</Text>
+          <Text style={styles.emptyText}>No service intervals configured yet.</Text>
+          <Text style={styles.emptyHint}>Add components with service intervals to track maintenance.</Text>
         </View>
       ) : (
-        <FlatList
-          data={items}
-          keyExtractor={(i) => i.part.id}
-          scrollEnabled={false}
-          renderItem={({ item }) => {
+        <>
+          <FlatList
+            data={showAll ? items : items.slice(0, 3)}
+            keyExtractor={(i) => i.id}
+            scrollEnabled={false}
+            renderItem={({ item }) => {
             const color = healthColor(item.healthRatio);
             return (
               <View
-                {...uiProps(uiPath('fingo', 'service_dashboard', 'row', item.part.id))}
+                {...uiProps(uiPath('fingo', 'service_dashboard', 'row', item.id))}
                 style={styles.row}
               >
-                <View style={styles.rowLeft}>
-                  <Text style={styles.assetLabel}>{item.asset.name}</Text>
-                  <Text style={styles.partLabel}>{item.part.name}</Text>
-                  {item.isOverdue && (
-                    <View style={styles.overdueBadge}>
-                      <Text style={styles.overdueBadgeText}>OVERDUE</Text>
-                    </View>
-                  )}
-                </View>
-                <View style={styles.rowRight}>
-                  <Text style={[styles.remaining, { color }]}>
-                    {formatRemaining(item.remaining, item.part.usage_unit)}
-                  </Text>
-                  <TouchableOpacity
-                    {...uiProps(uiPath('fingo', 'service_dashboard', 'service_button', item.part.id))}
-                    style={styles.serviceButton}
-                    onPress={() => {
-                      logUI(uiPath('fingo', 'service_dashboard', 'service_button', item.part.id), 'press');
-                      onServicePart(item.part, item.asset);
-                    }}
-                  >
-                    <Text style={styles.serviceButtonText}>✓</Text>
-                  </TouchableOpacity>
+                <View style={styles.rowTop}>
+                  <View style={styles.rowLeft}>
+                    <Text style={styles.assetLabel}>{item.assetName}</Text>
+                    <Text style={styles.partLabel}>{item.label}</Text>
+                    {item.isOverdue && (
+                      <View style={styles.overdueBadge}>
+                        <Text style={styles.overdueBadgeText}>OVERDUE</Text>
+                      </View>
+                    )}
+                  </View>
+                  <View style={styles.rowRight}>
+                    <Text style={[styles.remaining, { color }]}>
+                      {item.remaining}
+                    </Text>
+                    <TouchableOpacity
+                      {...uiProps(uiPath('fingo', 'service_dashboard', 'service_button', item.id))}
+                      style={styles.serviceButton}
+                      onPress={() => {
+                        logUI(uiPath('fingo', 'service_dashboard', 'service_button', item.id), 'press');
+                        item.onService();
+                      }}
+                    >
+                      <Text style={styles.serviceButtonText}>✓</Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
                 {/* Bottom bar indicator */}
                 <View style={styles.barTrack}>
@@ -116,6 +177,21 @@ export default function ServiceDashboard({
             );
           }}
         />
+          {items.length > 3 && (
+            <TouchableOpacity
+              {...uiProps(uiPath('fingo', 'service_dashboard', 'show_all_button'))}
+              style={styles.showAllButton}
+              onPress={() => {
+                logUI(uiPath('fingo', 'service_dashboard', 'show_all_button'), 'press');
+                setShowAll((v) => !v);
+              }}
+            >
+              <Text style={styles.showAllText}>
+                {showAll ? 'Show less' : `Show all (${items.length})`}
+              </Text>
+            </TouchableOpacity>
+          )}
+        </>
       )}
     </View>
   );
@@ -170,22 +246,30 @@ const styles = StyleSheet.create({
     color: '#334155',
     fontSize: 11,
     marginTop: 4,
+    textAlign: 'center',
   },
   row: {
     backgroundColor: '#0E1A2B',
     borderRadius: 8,
     borderWidth: 1,
     borderColor: '#1F3A59',
-    padding: 10,
+    paddingHorizontal: 10,
+    paddingTop: 10,
     marginBottom: 6,
     overflow: 'hidden',
+  },
+  rowTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+    gap: 8,
   },
   rowLeft: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
+    flexWrap: 'wrap',
     gap: 6,
-    marginBottom: 6,
   },
   assetLabel: {
     color: '#475569',
@@ -210,9 +294,8 @@ const styles = StyleSheet.create({
   },
   rowRight: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    gap: 8,
   },
   remaining: {
     fontSize: 13,
@@ -233,13 +316,22 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
   },
+  showAllButton: {
+    paddingVertical: 8,
+    alignItems: 'center',
+  },
+  showAllText: {
+    color: '#3B6A9E',
+    fontSize: 12,
+    fontWeight: '600',
+  },
   barTrack: {
     height: 4,
     backgroundColor: '#1F3A59',
     borderRadius: 2,
     overflow: 'hidden',
     marginHorizontal: -10,
-    marginBottom: -10,
+    marginBottom: 0,
   },
   barFill: {
     height: 4,

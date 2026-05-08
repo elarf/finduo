@@ -44,6 +44,14 @@ export function useUsageLogs(user: User | null) {
       const movingTimeMin = entry.movingTime ?? null;
       const elevationM = entry.elevation ?? null;
 
+      // Read installed components BEFORE insert so our update is idempotent
+      // with the DB trigger (if it exists): both write old_value + delta.
+      const { data: installedComps } = await supabase
+        .from('components')
+        .select('id, track_distance, track_rides, track_moving_time, track_elapsed_time, track_elevation_gain')
+        .eq('installed_on_asset_id', asset.id)
+        .eq('status', 'installed');
+
       const { error: logError } = await supabase
         .from('usage_logs')
         .insert({
@@ -83,6 +91,25 @@ export function useUsageLogs(user: User | null) {
         .update(totalsUpdate)
         .eq('id', asset.id);
       if (assetError) throw assetError;
+
+      // Update component tracking values directly (does not rely on DB trigger).
+      // Uses pre-insert component values so the result equals old + delta even
+      // if the trigger also fires for the same insert.
+      if (installedComps && installedComps.length > 0) {
+        const movingTimeHDelta = movingTimeMin != null ? movingTimeMin / 60.0 : 0;
+        const elevationDelta = elevationM ?? 0;
+        await Promise.all(
+          installedComps.map((comp) =>
+            supabase.from('components').update({
+              track_distance:       comp.track_distance       + usageDelta,
+              track_rides:          comp.track_rides          + 1,
+              track_moving_time:    comp.track_moving_time    + movingTimeHDelta,
+              track_elapsed_time:   comp.track_elapsed_time   + movingTimeHDelta,
+              track_elevation_gain: comp.track_elevation_gain + elevationDelta,
+            }).eq('id', comp.id),
+          ),
+        );
+      }
 
       await loadLogs(asset.id);
       return true;

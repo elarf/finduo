@@ -20,6 +20,7 @@ export default function TransactionSection() {
     categoriesById,
     tags,
     hasMoreTransactions,
+    setVisibleTransactionsCount,
     txDisplayLabel,
     formatCurrency,
     openEditTransaction,
@@ -262,13 +263,21 @@ export default function TransactionSection() {
         })()}
         {!showAccountOverviewPicker && hasMoreTransactions && !selectedCategoryFilter && (
           <Text style={styles.transactionMeta} {...uiProps(uiPath('dashboard', 'tx_section', 'load_more_hint'))}>
-            Scroll down to load more transactions
+            Tap to load more transactions
           </Text>
         )}
         {showAccountOverviewPicker && visibleTransactionsCount < filteredIncludedTxs.length && (
-          <Text style={styles.transactionMeta} {...uiProps(uiPath('dashboard', 'tx_section', 'load_more_hint'))}>
-            Scroll down to load more transactions
-          </Text>
+          <TouchableOpacity
+            onPress={() => {
+              logUI(uiPath('dashboard', 'tx_section', 'load_more_hint'), 'press');
+              setVisibleTransactionsCount((prev) => Math.min(prev + 12, filteredIncludedTxs.length));
+            }}
+            {...uiProps(uiPath('dashboard', 'tx_section', 'load_more_hint'))}
+          >
+            <Text style={styles.transactionMeta}>
+              Tap to load more transactions
+            </Text>
+          </TouchableOpacity>
         )}
       </View>
 

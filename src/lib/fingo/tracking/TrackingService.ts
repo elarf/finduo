@@ -1,16 +1,16 @@
+import { Capacitor } from '@capacitor/core';
 import type { ITrackingProvider } from './ITrackingProvider';
 import { ManualTrackingProvider } from './ManualTrackingProvider';
+import { GpsTrackingProvider } from './GpsTrackingProvider';
 
-/**
- * TrackingService — singleton that holds the active tracking provider.
- *
- * Swap providers without touching any UI code:
- *
- *   // When Capacitor is installed:
- *   import { CapacitorTrackingProvider } from './CapacitorTrackingProvider';
- *   TrackingService.setProvider(new CapacitorTrackingProvider());
- */
-let _provider: ITrackingProvider = new ManualTrackingProvider();
+// Capacitor.isNativePlatform() is synchronous — safe at module init time.
+// Web/PWA → ManualTrackingProvider; native APK → GpsTrackingProvider.
+function buildProvider(): ITrackingProvider {
+  if (Capacitor.isNativePlatform()) return new GpsTrackingProvider();
+  return new ManualTrackingProvider();
+}
+
+let _provider: ITrackingProvider = buildProvider();
 
 export const TrackingService = {
   get provider(): ITrackingProvider {

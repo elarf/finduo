@@ -1,5 +1,7 @@
 import React from 'react';
 import { Platform, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { topInset, bottomInset } from '../lib/safeArea';
 
 type ModalShellProps = {
   children: React.ReactNode;
@@ -14,6 +16,7 @@ type ModalShellProps = {
  */
 export function ModalShell({ children, onDismiss, maxWidth = 390, fullscreen = false }: ModalShellProps) {
   const { width } = useWindowDimensions();
+  const { top, bottom } = useSafeAreaInsets();
   const isWide = Platform.OS === 'web' && width >= 1024;
 
   return (
@@ -23,10 +26,11 @@ export function ModalShell({ children, onDismiss, maxWidth = 390, fullscreen = f
         <Pressable style={StyleSheet.absoluteFill} onPress={onDismiss} />
       )}
 
-      {/* Modal card */}
+      {/* Modal card — paddingTop: top ensures content clears notch/status bar */}
       <View
         style={[
           fullscreen ? styles.cardFullscreen : styles.card,
+          { paddingTop: topInset(0, top), paddingBottom: bottomInset(0, bottom) },
           isWide && !fullscreen && { width: maxWidth, maxHeight: '90%', borderRadius: 16, overflow: 'hidden' },
         ]}
       >

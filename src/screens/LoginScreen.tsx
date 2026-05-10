@@ -22,7 +22,9 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { logUI, uiPath, uiProps } from '../lib/devtools';
+import { bottomInset } from '../lib/safeArea';
 import { useAuth } from '../context/AuthContext';
 
 const MOBILE_MAX_WIDTH = 430;
@@ -32,6 +34,7 @@ export default function LoginScreen() {
   const { signInWithGoogle } = useAuth();
   const [loading, setLoading] = useState(false);
   const { width } = useWindowDimensions();
+  const { bottom } = useSafeAreaInsets();
   const isDesktop = Platform.OS === 'web' && width >= DESKTOP_BREAKPOINT;
 
   useEffect(() => {
@@ -70,7 +73,7 @@ export default function LoginScreen() {
         </View>
 
         {/* Footer strip with the CTA button */}
-        <View style={styles.footer} {...uiProps(uiPath('login', 'footer', 'container'))}>
+        <View style={[styles.footer, { paddingBottom: bottomInset(22, bottom) }]} {...uiProps(uiPath('login', 'footer', 'container'))}>
           <TouchableOpacity
             style={styles.googleButton}
             onPress={handleGoogleSignIn}
@@ -120,7 +123,7 @@ const styles = StyleSheet.create({
     height: '100%',
   },
   footer: {
-    paddingBottom: 56,
+    paddingBottom: 22,
     paddingTop: 40,
     paddingHorizontal: 32,
     backgroundColor: 'rgba(6, 10, 20, 0.90)',

@@ -1,11 +1,14 @@
 import React from 'react';
 import { Animated, Image, Text, TouchableOpacity, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { logUI, uiPath, uiProps } from '../../../lib/devtools';
+import { bottomInset } from '../../../lib/safeArea';
 import { useDashboard } from '../../../context/DashboardContext';
 import Icon from '../../Icon';
 import { styles } from '../../../screens/DashboardScreen.styles';
 
 export default function BottomActions() {
+  const { bottom } = useSafeAreaInsets();
   const {
     showAccountOverviewPicker,
     selectedCategoryFilter, setSelectedCategoryFilter,
@@ -60,7 +63,7 @@ export default function BottomActions() {
           <Text style={{ color: '#f87171', fontSize: 12, fontWeight: '600' }}>✕ Clear all</Text>
         </TouchableOpacity>
       </Animated.View>
-      <View style={[styles.bottomBar, !desktopView && { gap: 0 }, { position: 'relative' }]} {...uiProps(uiPath('dashboard', 'bottom_actions', 'bar'))}>
+      <View style={[styles.bottomBar, !desktopView && { gap: 0 }, { position: 'relative', paddingBottom: bottomInset(18, bottom) }]} {...uiProps(uiPath('dashboard', 'bottom_actions', 'bar'))}>
         <TouchableOpacity
           style={[
             styles.bottomBarIncome,

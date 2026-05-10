@@ -4,7 +4,7 @@ import type { AppCategory } from '../types/dashboard';
 
 export type CategoriesQueryData = {
   categories: AppCategory[];
-  hiddenCategoryIds: Set<string>;
+  hiddenCategoryIds: string[];
 };
 
 export const categoriesQueryKey = (userId: string) => ['categories', userId] as const;
@@ -26,9 +26,7 @@ async function fetchCategories(userId: string): Promise<CategoriesQueryData> {
 
   return {
     categories: (catData ?? []) as AppCategory[],
-    hiddenCategoryIds: new Set(
-      (!hiddenError ? hiddenData ?? [] : []).map((r: any) => r.category_id as string),
-    ),
+    hiddenCategoryIds: (!hiddenError ? hiddenData ?? [] : []).map((r: any) => r.category_id as string),
   };
 }
 

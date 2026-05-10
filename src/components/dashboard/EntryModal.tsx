@@ -13,10 +13,12 @@ import {
   View,
   useWindowDimensions,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from '../Icon';
 import { styles } from '../../screens/DashboardScreen.styles';
 import { AppAccount, AppCategory, AppTag, TransactionType } from '../../types/dashboard';
 import { uiPath, uiProps, logUI } from '../../lib/devtools';
+import { topInset, bottomInset } from '../../lib/safeArea';
 import NumpadGrid, { ENTRY_KEYS } from '../NumpadGrid';
 import DateButton from '../DateButton';
 
@@ -134,8 +136,7 @@ const EntryModal = React.memo(function EntryModal(props: EntryModalProps) {
 
   const { width: screenWidth } = useWindowDimensions();
   const isWide = Platform.OS === 'web' && screenWidth >= 1024;
-
-  const isIncome = entryType === 'income';
+  const { top, bottom } = useSafeAreaInsets();
   const amountColor = isIncome ? '#4ade80' : '#ff5555';
   const currency = entryAccount?.currency ?? selectedCurrency;
   const currencySymbol: { prefix: string; suffix: string } = (() => {
@@ -204,7 +205,7 @@ const EntryModal = React.memo(function EntryModal(props: EntryModalProps) {
         )}
         <View {...uiProps(uiPath('entry_modal', 'card', 'container'))} style={[styles.entryModalFullscreen, isWide && { width: 390, maxHeight: '90%' as any, borderRadius: 16, overflow: 'hidden' }]}>
           {/* Top bar */}
-          <View style={styles.entryModalTopBar}>
+          <View style={[styles.entryModalTopBar, !isWide && { paddingTop: topInset(16, top) }]}>
             <TouchableOpacity
               {...uiProps(uiPath('entry_modal', 'type_toggle', isIncome ? 'income_button' : 'expense_button'))}
               onPress={() => {
@@ -426,7 +427,7 @@ const EntryModal = React.memo(function EntryModal(props: EntryModalProps) {
           </ScrollView>
 
           {/* Bottom bar — category-aware CTA */}
-          <View style={bottomBarStyles.bottomBar}>
+          <View style={[bottomBarStyles.bottomBar, !isWide && { paddingBottom: bottomInset(12, bottom) }]}>
             {editingTransactionId && onDelete && (
               <TouchableOpacity
                 {...uiProps(uiPath('entry_modal', 'actions', 'delete_button'))}
@@ -518,7 +519,7 @@ const EntryModal = React.memo(function EntryModal(props: EntryModalProps) {
             ]}
             pointerEvents={isCatPickerOpen ? 'box-none' : 'none'}
           >
-            <View style={styles.catPickerHeader}>
+            <View style={[styles.catPickerHeader, !isWide && { paddingTop: topInset(20, top) }]}>
               <Text style={styles.catPickerTitle}>Choose Category</Text>
               <TouchableOpacity
                 onPress={() => {
@@ -529,7 +530,7 @@ const EntryModal = React.memo(function EntryModal(props: EntryModalProps) {
                 <Icon name="close" size={24} color="#8FA8C9" />
               </TouchableOpacity>
             </View>
-            <ScrollView contentContainerStyle={styles.catPickerGrid} showsVerticalScrollIndicator={false}>
+            <ScrollView contentContainerStyle={[styles.catPickerGrid, !isWide && { paddingBottom: bottomInset(0, bottom) }]} showsVerticalScrollIndicator={false}>
               {entryCategories.map((cat) => (
                 <TouchableOpacity
                   {...uiProps(uiPath('entry_modal', 'category_picker', 'row', cat.id))}

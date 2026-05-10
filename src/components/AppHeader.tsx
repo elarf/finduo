@@ -9,8 +9,10 @@ import {
   View,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';
 import { uiPath, uiProps } from '../lib/devtools';
+import { topInset } from '../lib/safeArea';
 
 interface Props {
   onBack?: () => void;
@@ -22,6 +24,7 @@ export default function AppHeader({ onBack, rightElement }: Props) {
   const navigation = useNavigation();
   const { user } = useAuth();
   const { width } = useWindowDimensions();
+  const { top } = useSafeAreaInsets();
   const isMobile = Platform.OS !== 'web' || width < 1024;
   const [avatarImgError, setAvatarImgError] = useState(false);
 
@@ -40,7 +43,7 @@ export default function AppHeader({ onBack, rightElement }: Props) {
   );
 
   return (
-    <View style={s.headerRow} {...uiProps(uiPath('app_header', 'container', 'view'))}>
+    <View style={[s.headerRow, { paddingTop: topInset(14, top) }]} {...uiProps(uiPath('app_header', 'container', 'view'))}>
       <TouchableOpacity
         style={s.avatarBtn}
         onPress={handleBack}
@@ -84,7 +87,7 @@ export default function AppHeader({ onBack, rightElement }: Props) {
 
 const s = StyleSheet.create({
   headerRow: {
-    paddingTop: Platform.OS === 'web' ? 14 : 48,
+    paddingTop: 14,
     paddingHorizontal: 20,
     paddingBottom: 8,
     flexDirection: 'row',

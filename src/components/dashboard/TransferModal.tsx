@@ -9,9 +9,11 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { styles } from '../../screens/DashboardScreen.styles';
 import type { AppAccount } from '../../types/dashboard';
 import { uiPath, uiProps, logUI } from '../../lib/devtools';
+import { topInset, bottomInset } from '../../lib/safeArea';
 import NumpadGrid, { ENTRY_KEYS, RATE_KEYS } from '../NumpadGrid';
 import DateButton from '../DateButton';
 
@@ -91,6 +93,7 @@ const TransferModal = React.memo(function TransferModal(props: TransferModalProp
   const fromAccount = accounts.find((a) => a.id === transferFromId) ?? null;
   const toAccount = accounts.find((a) => a.id === transferToId) ?? null;
   const crossCurrency = !!(fromAccount && toAccount && fromAccount.currency !== toAccount.currency);
+  const { top, bottom } = useSafeAreaInsets();
 
   const [activeField, setActiveField] = useState<ActiveField>('source');
   const [showPicker, setShowPicker] = useState<'from' | 'to' | null>(null);
@@ -331,13 +334,13 @@ const TransferModal = React.memo(function TransferModal(props: TransferModalProp
         </Pressable>
       ) : (
         <View style={[styles.entryModalFullscreen, { position: 'relative' }]}>
-          <View style={styles.entryModalTopBar}>
+          <View style={[styles.entryModalTopBar, { paddingTop: topInset(16, top) }]}>
             <View style={[styles.toggleButton, { flex: 0, minWidth: 110, paddingHorizontal: 20, borderColor: '#a855f7', backgroundColor: '#1e0e2a' }]}>
               <Text style={[styles.toggleButtonText, { color: '#a855f7' }]}>Transfer</Text>
             </View>
           </View>
           {content}
-          <View style={transferStyles.bottomBar}>
+          <View style={[transferStyles.bottomBar, { paddingBottom: bottomInset(12, bottom) }]}>
             <TouchableOpacity
               style={transferStyles.cancelBtn}
               onPress={() => { logUI(uiPath('transfer_modal', 'actions', 'cancel_button'), 'press'); onClose(); }}

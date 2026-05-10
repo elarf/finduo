@@ -12,33 +12,26 @@ export function sortedKey(accountIds: string[]): string {
 async function fetchTransactions(accountIds: string[]): Promise<AppTransaction[]> {
   if (accountIds.length === 0) return [];
 
-  const { data: txData, error: txError } = await supabase
+  const { data, error } = await supabase
     .from('transactions')
-    .select('id,account_id,category_id,amount,note,type,date,created_at')
+    .select('id,account_id,category_id,amount,note,type,date,created_at,transaction_tags(tag_id)')
     .in('account_id', accountIds)
     .order('date', { ascending: false })
     .limit(1000);
 
-  if (txError) throw txError;
+  if (error) throw error;
 
-  const txList = (txData ?? []) as AppTransaction[];
-  if (txList.length === 0) return [];
-
-  const txIds = txList.map((t) => t.id);
-  const { data: tagRows, error: tagError } = await supabase
-    .from('transaction_tags')
-    .select('transaction_id,tag_id')
-    .in('transaction_id', txIds);
-
-  if (tagError) throw tagError;
-
-  const tagMap = (tagRows ?? []).reduce<Record<string, string[]>>((acc, row) => {
-    if (!acc[row.transaction_id]) acc[row.transaction_id] = [];
-    acc[row.transaction_id].push(row.tag_id);
-    return acc;
-  }, {});
-
-  return txList.map((tx) => ({ ...tx, tag_ids: tagMap[tx.id] ?? [] }));
+  return (data ?? []).map((tx) => ({
+    id: tx.id,
+    account_id: tx.account_id,
+    category_id: tx.category_id,
+    amount: tx.amount,
+    note: tx.note,
+    type: tx.type,
+    date: tx.date,
+    created_at: tx.created_at,
+    tag_ids: (tx.transaction_tags ?? []).map((t: { tag_id: string }) => t.tag_id),
+  }));
 }
 
 /**

@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Animated, Modal, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import Icon from '../Icon';
 import { styles } from '../../screens/DashboardScreen.styles';
 import { AppAccount } from '../../types/dashboard';
 import { uiPath, uiProps, logUI } from '../../lib/devtools';
+import { registerBackHandler } from '../../lib/capacitorBack';
 
 type AccountPickerSheetProps = {
   visible: boolean;
@@ -32,6 +33,11 @@ function AccountPickerSheet({
   transferFromId, setTransferFromId,
   transferToId, setTransferToId,
 }: AccountPickerSheetProps) {
+  useEffect(() => {
+    if (!visible) return;
+    return registerBackHandler(() => { onClose(); return true; });
+  }, [visible, onClose]);
+
   return (
     <Modal
       visible={visible}

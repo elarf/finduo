@@ -1,4 +1,4 @@
-import { Platform, StyleSheet } from 'react-native';
+import { StyleSheet } from 'react-native';
 
 export const styles = StyleSheet.create({
   appShell: {
@@ -36,7 +36,7 @@ export const styles = StyleSheet.create({
     fontSize: 14,
   },
   headerRow: {
-    paddingTop: Platform.OS === 'web' ? 14 : 48,
+    paddingTop: 14,
     paddingHorizontal: 20,
     paddingBottom: 8,
     flexDirection: 'row',
@@ -67,7 +67,7 @@ export const styles = StyleSheet.create({
     paddingHorizontal: 14,
   },
   headerLogoCenter: {
-    flex: 1,
+    height: '100%',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -417,7 +417,7 @@ export const styles = StyleSheet.create({
   menuPanel: {
     position: 'absolute',
     left: 0,
-    marginTop: 48,
+    marginTop: 75,
     width: 360,
     maxWidth: '92%',
     maxHeight: '86%',
@@ -1259,7 +1259,7 @@ export const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingTop: Platform.OS === 'web' ? 16 : 52,
+    paddingTop: 16,
     paddingBottom: 10,
     borderBottomWidth: 1,
     borderBottomColor: '#1A2B40',
@@ -1314,7 +1314,7 @@ export const styles = StyleSheet.create({
     borderTopColor: '#1A2B40',
     paddingHorizontal: 16,
     paddingTop: 10,
-    paddingBottom: Platform.OS === 'web' ? 16 : 28,
+    paddingBottom: 0,
     gap: 8,
   },
   categoryIndicatorBtn: {
@@ -1403,7 +1403,7 @@ export const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingTop: Platform.OS === 'web' ? 20 : 56,
+    paddingTop: 20,
     paddingBottom: 16,
     borderBottomWidth: 1,
     borderBottomColor: '#1A2B40',

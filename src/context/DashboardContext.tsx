@@ -549,7 +549,7 @@ export function DashboardProvider({
   const [hiddenCategoryIds, setHiddenCategoryIds] = useState<Set<string>>(new Set());
   useEffect(() => {
     if (categoriesQ.data) {
-      setHiddenCategoryIds(categoriesQ.data.hiddenCategoryIds);
+      setHiddenCategoryIds(new Set(Array.isArray(categoriesQ.data.hiddenCategoryIds) ? categoriesQ.data.hiddenCategoryIds : []));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [categoriesQ.dataUpdatedAt]);

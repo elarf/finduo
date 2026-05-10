@@ -4,6 +4,7 @@ import {
   StyleSheet, Modal, TextInput, Platform, Alert,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';
 import { useAssets } from '../hooks/useAssets';
 import { useAssetParts } from '../hooks/useAssetParts';
@@ -29,6 +30,8 @@ import type { AppCategory } from '../types/dashboard';
 import { supabase } from '../lib/supabase';
 import { uiPath, uiProps, logUI } from '../lib/devtools';
 import { getTrackingValue } from '../lib/fingo/health';
+import { registerBackHandler } from '../lib/capacitorBack';
+import { bottomInset } from '../lib/safeArea';
 
 const ASSET_TYPES: AssetType[] = ['vehicle', 'motorbike', 'bike', 'shoe', 'other'];
 
@@ -36,6 +39,7 @@ export default function FinGoScreen() {
   const navigation = useNavigation();
   const { session } = useAuth();
   const user = session?.user ?? null;
+  const { bottom } = useSafeAreaInsets();
 
   // ─── Existing hooks ──────────────────────────────────────────────────────────
   const { assets, loading, loadAssets, createAsset, updateAsset, deleteAsset } = useAssets(user);
@@ -82,6 +86,21 @@ export default function FinGoScreen() {
   const [showComponentForm, setShowComponentForm] = useState(false);
   const [showIntervalSheet, setShowIntervalSheet] = useState(false);
   const [showRecordSheet, setShowRecordSheet] = useState(false);
+
+  // Android back button: close internal modals before navigating away
+  const fingoModalRef = useRef({ showAssetModal: false, showLibrary: false, showComponentForm: false, showIntervalSheet: false, showRecordSheet: false });
+  useEffect(() => {
+    fingoModalRef.current = { showAssetModal, showLibrary, showComponentForm, showIntervalSheet, showRecordSheet };
+  });
+  useEffect(() => registerBackHandler(() => {
+    const m = fingoModalRef.current;
+    if (m.showRecordSheet) { setShowRecordSheet(false); return true; }
+    if (m.showIntervalSheet) { setShowIntervalSheet(false); return true; }
+    if (m.showComponentForm) { setShowComponentForm(false); return true; }
+    if (m.showLibrary) { setShowLibrary(false); return true; }
+    if (m.showAssetModal) { setShowAssetModal(false); return true; }
+    return false;
+  }), []);
 
   // Pending context for sheets
   const [pendingAsset, setPendingAsset] = useState<FinGoAsset | null>(null);
@@ -454,7 +473,7 @@ export default function FinGoScreen() {
       </ScrollView>
 
       {/* Bottom bar */}
-      <View {...uiProps(uiPath('fingo', 'bottom_bar', 'container'))} style={styles.bottomBar}>
+      <View {...uiProps(uiPath('fingo', 'bottom_bar', 'container'))} style={[styles.bottomBar, { paddingBottom: bottomInset(12, bottom) }]}>
         <View style={styles.bottomBarSide} />
         <GoButton assetId={selectedAssetId} />
         <TouchableOpacity
@@ -645,7 +664,6 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    height: 80,
     backgroundColor: '#07111F',
     borderTopWidth: 1,
     borderColor: '#1F3A59',
@@ -653,7 +671,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 32,
-    paddingBottom: 12,
+    paddingTop: 12,
   },
   bottomBarSide: { width: 48 },
   bottomBarButton: {

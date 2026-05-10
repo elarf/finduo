@@ -1,7 +1,9 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Image, View } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { navigationRef } from './navigationRef';
+import { initCapacitorBackButton } from '../lib/capacitorBack';
 import { useAuth } from '../context/AuthContext';
 import { DashboardProvider } from '../context/DashboardContext';
 import LoginScreen from '../screens/LoginScreen';
@@ -52,6 +54,10 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
 export default function RootNavigator() {
   const { session, loading } = useAuth();
 
+  useEffect(() => {
+    initCapacitorBackButton();
+  }, []);
+
   if (loading) {
     return (
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#000000' }}>
@@ -65,7 +71,7 @@ export default function RootNavigator() {
   }
 
   return (
-    <NavigationContainer>
+    <NavigationContainer ref={navigationRef}>
       {session ? (
         <DashboardProvider>
           <Stack.Navigator screenOptions={{ headerShown: false }}>

@@ -10,16 +10,19 @@ import {
   View,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from '../components/Icon';
 import { styles } from './DashboardScreen.styles';
 import type { IntervalKey } from '../types/dashboard';
 import { useDashboard } from '../context/DashboardContext';
 import { uiPath, uiProps, logUI } from '../lib/devtools';
+import { topInset } from '../lib/safeArea';
 import { APP_VERSION, fetchLatestVersion, isNewerVersion } from '../lib/version';
 import ChangelogModal from '../components/dashboard/ChangelogModal';
 
 export default function QuickNavScreen() {
   const navigation = useNavigation();
+  const { top } = useSafeAreaInsets();
   const {
     user,
     signOut,
@@ -50,11 +53,6 @@ export default function QuickNavScreen() {
     menuExpenseCatEditMode,
     setMenuExpenseCatEditMode,
     toggleCategoryHidden,
-    setCategoryName,
-    setCategoryType,
-    setCategoryColor,
-    setCategoryIcon,
-    setCategoryTagIds,
     deleteCategory,
     selectedTags,
     menuTagsExpanded,
@@ -126,7 +124,7 @@ export default function QuickNavScreen() {
             handleClose();
           }}
         />
-        <View style={styles.menuPanel}>
+        <View style={[styles.menuPanel, { marginTop: topInset(75, top) }]}>
           <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.menuScrollContent}>
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
               <Text style={styles.menuTitle}>Quick Navigation</Text>

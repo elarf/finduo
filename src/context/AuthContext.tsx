@@ -14,7 +14,9 @@ import React, {
   useEffect,
   useState,
 } from 'react';
-import { Platform } from 'react-native';
+import { Capacitor } from '@capacitor/core';
+import { Browser } from '@capacitor/browser';
+import { App as CapacitorApp } from '@capacitor/app';
 import * as WebBrowser from 'expo-web-browser';
 import * as AuthSession from 'expo-auth-session';
 import * as QueryParams from 'expo-auth-session/build/QueryParams';
@@ -25,6 +27,9 @@ import { AuthContextValue } from '../types/auth';
 
 // Required so the browser tab can redirect back to the app on iOS / Android.
 WebBrowser.maybeCompleteAuthSession();
+
+// Deep-link scheme used by the Capacitor APK build.
+const CAPACITOR_REDIRECT = 'com.finduo.fingo://auth/callback';
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
@@ -87,7 +92,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     (async () => {
       const [{ data }, initialUrl] = await Promise.all([
         supabase.auth.getSession(),
-        Linking.getInitialURL(),
+        // On Capacitor, use App.getLaunchUrl() to catch cold-start deep links.
+        Capacitor.isNativePlatform()
+          ? CapacitorApp.getLaunchUrl().then(r => r?.url ?? null)
+          : Linking.getInitialURL(),
       ]);
 
       if (!mounted) return;
@@ -151,41 +159,73 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       },
     );
 
+    // Expo Linking listener (PWA / Expo native builds).
     const sub = Linking.addEventListener('url', ({ url }) => {
       void handleDeepLink(url);
     });
+
+    // Capacitor App plugin listener for deep-link callbacks (APK builds).
+    // Chrome Custom Tab automatically closes when the intent is received.
+    let removeCapacitorListener: (() => void) | null = null;
+    if (Capacitor.isNativePlatform()) {
+      void CapacitorApp.addListener('appUrlOpen', async ({ url }) => {
+        await Browser.close();
+        await handleDeepLink(url);
+      }).then(handle => {
+        removeCapacitorListener = () => void handle.remove();
+      });
+    }
 
     return () => {
       mounted = false;
       listener.subscription.unsubscribe();
       sub.remove();
+      removeCapacitorListener?.();
     };
   }, [handleDeepLink]);
 
   /**
    * Initiates Google OAuth via Supabase.
    *
-   * Web: redirects the browser directly to Google using window.location.origin
-   * as the callback URL — no popup, no localhost redirect.
+   * Web/PWA: redirects the browser directly — no popup, no localhost redirect.
    *
-   * Native: opens an in-app browser via expo-web-browser with the app's deep-link
-   * scheme as the redirect URI and processes the callback manually.
+   * Capacitor (APK): opens a Chrome Custom Tab via @capacitor/browser with the
+   * app's custom URL scheme as the redirect URI. The tab closes automatically
+   * when Android intercepts the deep link and fires appUrlOpen.
+   *
+   * Expo native: falls back to expo-web-browser in-app browser session.
    */
   const signInWithGoogle = useCallback(async () => {
-    if (Platform.OS === 'web') {
-      // Use the current page origin so the OAuth callback returns to the same host.
-      const redirectTo =
-        typeof window !== 'undefined' ? window.location.origin : undefined;
-
-      await supabase.auth.signInWithOAuth({
+    // Capacitor native APK — Chrome Custom Tab + deep-link redirect
+    if (Capacitor.isNativePlatform()) {
+      const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
-        options: { redirectTo },
+        options: {
+          redirectTo: CAPACITOR_REDIRECT,
+          skipBrowserRedirect: true,
+        },
       });
-      // The browser navigates away; nothing to do after this line.
+
+      if (error || !data.url) {
+        console.error('Google sign-in error:', error?.message ?? 'No URL returned');
+        return;
+      }
+
+      await Browser.open({ url: data.url });
+      // Deep-link callback is handled by the appUrlOpen listener in useEffect.
       return;
     }
 
-    // Native flow — deep-link back into the app.
+    // Web browser / PWA — redirect the current tab to Google and back.
+    if (typeof window !== 'undefined') {
+      await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: { redirectTo: window.location.origin },
+      });
+      return;
+    }
+
+    // Expo native fallback (expo run:android / iOS) — in-app browser session.
     const redirectTo = AuthSession.makeRedirectUri({
       scheme: 'finduo',
       path: 'auth/callback',

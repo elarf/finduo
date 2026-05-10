@@ -4,6 +4,65 @@
 
 ---
 
+## [1.2.4] — 2026-05-10
+
+### Features
+
+#### Capacitor Android APK Support
+
+- Full Capacitor 7 integration: `@capacitor/core`, `@capacitor/app`, `@capacitor/browser`, `@capacitor/geolocation`, `@capacitor/status-bar`
+- Google OAuth via Chrome Custom Tab with `com.finduo.fingo://auth/callback` deep-link redirect — the tab closes automatically when Android intercepts the callback
+- Hardware back button handled via `initCapacitorBackButton()` — priority chain: registered component handlers (LIFO) → React Navigation stack → minimize app
+- `registerBackHandler()` used in FinGoScreen, DashboardLayout, and AccountPickerSheet for internal modal/section dismissal
+- `build:android` (`npm run build:web && npx cap sync android`) and `open:android` npm scripts for the Capacitor build workflow
+
+#### Safe Area Insets — Full Native Support
+
+- New `src/lib/safeArea.ts` utility: `topInset(base, nativeInset)` and `bottomInset(base, nativeInset)` — returns CSS `env(safe-area-inset-*)` on web, computed native value on APK
+- Applied across all screens and modals: DashboardHeader, AppHeader, EntryModal, TransferModal, ModalShell, BottomActions, FinGoScreen, LoginScreen, QuickNavScreen
+- Hardcoded Platform-conditional padding removed throughout `DashboardScreen.styles.ts`
+
+#### Persistent Query Cache
+
+- `QueryClientProvider` replaced with `PersistQueryClientProvider` from `@tanstack/react-query-persist-client`
+- Cache serialized to AsyncStorage under key `FINDUO_QUERY_CACHE` with 1000 ms write throttle; `gcTime` bumped from 1h to 24h
+- Dashboard data survives full app restarts — opens instantly from cache with no loading spinner
+- Cache max age capped at 24h to prevent serving stale data across day boundaries
+
+#### GPS Tracking Provider (FinGo)
+
+- `GpsTrackingProvider` auto-selected on native Capacitor builds (uses `@capacitor/geolocation`)
+- `ManualTrackingProvider` retained for web/PWA; provider is selected synchronously at module init via `Capacitor.isNativePlatform()`
+
+### Improvements
+
+#### Transaction Tags — Single-Query Fetch
+
+- `useTransactionsQuery` now fetches tags in a single Supabase query using `.select('...,transaction_tags(tag_id)')` — eliminates the separate `transaction_tags` query and client-side join, halving DB round trips
+
+#### "Tap to Load More" in Transaction Section
+
+- "Scroll down to load more transactions" hint converted to a `TouchableOpacity` — tap loads 12 more entries on demand; works reliably on mobile and desktop without requiring scroll-to-bottom
+
+### Bug Fixes
+
+#### Hidden Categories — Cache Serialization
+
+- `hiddenCategoryIds` changed from `Set<string>` to `string[]` in `CategoriesQueryData` so the value is JSON-serializable for AsyncStorage persistence
+- `DashboardContext` now guards against deserialized non-Array values with `new Set(Array.isArray(...) ? ... : [])`
+
+### Technical
+
+- `capacitor.config.ts` — app ID `com.finduo.fingo`, `webDir: 'dist'`, `overlaysWebView: true` (Android 15 / targetSdkVersion=35 edge-to-edge), status bar `#53E3A6` with dark icons
+- `src/lib/capacitorBack.ts` — singleton back button registry with LIFO handler priority and React Navigation fallback
+- `src/lib/safeArea.ts` — `topInset` / `bottomInset` cross-platform helpers
+- `src/lib/fingo/tracking/GpsTrackingProvider.ts` — Capacitor Geolocation-based tracking provider
+- `src/navigation/navigationRef.ts` — React Navigation ref for imperative navigation outside the React tree
+- `src/context/AuthContext.tsx` — `getLaunchUrl()` for Capacitor cold-start deep links; `appUrlOpen` listener closes Browser plugin and handles callback; `skipBrowserRedirect: true` for native OAuth
+- `src/lib/fingo/tracking/TrackingService.ts` — `buildProvider()` selects GPS on native, manual on web
+
+---
+
 ## [1.2.3] — 2026-05-08
 
 ### Improvements

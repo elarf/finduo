@@ -1,6 +1,6 @@
 {
   "name": "finduo",
-  "version": "1.2.3",
+  "version": "1.2.4",
   "main": "index.js",
   "scripts": {
     "start": "expo start",
@@ -8,16 +8,26 @@
     "ios": "expo run:ios",
     "web": "expo start --web",
     "build:web": "expo export --platform web && node scripts/patch-web.js",
+    "build:android": "npm run build:web && npx cap sync android",
+    "open:android": "npx cap open android",
     "serve:web": "npx serve dist",
     "import:monefy": "node scripts/import-monefy.js"
   },
   "dependencies": {
+    "@capacitor/android": "^7.0.0",
+    "@capacitor/app": "^7.0.0",
+    "@capacitor/browser": "^7.0.0",
+    "@capacitor/core": "^7.0.0",
+    "@capacitor/geolocation": "^7.0.0",
+    "@capacitor/status-bar": "^7.0.0",
     "@expo/vector-icons": "^15.0.2",
     "@react-native-async-storage/async-storage": "2.2.0",
     "@react-navigation/native": "^7.2.1",
     "@react-navigation/native-stack": "^7.14.9",
     "@supabase/supabase-js": "^2.100.1",
+    "@tanstack/query-async-storage-persister": "^5.100.9",
     "@tanstack/react-query": "^5.96.0",
+    "@tanstack/react-query-persist-client": "^5.100.9",
     "expo": "~55.0.8",
     "expo-auth-session": "^55.0.9",
     "expo-crypto": "^55.0.10",
@@ -38,6 +48,7 @@
     "three": "^0.140.0"
   },
   "devDependencies": {
+    "@capacitor/cli": "^7.0.0",
     "@types/react": "~19.2.2",
     "@types/three": "^0.160.0",
     "typescript": "~5.9.2",

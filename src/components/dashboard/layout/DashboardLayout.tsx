@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { Image, View } from 'react-native';
 import { useDashboard } from '../../../context/DashboardContext';
 import { styles } from '../../../screens/DashboardScreen.styles';
@@ -11,6 +11,7 @@ import LendingSection from '../../sections/LendingSection';
 import SettlementsSection from '../../sections/SettlementsSection';
 import ContactsSection from '../../sections/ContactsSection';
 import { uiPath, uiProps } from '../../../lib/devtools';
+import { registerBackHandler } from '../../../lib/capacitorBack';
 
 export default function DashboardLayout() {
   const {
@@ -18,7 +19,28 @@ export default function DashboardLayout() {
     desktopView,
     framedMobileView,
     activeSection,
+    setActiveSection,
+    showAccountOverviewPicker,
+    setShowAccountOverviewPicker,
   } = useDashboard();
+
+  const activeSectionRef = useRef(activeSection);
+  useEffect(() => { activeSectionRef.current = activeSection; });
+
+  const overviewPickerRef = useRef(showAccountOverviewPicker);
+  useEffect(() => { overviewPickerRef.current = showAccountOverviewPicker; });
+
+  useEffect(() => registerBackHandler(() => {
+    if (overviewPickerRef.current) {
+      setShowAccountOverviewPicker(false);
+      return true;
+    }
+    if (activeSectionRef.current !== null) {
+      setActiveSection(null);
+      return true;
+    }
+    return false;
+  }), []);
 
   if (loading) {
     return (

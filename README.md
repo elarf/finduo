@@ -6,9 +6,13 @@ Financial tracking app for couples and shared households. Track income, expenses
 
 ---
 
-## Latest Release — v1.2.3
+## Latest Release — v1.2.4
 
-- **FinGo improvements** — header redesigned (black background, full-height asset icon, white stats with semantic icons); accordion expand moves asset to top and hides Upcoming Services; all service intervals listed per component with individual progress bars; component move between assets; odometer vs distance toggle for vehicle usage logs; all transactions visible in Stats tab; show 3 / show all in Upcoming Services
+- **Capacitor Android APK** — Full Capacitor 7 integration with Chrome Custom Tab OAuth, hardware back button handling, GPS tracking provider, and `build:android` / `open:android` scripts
+- **Safe area insets** — New `safeArea.ts` helpers applied across all screens and modals; removes hardcoded Platform-conditional padding from styles
+- **Persistent query cache** — `PersistQueryClientProvider` + AsyncStorage; dashboard data survives full app restarts; gcTime bumped to 24h
+- **Transaction tags single-query** — Tags fetched in one Supabase query instead of two (eliminates a round trip per load)
+- **Tap to load more** — "Load more" hint in transaction list is now a tappable button
 
 Full history: [PATCHNOTES.md](./PATCHNOTES.md)
 
@@ -20,7 +24,7 @@ Full history: [PATCHNOTES.md](./PATCHNOTES.md)
 - **Web:** react-native-web with PWA support (installable on Android and iOS)
 - **Backend:** Supabase (PostgreSQL, Auth, Row Level Security)
 - **Auth:** Google OAuth (PKCE flow)
-- **Data layer:** TanStack Query v5 (cache-first, 5 min stale time, 1 hr gc)
+- **Data layer:** TanStack Query v5 (cache-first, 5 min stale time, 24h gc, persisted to AsyncStorage via `@tanstack/react-query-persist-client`)
 - **Icons:** lucide-react-native (all ~1,900 icons available in picker)
 - **DevTools:** `src/lib/devtools.ts` — stable `testID`/`data-ui` attributes, console tracing, debug overlay
 
@@ -480,7 +484,14 @@ npm run build:web       # Exports to dist/ and patches with PWA tags + viewport 
 npm run serve:web       # Serve dist/ locally for testing
 ```
 
-### Android (preview build)
+### Android (Capacitor APK)
+
+```bash
+npm run build:android   # Build web, then sync Capacitor assets
+npm run open:android    # Open Android project in Android Studio
+```
+
+### Android (Expo preview build)
 
 ```bash
 eas build -p android --profile preview --non-interactive

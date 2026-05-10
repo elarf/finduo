@@ -1,8 +1,10 @@
 import React, { useEffect, useRef } from 'react';
 import { Image, PanResponder, StyleSheet, Text, TouchableOpacity, View, Platform } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
 import { logUI, uiPath, uiProps } from '../../../lib/devtools';
+import { topInset } from '../../../lib/safeArea';
 import { useDashboard } from '../../../context/DashboardContext';
 import Icon from '../../Icon';
 import { styles } from '../../../screens/DashboardScreen.styles';
@@ -14,6 +16,7 @@ interface DashboardHeaderProps {
 
 export default function DashboardHeader({ onBack, rightElement }: DashboardHeaderProps) {
   const navigation = useNavigation<any>();
+  const { top } = useSafeAreaInsets();
   const {
     avatarUrl,
     user,
@@ -77,7 +80,7 @@ export default function DashboardHeader({ onBack, rightElement }: DashboardHeade
   ).current;
 
   return (
-    <View style={styles.headerRow} {...uiProps(uiPath('dashboard', 'header', 'container'))}>
+    <View style={[styles.headerRow, { paddingTop: topInset(14, top) }]} {...uiProps(uiPath('dashboard', 'header', 'container'))}>
       {onBack ? (
         <TouchableOpacity
           style={styles.avatarBtn}
@@ -127,8 +130,8 @@ export default function DashboardHeader({ onBack, rightElement }: DashboardHeade
           </TouchableOpacity>
         </View>
       )}
-      {/* Logo: absolutely centred */}
-      <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
+      {/* Logo: absolutely centred within the visible content area */}
+      <View style={[StyleSheet.absoluteFill, { paddingTop: topInset(14, top) }]} pointerEvents="box-none">
         <View style={styles.headerLogoCenter} pointerEvents="box-none">
           <Image
             source={require('../../../../assets/logo.png')}

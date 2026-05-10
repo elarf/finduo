@@ -1132,7 +1132,7 @@ export function DashboardProvider({
   const txDisplayLabel = useCallback((tx: AppTransaction, fallback: string): React.ReactNode => {
     const txTags = (tx.tag_ids ?? []).map((id) => tagsById[id]).filter(Boolean);
     const note = tx.note?.trim() || '';
-    if (txTags.length === 0 && !note) return categoriesById[tx.category_id]?.name ?? fallback;
+    if (txTags.length === 0 && !note) return categoriesById[tx.category_id ?? '']?.name ?? fallback;
     return (
       <>
         {txTags.map((tag) => (

@@ -426,9 +426,48 @@ export function DashboardProvider({
   children: React.ReactNode;
   prefillEntry?: { amount: number; type: 'income' | 'expense'; note?: string } | null;
 }) {
-  const { user, avatarUrl, signOut } = useAuth();
+  const { user, avatarUrl: googleAvatarUrl, signOut } = useAuth();
   const navigation = useNavigation<any>();
   const { width, height } = useWindowDimensions();
+
+  // On native (Capacitor WebView), lh3.googleusercontent.com images fail to load.
+  // Upload the avatar to Supabase Storage on login/startup and use the public URL.
+  const [storedAvatarUrl, setStoredAvatarUrl] = useState<string | null>(null);
+  useEffect(() => {
+    if (!user || !googleAvatarUrl) { setStoredAvatarUrl(null); return; }
+    let cancelled = false;
+    (async () => {
+      const { data: profile } = await supabase
+        .from('user_profiles')
+        .select('avatar_url, avatar_source_url')
+        .eq('user_id', user.id)
+        .maybeSingle();
+      if (cancelled) return;
+      if (profile?.avatar_url && profile.avatar_source_url === googleAvatarUrl) {
+        setStoredAvatarUrl(profile.avatar_url);
+        return;
+      }
+      try {
+        const res = await fetch(googleAvatarUrl);
+        const buf = await res.arrayBuffer();
+        const contentType = res.headers.get('content-type') || 'image/jpeg';
+        const { error } = await supabase.storage
+          .from('avatars')
+          .upload(user.id, buf, { contentType, upsert: true });
+        if (!error && !cancelled) {
+          const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(user.id);
+          setStoredAvatarUrl(publicUrl);
+          await supabase.from('user_profiles').upsert(
+            { user_id: user.id, avatar_url: publicUrl, avatar_source_url: googleAvatarUrl },
+            { onConflict: 'user_id' },
+          );
+        }
+      } catch {}
+    })();
+    return () => { cancelled = true; };
+  }, [user?.id, googleAvatarUrl]);
+
+  const avatarUrl = storedAvatarUrl ?? googleAvatarUrl;
 
   const data = useDashboardData(user);
   const {
@@ -1276,7 +1315,7 @@ export function DashboardProvider({
     Animated.timing(filterBarAnim, { toValue: active ? 1 : 0, duration: 220, useNativeDriver: false }).start();
   }, [selectedCategoryFilter, selectedTagFilter, showOnlyTransfers, filterBarAnim]);
 
-  useEffect(() => { setAvatarImgError(false); }, [avatarUrl]);
+  useEffect(() => { setAvatarImgError(false); }, [avatarUrl, storedAvatarUrl]);
 
   useEffect(() => {
     if (!isDesktopBrowser) {

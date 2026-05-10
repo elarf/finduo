@@ -6,13 +6,9 @@ Financial tracking app for couples and shared households. Track income, expenses
 
 ---
 
-## Latest Release — v1.2.4
+## Latest Release — v1.2.5
 
-- **Capacitor Android APK** — Full Capacitor 7 integration with Chrome Custom Tab OAuth, hardware back button handling, GPS tracking provider, and `build:android` / `open:android` scripts
-- **Safe area insets** — New `safeArea.ts` helpers applied across all screens and modals; removes hardcoded Platform-conditional padding from styles
-- **Persistent query cache** — `PersistQueryClientProvider` + AsyncStorage; dashboard data survives full app restarts; gcTime bumped to 24h
-- **Transaction tags single-query** — Tags fetched in one Supabase query instead of two (eliminates a round trip per load)
-- **Tap to load more** — "Load more" hint in transaction list is now a tappable button
+- **Google avatar fix (APK)** — Profile pictures from Google OAuth now load correctly in the Capacitor Android WebView; avatars are uploaded to Supabase Storage on startup and the permanent public URL is used instead of the ephemeral Google CDN URL
 
 Full history: [PATCHNOTES.md](./PATCHNOTES.md)
 

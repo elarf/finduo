@@ -4,6 +4,24 @@
 
 ---
 
+## [1.2.5] — 2026-05-10
+
+### Bug Fixes
+
+#### Google Profile Avatar Not Loading on Android APK
+
+- Google profile picture URLs (`lh3.googleusercontent.com`) fail to load in Capacitor's Android WebView; avatars were showing a letter-initial fallback on APK while working correctly on PWA
+- Fix: `DashboardContext` now uploads the Google avatar to Supabase Storage on startup and uses the resulting permanent public URL for display — matching the upload logic already present in `useFriends.ts:ensureProfile`
+- Fast path: if `user_profiles.avatar_source_url` already matches the current Google URL the stored Supabase URL is used immediately (one SELECT, no re-upload)
+- Upload runs in the background with a cancellation guard — unmounting or user-switching exits the async flow cleanly
+- `avatarImgError` reset effect extended to also clear when `storedAvatarUrl` first arrives, so the letter-initial fallback disappears as soon as the Supabase image is ready
+
+### Technical
+
+- `src/context/DashboardContext.tsx` — `storedAvatarUrl` state and async effect added; exposes `storedAvatarUrl ?? googleAvatarUrl` as `avatarUrl` to all consumers
+
+---
+
 ## [1.2.4] — 2026-05-10
 
 ### Features

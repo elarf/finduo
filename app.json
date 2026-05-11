@@ -43,6 +43,9 @@
         "projectId": "a9bb1fc5-8ce5-4722-8056-31a965a95a31"
       }
     },
-    "owner": "elarf8769"
+    "owner": "elarf8769",
+    "plugins": [
+      "react-native-health-connect"
+    ]
   }
 }

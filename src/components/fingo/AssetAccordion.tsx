@@ -5,6 +5,7 @@ import {
 } from 'react-native';
 import ComponentIcon from './ComponentIcon';
 import type { User } from '@supabase/supabase-js';
+import type {
   FinGoAsset, AssetPart, AssetType, ComponentNode,
   ComponentServiceInterval, Component, UsageLog, UsageEntry,
 } from '../../types/fingo';

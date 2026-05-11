@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { Platform } from 'react-native';
+import { Capacitor } from '@capacitor/core';
 import {
   readHealthConnectData,
   requestHealthConnectPermissions,
@@ -10,7 +10,7 @@ import type { HCRecord } from '../lib/fingo/tracking/HealthConnectTrackingProvid
 export type { HCRecord };
 
 export function useHealthConnect() {
-  const isAvailable = Platform.OS === 'android';
+  const isAvailable = Capacitor.isNativePlatform();
 
   const [records, setRecords] = useState<HCRecord[]>([]);
   const [loading, setLoading] = useState(false);

@@ -4,6 +4,22 @@
 
 ---
 
+## [1.2.6] — 2026-05-11
+
+### Bug Fixes
+
+#### Google Profile Avatar Not Loading on APK — AppHeader
+
+- `AppHeader` (used on non-dashboard screens) was reading `user?.user_metadata?.avatar_url` directly instead of using the normalized `avatarUrl` from `AuthContext`
+- On Capacitor APK the Google OAuth payload may deliver the photo URL under `user_metadata.picture` or `identities[0].identity_data.*`; `AuthContext` already normalizes all variants but `AppHeader` bypassed that logic
+- Fix: `AppHeader` now destructures `avatarUrl` from `useAuth()` so the same fallback chain used by `DashboardHeader` is applied everywhere
+
+### Technical
+
+- `src/components/AppHeader.tsx` — replaces manual `user?.user_metadata?.avatar_url` derivation with `avatarUrl` from `useAuth()`
+
+---
+
 ## [1.2.5] — 2026-05-10
 
 ### Bug Fixes

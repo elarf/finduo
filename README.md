@@ -6,9 +6,9 @@ Financial tracking app for couples and shared households. Track income, expenses
 
 ---
 
-## Latest Release — v1.2.5
+## Latest Release — v1.2.6
 
-- **Google avatar fix (APK)** — Profile pictures from Google OAuth now load correctly in the Capacitor Android WebView; avatars are uploaded to Supabase Storage on startup and the permanent public URL is used instead of the ephemeral Google CDN URL
+- **Google avatar fix (AppHeader)** — Profile pictures now load correctly on Capacitor APK in all headers; `AppHeader` was bypassing the `AuthContext` fallback chain and reading `avatar_url` directly from user metadata
 
 Full history: [PATCHNOTES.md](./PATCHNOTES.md)
 

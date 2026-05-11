@@ -4,6 +4,8 @@ import {
   StyleSheet, Modal, TextInput, Platform, Alert,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { RootStackParamList } from '../navigation';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';
 import { useAssets } from '../hooks/useAssets';
@@ -26,7 +28,8 @@ import type {
   FinGoAsset, AssetPart, AssetType, FinGoSortOrder,
   Component, ComponentServiceInterval, ComponentTemplate, UsageEntry,
 } from '../types/fingo';
-import type { AppCategory } from '../types/dashboard';
+
+type IntervalWithComponent = { interval: ComponentServiceInterval; component: Component };import type { AppCategory } from '../types/dashboard';
 import { supabase } from '../lib/supabase';
 import { uiPath, uiProps, logUI } from '../lib/devtools';
 import { getTrackingValue } from '../lib/fingo/health';
@@ -36,7 +39,7 @@ import { bottomInset } from '../lib/safeArea';
 const ASSET_TYPES: AssetType[] = ['vehicle', 'motorbike', 'bike', 'shoe', 'other'];
 
 export default function FinGoScreen() {
-  const navigation = useNavigation();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { session } = useAuth();
   const user = session?.user ?? null;
   const { bottom } = useSafeAreaInsets();
@@ -62,17 +65,20 @@ export default function FinGoScreen() {
   const [categories, setCategories] = useState<AppCategory[]>([]);
   const [sortOrder, setSortOrder] = useState<FinGoSortOrder>('deadline');
   const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
-  const [expandedAssetId, setExpandedAssetId] = useState<string | null>(null);
+  const [focusedAssetId, setFocusedAssetId] = useState<string | null>(null);
 
   const scrollViewRef = useRef<ScrollView>(null);
   const accordionOffsets = useRef<Record<string, number>>({});
 
-  const displayedAssets = useMemo(() => {
-    if (!expandedAssetId) return assets;
-    const expanded = assets.find((a) => a.id === expandedAssetId);
-    if (!expanded) return assets;
-    return [expanded, ...assets.filter((a) => a.id !== expandedAssetId)];
-  }, [assets, expandedAssetId]);
+  const focusedAsset = useMemo(
+    () => (focusedAssetId ? (assets.find((a) => a.id === focusedAssetId) ?? null) : null),
+    [assets, focusedAssetId],
+  );
+
+  const collapseAccordion = useCallback(() => {
+    setFocusedAssetId(null);
+    setTimeout(() => scrollViewRef.current?.scrollTo({ y: 0, animated: true }), 50);
+  }, []);
 
   // Asset create/edit modal
   const [showAssetModal, setShowAssetModal] = useState(false);
@@ -99,8 +105,9 @@ export default function FinGoScreen() {
     if (m.showComponentForm) { setShowComponentForm(false); return true; }
     if (m.showLibrary) { setShowLibrary(false); return true; }
     if (m.showAssetModal) { setShowAssetModal(false); return true; }
+    if (focusedAssetId) { setFocusedAssetId(null); return true; }
     return false;
-  }), []);
+  }), [focusedAssetId]);
 
   // Pending context for sheets
   const [pendingAsset, setPendingAsset] = useState<FinGoAsset | null>(null);
@@ -110,6 +117,7 @@ export default function FinGoScreen() {
   const [activeComponent, setActiveComponent] = useState<Component | null>(null);
   const [editingInterval, setEditingInterval] = useState<ComponentServiceInterval | null>(null);
   const [libraryForReplace, setLibraryForReplace] = useState(false);
+  const [pendingAllIntervals, setPendingAllIntervals] = useState<IntervalWithComponent[]>([]);
 
   // ─── Load data on mount ───────────────────────────────────────────────────────
   useEffect(() => {
@@ -175,8 +183,8 @@ export default function FinGoScreen() {
   const handleDeleteAsset = useCallback(async (assetId: string) => {
     await deleteAsset(assetId);
     if (selectedAssetId === assetId) setSelectedAssetId(null);
-    if (expandedAssetId === assetId) setExpandedAssetId(null);
-  }, [deleteAsset, selectedAssetId, expandedAssetId]);
+    if (focusedAssetId === assetId) setFocusedAssetId(null);
+  }, [deleteAsset, selectedAssetId, focusedAssetId]);
 
   const handleServicePart = useCallback(async (part: AssetPart, asset: FinGoAsset) => {
     await servicePart(part.id, asset.id, asset.current_usage);
@@ -364,6 +372,20 @@ export default function FinGoScreen() {
     }
   }, [deleteInterval]);
 
+  const handleAddService = useCallback((asset: FinGoAsset) => {
+    const allComponents = getAllComponents(asset.id);
+    const gathered: IntervalWithComponent[] = [];
+    for (const comp of allComponents) {
+      for (const interval of (intervals[comp.id] ?? [])) {
+        gathered.push({ interval, component: comp });
+      }
+    }
+    setPendingAllIntervals(gathered);
+    setPendingAsset(asset);
+    setActiveComponent(null);
+    setShowRecordSheet(true);
+  }, [getAllComponents, intervals]);
+
   return (
     <View {...uiProps(uiPath('fingo', 'screen', 'container'))} style={styles.screen}>
       {/* Header */}
@@ -386,12 +408,47 @@ export default function FinGoScreen() {
         }
       />
 
+      {/* Pinned accordion header (outside ScrollView when an asset is focused) */}
+      {focusedAsset && (
+        <View style={styles.pinnedAccordionHeader}>
+          <AssetAccordion
+            asset={focusedAsset}
+            user={user}
+            parts={parts[focusedAsset.id] ?? []}
+            componentTree={getTree(focusedAsset.id)}
+            intervals={intervals}
+            linkedCategoryIds={categoryLinks[focusedAsset.id] ?? []}
+            transactions={transactions[focusedAsset.id] ?? []}
+            usageLogs={logs[focusedAsset.id] ?? []}
+            categories={categories}
+            onLogUsage={async (entry) => {
+              await addUsageLog(focusedAsset, entry);
+              await Promise.all([loadAssets(), loadComponents(focusedAsset.id)]);
+            }}
+            onServicePart={(part) => void handleServicePart(part, focusedAsset)}
+            onLinkCategory={(catId) => void linkCategory(focusedAsset.id, catId)}
+            onUnlinkCategory={(catId) => void unlinkCategory(focusedAsset.id, catId)}
+            onDeleteAsset={(id) => void handleDeleteAsset(id)}
+            onEditAsset={openEditAsset}
+            onComponentAction={(action, component) => handleComponentAction(action, component, focusedAsset)}
+            onIntervalAction={(action, interval, component) => handleIntervalAction(action, interval, component, focusedAsset)}
+            onAddComponent={(parentId) => handleAddComponent(focusedAsset, parentId)}
+            onComponentPress={(component) => navigation.push('ComponentDetail', { componentId: component.id, assetId: focusedAsset.id })}
+            onIntervalPress={(interval, component) => navigation.push('ServiceIntervalDetail', { intervalId: interval.id, componentId: component.id, assetId: focusedAsset.id })}
+            onAddService={() => handleAddService(focusedAsset)}
+            expanded
+            onToggle={collapseAccordion}
+            headerOnly
+          />
+        </View>
+      )}
+
       {/* Main scroll area */}
       <ScrollView
         {...uiProps(uiPath('fingo', 'screen', 'scroll_view'))}
         ref={scrollViewRef}
         style={styles.scroll}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={focusedAsset ? styles.scrollContentFocused : styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
         {loading && assets.length === 0 ? (
@@ -406,27 +463,56 @@ export default function FinGoScreen() {
               <Text style={styles.emptyButtonText}>Add Asset</Text>
             </TouchableOpacity>
           </View>
+        ) : focusedAsset ? (
+          /* Focused: only the body scrolls */
+          <AssetAccordion
+            asset={focusedAsset}
+            user={user}
+            parts={parts[focusedAsset.id] ?? []}
+            componentTree={getTree(focusedAsset.id)}
+            intervals={intervals}
+            linkedCategoryIds={categoryLinks[focusedAsset.id] ?? []}
+            transactions={transactions[focusedAsset.id] ?? []}
+            usageLogs={logs[focusedAsset.id] ?? []}
+            categories={categories}
+            onLogUsage={async (entry) => {
+              await addUsageLog(focusedAsset, entry);
+              await Promise.all([loadAssets(), loadComponents(focusedAsset.id)]);
+            }}
+            onServicePart={(part) => void handleServicePart(part, focusedAsset)}
+            onLinkCategory={(catId) => void linkCategory(focusedAsset.id, catId)}
+            onUnlinkCategory={(catId) => void unlinkCategory(focusedAsset.id, catId)}
+            onDeleteAsset={(id) => void handleDeleteAsset(id)}
+            onEditAsset={openEditAsset}
+            onComponentAction={(action, component) => handleComponentAction(action, component, focusedAsset)}
+            onIntervalAction={(action, interval, component) => handleIntervalAction(action, interval, component, focusedAsset)}
+            onAddComponent={(parentId) => handleAddComponent(focusedAsset, parentId)}
+            onComponentPress={(component) => navigation.push('ComponentDetail', { componentId: component.id, assetId: focusedAsset.id })}
+            onIntervalPress={(interval, component) => navigation.push('ServiceIntervalDetail', { intervalId: interval.id, componentId: component.id, assetId: focusedAsset.id })}
+            onAddService={() => handleAddService(focusedAsset)}
+            expanded
+            onToggle={collapseAccordion}
+            bodyOnly
+          />
         ) : (
           <>
-            {!expandedAssetId && (
-              <ServiceDashboard
-                assets={assets}
-                partsByAsset={parts}
-                componentsByAsset={componentsByAsset}
-                intervals={intervals}
-                sortOrder={sortOrder}
-                onSortChange={setSortOrder}
-                onServicePart={handleServicePart}
-                onLogServiceInterval={(_interval, component, asset) => {
-                  setActiveComponent(component);
-                  setPendingAsset(asset);
-                  setShowRecordSheet(true);
-                }}
-              />
-            )}
+            <ServiceDashboard
+              assets={assets}
+              partsByAsset={parts}
+              componentsByAsset={componentsByAsset}
+              intervals={intervals}
+              sortOrder={sortOrder}
+              onSortChange={setSortOrder}
+              onServicePart={handleServicePart}
+              onLogServiceInterval={(_interval, component, asset) => {
+                setActiveComponent(component);
+                setPendingAsset(asset);
+                setShowRecordSheet(true);
+              }}
+            />
 
-            {!expandedAssetId && <Text style={styles.sectionLabel}>Your Assets</Text>}
-            {displayedAssets.map((asset) => (
+            <Text style={styles.sectionLabel}>Your Assets</Text>
+            {assets.map((asset) => (
               <View
                 key={asset.id}
                 onLayout={(e) => { accordionOffsets.current[asset.id] = e.nativeEvent.layout.y; }}
@@ -457,10 +543,23 @@ export default function FinGoScreen() {
                     handleIntervalAction(action, interval, component, asset);
                   }}
                   onAddComponent={(parentId) => handleAddComponent(asset, parentId)}
-                  expanded={expandedAssetId === asset.id}
+                  onComponentPress={(component) => {
+                    navigation.push('ComponentDetail', {
+                      componentId: component.id,
+                      assetId: asset.id,
+                    });
+                  }}
+                  onIntervalPress={(interval, component) => {
+                    navigation.push('ServiceIntervalDetail', {
+                      intervalId: interval.id,
+                      componentId: component.id,
+                      assetId: asset.id,
+                    });
+                  }}
+                  onAddService={() => handleAddService(asset)}
+                  expanded={false}
                   onToggle={() => {
-                    const isExpanding = expandedAssetId !== asset.id;
-                    setExpandedAssetId(isExpanding ? asset.id : null);
+                    setFocusedAssetId(asset.id);
                     setTimeout(() => {
                       scrollViewRef.current?.scrollTo({ y: 0, animated: true });
                     }, 50);
@@ -474,7 +573,17 @@ export default function FinGoScreen() {
 
       {/* Bottom bar */}
       <View {...uiProps(uiPath('fingo', 'bottom_bar', 'container'))} style={[styles.bottomBar, { paddingBottom: bottomInset(12, bottom) }]}>
-        <View style={styles.bottomBarSide} />
+        <TouchableOpacity
+          {...uiProps(uiPath('fingo', 'bottom_bar', 'data_button'))}
+          style={styles.bottomBarButton}
+          onPress={() => {
+            logUI(uiPath('fingo', 'bottom_bar', 'data_button'), 'press');
+            navigation.push('HealthConnect');
+          }}
+        >
+          <Text style={styles.bottomBarIcon}>💚</Text>
+          <Text style={styles.bottomBarLabel}>Data</Text>
+        </TouchableOpacity>
         <GoButton assetId={selectedAssetId} />
         <TouchableOpacity
           {...uiProps(uiPath('fingo', 'bottom_bar', 'stats_button'))}
@@ -575,22 +684,47 @@ export default function FinGoScreen() {
         componentName={activeComponent?.name}
         intervals={activeComponent ? (intervals[activeComponent.id] ?? []) : []}
         component={activeComponent}
+        allIntervals={pendingAllIntervals.length > 0 ? pendingAllIntervals : undefined}
         onSave={async (name, servicedAt, notes, cost, selectedIntervalIds) => {
           if (!pendingAsset) return;
-          await createRecord(pendingAsset.id, activeComponent?.id ?? null, name, servicedAt, notes, cost);
-          if (activeComponent && selectedIntervalIds.length > 0) {
-            const componentIntervals = intervals[activeComponent.id] ?? [];
+          if (pendingAllIntervals.length > 0) {
+            // Asset-level service: save one record per selected component
+            const selectedItems = pendingAllIntervals.filter((x) => selectedIntervalIds.includes(x.interval.id));
+            const byComponent = new Map<string, { component: Component; intervalIds: string[] }>();
+            for (const { interval, component: comp } of selectedItems) {
+              const existing = byComponent.get(comp.id);
+              if (existing) existing.intervalIds.push(interval.id);
+              else byComponent.set(comp.id, { component: comp, intervalIds: [interval.id] });
+            }
             await Promise.all(
-              selectedIntervalIds.map((id) => {
-                const interval = componentIntervals.find((i) => i.id === id);
-                if (!interval) return Promise.resolve(false);
-                const currentValue = getTrackingValue(activeComponent, interval.tracking_method);
-                return markServiced(id, activeComponent.id, currentValue);
+              Array.from(byComponent.values()).map(async ({ component: comp, intervalIds }) => {
+                await createRecord(pendingAsset.id, comp.id, name, servicedAt, notes, cost);
+                await Promise.all(
+                  intervalIds.map((id) => {
+                    const iv = pendingAllIntervals.find((x) => x.interval.id === id)?.interval;
+                    if (!iv) return Promise.resolve(false);
+                    const currentValue = getTrackingValue(comp, iv.tracking_method);
+                    return markServiced(id, comp.id, currentValue);
+                  }),
+                );
               }),
             );
+          } else {
+            await createRecord(pendingAsset.id, activeComponent?.id ?? null, name, servicedAt, notes, cost);
+            if (activeComponent && selectedIntervalIds.length > 0) {
+              const componentIntervals = intervals[activeComponent.id] ?? [];
+              await Promise.all(
+                selectedIntervalIds.map((id) => {
+                  const interval = componentIntervals.find((i) => i.id === id);
+                  if (!interval) return Promise.resolve(false);
+                  const currentValue = getTrackingValue(activeComponent, interval.tracking_method);
+                  return markServiced(id, activeComponent.id, currentValue);
+                }),
+              );
+            }
           }
         }}
-        onClose={() => { setShowRecordSheet(false); }}
+        onClose={() => { setShowRecordSheet(false); setPendingAllIntervals([]); }}
       />
     </View>
   );
@@ -615,6 +749,14 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: 16,
     paddingBottom: 100,
+  },
+  scrollContentFocused: {
+    paddingTop: 0,
+    paddingHorizontal: 16,
+    paddingBottom: 100,
+  },
+  pinnedAccordionHeader: {
+    paddingHorizontal: 16,
   },
   loadingText: {
     color: '#475569',
@@ -673,7 +815,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 32,
     paddingTop: 12,
   },
-  bottomBarSide: { width: 48 },
   bottomBarButton: {
     alignItems: 'center',
     width: 48,

@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import ComponentIcon from './ComponentIcon';
 import type { AssetType, Component, ComponentNode, ComponentServiceInterval } from '../../types/fingo';
 import {
   computeIntervalHealth, formatIntervalRemaining, healthColor,
 } from '../../lib/fingo/health';
 import { findTemplate } from '../../lib/fingo/componentTemplates';
+import { getComponentIcon } from '../../lib/fingo/componentIcons';
 import { uiPath, uiProps, logUI } from '../../lib/devtools';
 
 interface Props {
@@ -55,6 +57,11 @@ export default function ComponentRow({
         {/* Main content */}
         <View style={styles.content}>
           <View style={styles.titleRow}>
+            <ComponentIcon
+              name={getComponentIcon(component.name, component.template_key)}
+              size={14}
+              color="#3B6A9E"
+            />
             <Text style={styles.name} numberOfLines={1}>{component.name}</Text>
             {template && (
               <View style={styles.categoryTag}>
@@ -199,7 +206,7 @@ const styles = StyleSheet.create({
   titleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 5,
     flexWrap: 'wrap',
   },
   name: {

@@ -17,15 +17,18 @@ function parseNum(v: string): number {
   return parseFloat(v.replace(',', '.')) || 0;
 }
 
-/** Convert "h:mm" or bare number string to minutes */
+/** Convert "HH:MM" digit-mask string to minutes */
 function parseTime(v: string): number {
   const trimmed = v.trim();
-  if (trimmed.includes(':')) {
-    const [h, m] = trimmed.split(':').map((s) => parseInt(s, 10) || 0);
-    return h * 60 + m;
-  }
-  const n = parseFloat(trimmed) || 0;
-  return Math.round(n * 60); // treat bare number as hours
+  if (!trimmed) return 0;
+  const [h, m] = trimmed.split(':').map((s) => parseInt(s, 10) || 0);
+  return h * 60 + (m ?? 0);
+}
+
+/** Format raw digit string (max 4) as HH:MM display value */
+function formatTimeDigits(digits: string): string {
+  if (digits.length <= 2) return digits;
+  return digits.slice(0, 2) + ':' + digits.slice(2);
 }
 
 /** Format minutes as h:mm for preview */
@@ -59,7 +62,7 @@ export default function UsageLogModal({ visible, asset, onClose, onSubmit }: Pro
     ? Math.max(0, odomNum - asset.current_usage)
     : rawDistNum;
 
-  const timeMin = parseTime(movingTime);
+  const timeMin = parseTime(formatTimeDigits(movingTime));
   const elevNum = parseNum(elevation);
   const stepsNum = Math.round(parseNum(steps));
 
@@ -86,6 +89,16 @@ export default function UsageLogModal({ visible, asset, onClose, onSubmit }: Pro
     setOdometer(total > 0 ? String(total) : '');
   };
 
+  const handleMovingTimeChange = (text: string) => {
+    const newDigits = text.replace(/\D/g, '').slice(0, 4);
+    // User deleted the ':' separator — remove last digit instead
+    if (newDigits === movingTime && text.length < formatTimeDigits(movingTime).length) {
+      setMovingTime(movingTime.slice(0, -1));
+    } else {
+      setMovingTime(newDigits);
+    }
+  };
+
   const handleSubmit = async () => {
     if (!isValid) return;
     setSubmitting(true);
@@ -95,7 +108,7 @@ export default function UsageLogModal({ visible, asset, onClose, onSubmit }: Pro
         entry.steps = stepsNum;
       } else {
         entry.distance = distNum;
-        if (movingTime.trim()) entry.movingTime = timeMin;
+        if (timeMin > 0) entry.movingTime = timeMin;
         if (type === 'bike' && elevation.trim()) entry.elevation = elevNum;
       }
       await onSubmit(entry);
@@ -197,17 +210,18 @@ export default function UsageLogModal({ visible, asset, onClose, onSubmit }: Pro
                 </>
               )}
 
-              <Text style={styles.label}>Moving time <Text style={styles.labelHint}>(h:mm or decimal hours, optional)</Text></Text>
+              <Text style={styles.label}>Moving time <Text style={styles.labelHint}>(hh:mm, optional)</Text></Text>
               <TextInput
                 {...uiProps(uiPath('fingo', 'usage_log_modal', 'time_input'))}
                 style={styles.input}
-                value={movingTime}
-                onChangeText={setMovingTime}
-                placeholder="e.g. 1:30 or 1.5"
+                value={formatTimeDigits(movingTime)}
+                onChangeText={handleMovingTimeChange}
+                placeholder="00:00"
                 placeholderTextColor="#475569"
-                keyboardType="numeric"
+                keyboardType="number-pad"
+                maxLength={5}
               />
-              {movingTime.trim() && timeMin > 0 && (
+              {movingTime.length === 4 && timeMin > 0 && (
                 <Text style={styles.preview}>{formatMinutes(timeMin)}</Text>
               )}
 

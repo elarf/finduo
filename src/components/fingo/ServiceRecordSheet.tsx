@@ -8,12 +8,20 @@ import type { ComponentServiceInterval, Component } from '../../types/fingo';
 import {
   computeIntervalHealth, formatIntervalRemaining, healthColor,
 } from '../../lib/fingo/health';
+import DateTimeFields from './DateTimeFields';
+
+interface IntervalWithComponent {
+  interval: ComponentServiceInterval;
+  component: Component;
+}
 
 interface Props {
   visible: boolean;
   componentName?: string | null;
   intervals?: ComponentServiceInterval[];
   component?: Component | null;
+  /** When provided, shows intervals from multiple components (asset-level service). */
+  allIntervals?: IntervalWithComponent[];
   onSave: (
     name: string,
     servicedAt: string,
@@ -24,17 +32,23 @@ interface Props {
   onClose: () => void;
 }
 
-function toLocalDatetimeString(date: Date): string {
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+function toDateStr(d: Date): string {
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
+function toTimeStr(d: Date): string {
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
 export default function ServiceRecordSheet({
-  visible, componentName, intervals, component, onSave, onClose,
+  visible, componentName, intervals, component, allIntervals, onSave, onClose,
 }: Props) {
   const [name, setName] = useState('');
   const [nameIsManual, setNameIsManual] = useState(false);
-  const [datetimeStr, setDatetimeStr] = useState('');
+  const [serviceDate, setServiceDate] = useState('');
+  const [serviceTime, setServiceTime] = useState('');
   const [notes, setNotes] = useState('');
   const [costStr, setCostStr] = useState('');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -44,7 +58,9 @@ export default function ServiceRecordSheet({
     if (visible) {
       setName('');
       setNameIsManual(false);
-      setDatetimeStr(toLocalDatetimeString(new Date()));
+      const now = new Date();
+      setServiceDate(toDateStr(now));
+      setServiceTime(toTimeStr(now));
       setNotes('');
       setCostStr('');
       setSelectedIds(new Set());
@@ -52,12 +68,16 @@ export default function ServiceRecordSheet({
   }, [visible]);
 
   const cost = costStr.trim() ? parseFloat(costStr.replace(',', '.')) : null;
-  const canSave = name.trim() && datetimeStr.trim();
+  const canSave = name.trim() && serviceDate && serviceTime;
+
+  // Normalize to a flat list of { interval, component } for rendering
+  const effectiveIntervals: IntervalWithComponent[] = allIntervals
+    ?? (intervals ?? []).map((interval) => ({ interval, component: component! })).filter((x) => x.component != null);
 
   const autoNameFromIds = (ids: Set<string>): string => {
-    if (!intervals || ids.size === 0) return '';
+    if (ids.size === 0) return '';
     return Array.from(ids)
-      .map((id) => intervals.find((i) => i.id === id)?.name ?? '')
+      .map((id) => effectiveIntervals.find((x) => x.interval.id === id)?.interval.name ?? '')
       .filter(Boolean)
       .join(', ');
   };
@@ -88,7 +108,7 @@ export default function ServiceRecordSheet({
     setSaving(true);
     try {
       logUI(uiPath('fingo', 'service_record_sheet', 'save'), 'press');
-      const isoDate = new Date(datetimeStr).toISOString();
+      const isoDate = new Date(`${serviceDate}T${serviceTime}`).toISOString();
       await onSave(
         name.trim(),
         isoDate,
@@ -102,7 +122,7 @@ export default function ServiceRecordSheet({
     }
   };
 
-  const hasIntervals = (intervals?.length ?? 0) > 0;
+  const hasIntervals = effectiveIntervals.length > 0;
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
@@ -122,8 +142,8 @@ export default function ServiceRecordSheet({
                 <Text style={styles.label}>
                   Service intervals <Text style={styles.optional}>(select what was done)</Text>
                 </Text>
-                {intervals!.map((interval) => {
-                  const health = component ? computeIntervalHealth(interval, component) : null;
+                {effectiveIntervals.map(({ interval, component: comp }) => {
+                  const health = comp ? computeIntervalHealth(interval, comp) : null;
                   const selected = selectedIds.has(interval.id);
                   const ratio = health ? health.remaining / interval.interval_value : 1;
                   const color = healthColor(ratio);
@@ -137,7 +157,12 @@ export default function ServiceRecordSheet({
                       <View style={[styles.checkbox, selected && styles.checkboxSelected]}>
                         {selected && <Text style={styles.checkmark}>✓</Text>}
                       </View>
-                      <Text style={styles.intervalName}>{interval.name}</Text>
+                      <View style={styles.intervalBody}>
+                        <Text style={styles.intervalName}>{interval.name}</Text>
+                        {allIntervals && (
+                          <Text style={styles.intervalComponent}>{comp.name}</Text>
+                        )}
+                      </View>
                       {health && (
                         <Text style={[styles.intervalBadge, { color, borderColor: color + '55' }]}>
                           {formatIntervalRemaining(health)}
@@ -168,14 +193,11 @@ export default function ServiceRecordSheet({
             </View>
 
             <Text style={styles.label}>Date & time</Text>
-            <TextInput
-              {...uiProps(uiPath('fingo', 'service_record_sheet', 'date_input'))}
-              style={styles.input}
-              value={datetimeStr}
-              onChangeText={setDatetimeStr}
-              placeholder="YYYY-MM-DDTHH:MM"
-              placeholderTextColor="#475569"
-              keyboardType="default"
+            <DateTimeFields
+              dateStr={serviceDate}
+              timeStr={serviceTime}
+              onDateChange={setServiceDate}
+              onTimeChange={setServiceTime}
             />
 
             <Text style={styles.label}>
@@ -310,7 +332,9 @@ const styles = StyleSheet.create({
     borderColor: '#4ade80',
   },
   checkmark: { color: '#060D18', fontSize: 11, fontWeight: '900', lineHeight: 14 },
-  intervalName: { flex: 1, color: '#CBD5E1', fontSize: 14 },
+  intervalBody: { flex: 1 },
+  intervalName: { color: '#CBD5E1', fontSize: 14 },
+  intervalComponent: { color: '#475569', fontSize: 11, marginTop: 2 },
   intervalBadge: {
     fontSize: 11,
     fontWeight: '600',

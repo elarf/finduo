@@ -1,10 +1,24 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet,
-  ScrollView, Alert, Platform, Image, ImageSourcePropType,
+  ScrollView, Alert, Platform, Image, ImageSourcePropType, Modal,
 } from 'react-native';
+import ComponentIcon from './ComponentIcon';
 import type { User } from '@supabase/supabase-js';
-import type { FinGoAsset, AssetPart, AssetType, ComponentNode, ComponentServiceInterval, Component, UsageLog, UsageEntry } from '../../types/fingo';
+  FinGoAsset, AssetPart, AssetType, ComponentNode,
+  ComponentServiceInterval, Component, UsageLog, UsageEntry,
+} from '../../types/fingo';
+import type { AppCategory, AppTransaction } from '../../types/dashboard';
+import { useDashboard } from '../../context/DashboardContext';
+import UsageLogModal from './UsageLogModal';
+import AssetCategoryPicker from './AssetCategoryPicker';
+import ComponentActionSheet from './ComponentActionSheet';
+import type { ComponentActionType } from './ComponentActionSheet';
+import {
+  computeIntervalHealth, healthColor, formatIntervalRemaining, worstIntervalHealth,
+} from '../../lib/fingo/health';
+import { getComponentIcon } from '../../lib/fingo/componentIcons';
+import { uiPath, uiProps, logUI } from '../../lib/devtools';
 
 const ASSET_ICONS: Record<AssetType, ImageSourcePropType> = {
   vehicle:   require('../../../assets/car.png'),
@@ -13,16 +27,6 @@ const ASSET_ICONS: Record<AssetType, ImageSourcePropType> = {
   shoe:      require('../../../assets/shoes.png'),
   other:     require('../../../assets/car.png'),
 };
-import type { AppCategory, AppTransaction } from '../../types/dashboard';
-import { useDashboard } from '../../context/DashboardContext';
-import PartHealthBar from './PartHealthBar';
-import UsageLogModal from './UsageLogModal';
-import AssetCategoryPicker from './AssetCategoryPicker';
-import ComponentRow from './ComponentRow';
-import ComponentActionSheet from './ComponentActionSheet';
-import type { ComponentActionType } from './ComponentActionSheet';
-import { computePartHealth } from '../../lib/fingo/health';
-import { uiPath, uiProps, logUI } from '../../lib/devtools';
 
 type Props = {
   asset: FinGoAsset;
@@ -43,17 +47,32 @@ type Props = {
   onComponentAction: (action: ComponentActionType, component: Component) => void;
   onIntervalAction: (action: 'edit' | 'delete', interval: ComponentServiceInterval, component: Component) => void;
   onAddComponent: (parentId: string | null) => void;
+  onComponentPress: (component: Component) => void;
+  onIntervalPress: (interval: ComponentServiceInterval, component: Component) => void;
+  onAddService: () => void;
   expanded: boolean;
   onToggle: () => void;
+  headerOnly?: boolean;
+  bodyOnly?: boolean;
 };
 
-type ActiveTab = 'parts' | 'stats' | 'logs';
-
 function formatMovingTime(minutes: number): string {
-  if (minutes < 60) return `${minutes}m`;
+  if (minutes < 60) return `${Math.round(minutes)}m`;
   const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
+  const m = Math.round(minutes % 60);
   return m > 0 ? `${h}h ${m}m` : `${h}h`;
+}
+
+function flattenTree(nodes: ComponentNode[]): { component: Component; depth: number }[] {
+  const result: { component: Component; depth: number }[] = [];
+  const walk = (ns: ComponentNode[], depth: number) => {
+    for (const n of ns) {
+      result.push({ component: n.component, depth });
+      walk(n.children, depth + 1);
+    }
+  };
+  walk(nodes, 0);
+  return result;
 }
 
 export default function AssetAccordion({
@@ -75,21 +94,34 @@ export default function AssetAccordion({
   onComponentAction,
   onIntervalAction,
   onAddComponent,
+  onComponentPress,
+  onIntervalPress,
+  onAddService,
   expanded,
   onToggle,
+  headerOnly = false,
+  bodyOnly = false,
 }: Props) {
-  const [activeTab, setActiveTab] = useState<ActiveTab>('parts');
   const [showUsageModal, setShowUsageModal] = useState(false);
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
+  const [showAssetActions, setShowAssetActions] = useState(false);
   const [actionSheetComp, setActionSheetComp] = useState<Component | null>(null);
+  const [statsExpanded, setStatsExpanded] = useState(false);
 
   const isOwner = asset.created_by === user?.id;
   const { formatCurrency } = useDashboard();
 
-  // Total money spent via linked categories
   const totalSpent = transactions
     .filter((t) => t.type === 'expense')
     .reduce((sum, t) => sum + t.amount, 0);
+
+  // All intervals flat, each paired with their component
+  const allIntervals: { interval: ComponentServiceInterval; component: Component }[] = [];
+  for (const { component } of flattenTree(componentTree)) {
+    for (const interval of (intervals[component.id] ?? [])) {
+      allIntervals.push({ interval, component });
+    }
+  }
 
   const handleDeleteAsset = () => {
     if (Platform.OS === 'web') {
@@ -107,22 +139,19 @@ export default function AssetAccordion({
   return (
     <View {...uiProps(uiPath('fingo', 'asset_accordion', 'container', asset.id))}>
       {/* Header row */}
+      {!bodyOnly && (
       <TouchableOpacity
         {...uiProps(uiPath('fingo', 'asset_accordion', 'header', asset.id))}
-        style={styles.header}
+        style={[styles.header, expanded && styles.headerExpanded]}
         onPress={() => {
           logUI(uiPath('fingo', 'asset_accordion', 'header', asset.id), 'press');
           onToggle();
         }}
       >
-        <Image
-          source={ASSET_ICONS[asset.type]}
-          style={styles.assetTypeIcon}
-          resizeMode="contain"
-        />
+        <Image source={ASSET_ICONS[asset.type]} style={styles.assetTypeIcon} resizeMode="contain" />
         <View style={styles.headerInfo}>
           <Text style={styles.assetName}>{asset.name}</Text>
-          <View style={styles.statsRow}>
+          <View style={styles.headerStats}>
             {asset.type === 'shoe' ? (
               <>
                 {asset.total_steps > 0 && (
@@ -141,7 +170,7 @@ export default function AssetAccordion({
                   <Text style={styles.statChip}>⏱ {formatMovingTime(asset.total_moving_time)}</Text>
                 )}
                 {asset.total_rides > 0 && (
-                  <Text style={styles.statChip}>↺ {asset.total_rides.toLocaleString()} rides</Text>
+                  <Text style={styles.statChip}>↺ {asset.total_rides.toLocaleString()}</Text>
                 )}
                 {asset.total_elevation > 0 && (
                   <Text style={styles.statChip}>▲ {asset.total_elevation.toLocaleString()} m</Text>
@@ -150,7 +179,24 @@ export default function AssetAccordion({
             )}
           </View>
         </View>
+
+        {/* Asset "..." actions */}
+        {isOwner && (
+          <TouchableOpacity
+            style={styles.dotsButton}
+            onPress={(e) => {
+              e.stopPropagation?.();
+              setShowAssetActions(true);
+            }}
+            hitSlop={8}
+          >
+            <Text style={styles.dotsText}>•••</Text>
+          </TouchableOpacity>
+        )}
+
         <Text style={styles.chevron}>{expanded ? '▾' : '▸'}</Text>
+
+        {/* Quick log usage button */}
         <TouchableOpacity
           {...uiProps(uiPath('fingo', 'asset_accordion', 'log_button', asset.id))}
           style={styles.logButton}
@@ -163,76 +209,128 @@ export default function AssetAccordion({
           <Text style={styles.logButtonText}>＋</Text>
         </TouchableOpacity>
       </TouchableOpacity>
+      )}
 
-      {/* Expanded content */}
-      {expanded && (
+      {/* Expanded body — section-based layout (no tabs) */}
+      {!headerOnly && expanded && (
         <View style={styles.body}>
-          {/* Tab bar */}
-          <View style={styles.tabs}>
-            {(['parts', 'stats', 'logs'] as ActiveTab[]).map((tab) => (
-              <TouchableOpacity
-                {...uiProps(uiPath('fingo', 'asset_accordion', 'tab', tab))}
-                key={tab}
-                style={[styles.tab, activeTab === tab && styles.tabActive]}
-                onPress={() => {
-                  logUI(uiPath('fingo', 'asset_accordion', 'tab', tab), 'press');
-                  setActiveTab(tab);
-                }}
-              >
-                <Text style={[styles.tabText, activeTab === tab && styles.tabTextActive]}>
-                  {tab === 'parts' ? 'Parts' : tab === 'stats' ? 'Stats' : 'Logs'}
-                </Text>
-              </TouchableOpacity>
-            ))}
+
+          {/* ── Components ─────────────────────────────────────────────────────── */}
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Components</Text>
+            <TouchableOpacity
+              style={styles.sectionAddBtn}
+              onPress={() => onAddComponent(null)}
+            >
+              <Text style={styles.sectionAddText}>＋</Text>
+            </TouchableOpacity>
           </View>
 
-          {/* Tab: Parts */}
-          {activeTab === 'parts' && (
-            <View>
-              {componentTree.length === 0 ? (
-                <Text style={styles.emptyText}>No components yet.</Text>
-              ) : (
-                componentTree.map((node) => (
-                  <ComponentRow
-                    key={node.component.id}
-                    node={node}
-                    depth={0}
-                    assetId={asset.id}
-                    assetType={asset.type}
-                    intervals={intervals}
-                    onShowActions={setActionSheetComp}
-                    onAddChild={(parentId) => onAddComponent(parentId)}
-                    onIntervalAction={onIntervalAction}
+          {componentTree.length === 0 ? (
+            <Text style={styles.emptyText}>No components yet. Tap + to add one.</Text>
+          ) : (
+            componentTree.map((node) => {
+              const comp = node.component;
+              const compIntervals = intervals[comp.id] ?? [];
+              const worst = worstIntervalHealth(compIntervals, comp);
+              const dotColor = worst ? healthColor(worst.remaining / worst.interval.interval_value) : '#4ade80';
+              const childCount = node.children.length;
+              return (
+                <TouchableOpacity
+                  key={comp.id}
+                  style={styles.componentRow}
+                  onPress={() => onComponentPress(comp)}
+                  activeOpacity={0.7}
+                >
+                  {worst && (
+                    <View style={[styles.healthDot, { backgroundColor: dotColor }]} />
+                  )}
+                  <ComponentIcon
+                    name={getComponentIcon(comp.name, comp.template_key)}
+                    size={16}
+                    color="#3B6A9E"
                   />
-                ))
-              )}
-              <TouchableOpacity
-                {...uiProps(uiPath('fingo', 'asset_accordion', 'add_component', asset.id))}
-                style={styles.addComponentBtn}
-                onPress={() => {
-                  logUI(uiPath('fingo', 'asset_accordion', 'add_component', asset.id), 'press');
-                  onAddComponent(null);
-                }}
-              >
-                <Text style={styles.addComponentText}>+ Add Component</Text>
-              </TouchableOpacity>
-            </View>
+                  <View style={styles.componentRowBody}>
+                    <Text style={styles.componentName}>{comp.name}</Text>
+                    {childCount > 0 && (
+                      <Text style={styles.componentMeta}>{childCount} part{childCount > 1 ? 's' : ''}</Text>
+                    )}
+                    {compIntervals.length > 0 && (
+                      <Text style={styles.componentMeta}>{compIntervals.length} interval{compIntervals.length > 1 ? 's' : ''}</Text>
+                    )}
+                  </View>
+                  <TouchableOpacity
+                    style={styles.componentActionBtn}
+                    onPress={(e) => { e.stopPropagation?.(); setActionSheetComp(comp); }}
+                    hitSlop={8}
+                  >
+                    <Text style={styles.componentActionText}>•••</Text>
+                  </TouchableOpacity>
+                  <Text style={styles.componentChevron}>›</Text>
+                </TouchableOpacity>
+              );
+            })
           )}
 
-          {/* Tab: Stats */}
-          {activeTab === 'stats' && (
-            <View>
-              <View style={styles.statsRow}>
-                <View style={styles.statBox}>
-                  <Text style={styles.statValue}>
-                    {asset.current_usage.toLocaleString()}
+          {/* ── Service Intervals ──────────────────────────────────────────────── */}
+          <View style={[styles.sectionHeader, styles.sectionHeaderMt]}>
+            <Text style={styles.sectionTitle}>Service Intervals</Text>
+            {allIntervals.length > 0 && (
+              <TouchableOpacity
+                style={styles.addServiceBtn}
+                onPress={onAddService}
+              >
+                <Text style={styles.addServiceText}>+ Add Service</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {allIntervals.length === 0 ? (
+            <Text style={styles.emptyText}>No intervals yet. Add them per component.</Text>
+          ) : (
+            allIntervals.map(({ interval, component }) => {
+              const health = computeIntervalHealth(interval, component);
+              const color = healthColor(health.remaining / interval.interval_value);
+              return (
+                <TouchableOpacity
+                  key={interval.id}
+                  style={styles.intervalRow}
+                  onPress={() => onIntervalPress(interval, component)}
+                  activeOpacity={0.7}
+                >
+                  <View style={[styles.healthDot, { backgroundColor: color }]} />
+                  <View style={styles.intervalRowBody}>
+                    <Text style={styles.intervalName}>{interval.name}</Text>
+                    <Text style={styles.intervalComponentLabel}>{component.name}</Text>
+                  </View>
+                  <Text style={[styles.intervalRemaining, { color }]}>
+                    {formatIntervalRemaining(health)}
                   </Text>
+                  <Text style={styles.componentChevron}>›</Text>
+                </TouchableOpacity>
+              );
+            })
+          )}
+
+          {/* ── Stats (collapsible) ────────────────────────────────────────────── */}
+          <TouchableOpacity
+            style={[styles.sectionHeader, styles.sectionHeaderMt]}
+            onPress={() => setStatsExpanded((v) => !v)}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.sectionTitle}>Stats</Text>
+            <Text style={styles.chevron}>{statsExpanded ? '▾' : '▸'}</Text>
+          </TouchableOpacity>
+
+          {statsExpanded && (
+            <View>
+              <View style={styles.statBoxRow}>
+                <View style={styles.statBox}>
+                  <Text style={styles.statValue}>{asset.current_usage.toLocaleString()}</Text>
                   <Text style={styles.statLabel}>{asset.usage_unit} total</Text>
                 </View>
                 <View style={styles.statBox}>
-                  <Text style={styles.statValue}>
-                    {formatCurrency(totalSpent)}
-                  </Text>
+                  <Text style={styles.statValue}>{formatCurrency(totalSpent)}</Text>
                   <Text style={styles.statLabel}>total spent</Text>
                 </View>
                 <View style={styles.statBox}>
@@ -270,76 +368,54 @@ export default function AssetAccordion({
             </View>
           )}
 
-          {/* Tab: Owner actions */}
-          {activeTab === 'logs' && (
-            <View>
-              <Text style={styles.sectionLabel}>Usage History</Text>
-              {usageLogs.length === 0 ? (
-                <Text style={styles.emptyText}>No usage logged yet.</Text>
-              ) : (
-                usageLogs.map((log) => (
-                  <View key={log.id} style={styles.logRow}>
-                    <View style={styles.logLeft}>
-                      <Text style={styles.logDate}>
-                        {new Date(log.recorded_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
-                      </Text>
-                      {log.notes ? <Text style={styles.logNotes} numberOfLines={1}>{log.notes}</Text> : null}
-                    </View>
-                    <View style={styles.logRight}>
-                      {asset.type === 'shoe' ? (
-                        <>
-                          <Text style={styles.logDelta}>+{log.usage_delta.toLocaleString()} steps</Text>
-                          <Text style={styles.logTotal}>{log.usage_after.toLocaleString()} total</Text>
-                        </>
-                      ) : (
-                        <>
-                          <Text style={styles.logDelta}>+{log.usage_delta.toLocaleString()} km</Text>
-                          {log.moving_time_delta != null && (
-                            <Text style={styles.logMeta}>
-                              {log.moving_time_delta < 60
-                                ? `${log.moving_time_delta} min`
-                                : `${Math.floor(log.moving_time_delta / 60)}h ${log.moving_time_delta % 60 > 0 ? `${log.moving_time_delta % 60}m` : ''}`}
-                            </Text>
-                          )}
-                          {asset.type === 'bike' && log.elevation_delta != null && (
-                            <Text style={styles.logMeta}>+{log.elevation_delta.toLocaleString()} m elev</Text>
-                          )}
-                          <Text style={styles.logTotal}>{log.usage_after.toLocaleString()} km total</Text>
-                        </>
-                      )}
-                    </View>
-                  </View>
-                ))
-              )}
-              {isOwner && (
-                <View style={styles.ownerActions}>
-                  <TouchableOpacity
-                    {...uiProps(uiPath('fingo', 'asset_accordion', 'edit_button', asset.id))}
-                    style={styles.editButton}
-                    onPress={() => {
-                      logUI(uiPath('fingo', 'asset_accordion', 'edit_button', asset.id), 'press');
-                      onEditAsset(asset);
-                    }}
-                  >
-                    <Text style={styles.editButtonText}>✎ Edit Asset</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    {...uiProps(uiPath('fingo', 'asset_accordion', 'delete_button', asset.id))}
-                    style={styles.deleteButton}
-                    onPress={() => {
-                      logUI(uiPath('fingo', 'asset_accordion', 'delete_button', asset.id), 'press');
-                      handleDeleteAsset();
-                    }}
-                  >
-                    <Text style={styles.deleteButtonText}>✕ Delete</Text>
-                  </TouchableOpacity>
+          {/* ── Rides ─────────────────────────────────────────────────────────── */}
+          <View style={[styles.sectionHeader, styles.sectionHeaderMt]}>
+            <Text style={styles.sectionTitle}>Rides</Text>
+            <TouchableOpacity
+              style={styles.sectionAddBtn}
+              onPress={() => setShowUsageModal(true)}
+            >
+              <Text style={styles.sectionAddText}>＋</Text>
+            </TouchableOpacity>
+          </View>
+
+          {usageLogs.length === 0 ? (
+            <Text style={styles.emptyText}>No rides logged yet.</Text>
+          ) : (
+            usageLogs.map((log) => (
+              <View key={log.id} style={styles.logRow}>
+                <View style={styles.logLeft}>
+                  <Text style={styles.logDate}>
+                    {new Date(log.recorded_at).toLocaleDateString(undefined, {
+                      month: 'short', day: 'numeric', year: 'numeric',
+                    })}
+                  </Text>
+                  {log.notes ? (
+                    <Text style={styles.logNotes} numberOfLines={1}>{log.notes}</Text>
+                  ) : null}
                 </View>
-              )}
-            </View>
+                <View style={styles.logRight}>
+                  {asset.type === 'shoe' ? (
+                    <Text style={styles.logDelta}>+{log.usage_delta.toLocaleString()} steps</Text>
+                  ) : (
+                    <>
+                      <Text style={styles.logDelta}>+{log.usage_delta.toLocaleString()} km</Text>
+                      {log.moving_time_delta != null && (
+                        <Text style={styles.logMeta}>{formatMovingTime(log.moving_time_delta)}</Text>
+                      )}
+                      {asset.type === 'bike' && log.elevation_delta != null && (
+                        <Text style={styles.logMeta}>+{log.elevation_delta.toLocaleString()} m</Text>
+                      )}
+                    </>
+                  )}
+                </View>
+              </View>
+            ))
           )}
         </View>
       )}
 
+      {/* ── Modals ───────────────────────────────────────────────────────────────── */}
       <UsageLogModal
         visible={showUsageModal}
         asset={asset}
@@ -365,6 +441,36 @@ export default function AssetAccordion({
         }}
         onClose={() => setActionSheetComp(null)}
       />
+
+      {/* Asset actions sheet */}
+      <Modal
+        visible={showAssetActions}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowAssetActions(false)}
+      >
+        <TouchableOpacity
+          style={styles.assetActionsBackdrop}
+          activeOpacity={1}
+          onPress={() => setShowAssetActions(false)}
+        />
+        <View style={styles.assetActionsSheet}>
+          <View style={styles.sheetHandle} />
+          <Text style={styles.assetActionsTitle} numberOfLines={1}>{asset.name}</Text>
+          <TouchableOpacity
+            style={styles.assetActionRow}
+            onPress={() => { setShowAssetActions(false); onEditAsset(asset); }}
+          >
+            <Text style={styles.assetActionText}>✎  Edit Asset</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.assetActionRow}
+            onPress={() => { setShowAssetActions(false); handleDeleteAsset(); }}
+          >
+            <Text style={[styles.assetActionText, styles.destructiveText]}>✕  Delete Asset</Text>
+          </TouchableOpacity>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -378,18 +484,14 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#1F3A59',
     marginBottom: 2,
-    gap: 0,
     overflow: 'hidden',
     maxHeight: 80,
   },
-  chevron: {
-    color: '#8FA8C9',
-    fontSize: 12,
-    fontWeight: '700',
-    width: 14,
-    textAlign: 'center',
-    alignSelf: 'center',
-    marginRight: 4,
+  headerExpanded: {
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
+    borderBottomWidth: 0,
+    marginBottom: 0,
   },
   assetTypeIcon: {
     width: 64,
@@ -408,7 +510,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
   },
-  statsRow: {
+  headerStats: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 6,
@@ -417,6 +519,27 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 11,
     fontWeight: '500',
+  },
+  dotsButton: {
+    width: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'center',
+  },
+  dotsText: {
+    color: '#475569',
+    fontSize: 12,
+    letterSpacing: 1,
+    transform: [{ rotate: '90deg' }],
+  },
+  chevron: {
+    color: '#8FA8C9',
+    fontSize: 12,
+    fontWeight: '700',
+    width: 14,
+    textAlign: 'center',
+    alignSelf: 'center',
+    marginRight: 4,
   },
   logButton: {
     width: 28,
@@ -446,41 +569,138 @@ const styles = StyleSheet.create({
     padding: 12,
     marginBottom: 10,
   },
-  tabs: {
+  sectionHeader: {
     flexDirection: 'row',
-    gap: 6,
-    marginBottom: 12,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
   },
-  tab: {
-    flex: 1,
-    paddingVertical: 6,
+  sectionHeaderMt: {
+    marginTop: 16,
+  },
+  sectionTitle: {
+    color: '#475569',
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.7,
+  },
+  sectionAddBtn: {
+    width: 24,
+    height: 24,
     borderRadius: 6,
+    backgroundColor: '#0D2137',
     borderWidth: 1,
     borderColor: '#1F3A59',
     alignItems: 'center',
+    justifyContent: 'center',
   },
-  tabActive: {
-    backgroundColor: '#0D2137',
-    borderColor: '#3B6A9E',
-  },
-  tabText: {
-    color: '#475569',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  tabTextActive: {
-    color: '#8FA8C9',
+  sectionAddText: {
+    color: '#4ade80',
+    fontSize: 14,
+    fontWeight: '700',
+    lineHeight: 16,
   },
   emptyText: {
     color: '#475569',
     fontSize: 12,
     textAlign: 'center',
-    paddingVertical: 12,
+    paddingVertical: 10,
   },
-  statsRow: {
+  // Component rows
+  componentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#0E1A2B',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#1F3A59',
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+    marginBottom: 5,
+    gap: 8,
+  },
+  healthDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    flexShrink: 0,
+  },
+  componentRowBody: {
+    flex: 1,
+  },
+  componentName: {
+    color: '#CBD5E1',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  componentMeta: {
+    color: '#475569',
+    fontSize: 11,
+    marginTop: 2,
+  },
+  componentActionBtn: {
+    paddingHorizontal: 4,
+  },
+  componentActionText: {
+    color: '#475569',
+    fontSize: 12,
+    letterSpacing: 1,
+    transform: [{ rotate: '90deg' }],
+  },
+  componentChevron: {
+    color: '#3B6A9E',
+    fontSize: 18,
+    fontWeight: '300',
+  },
+  // Interval rows
+  intervalRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#0E1A2B',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#1F3A59',
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+    marginBottom: 5,
+    gap: 8,
+  },
+  intervalRowBody: {
+    flex: 1,
+  },
+  intervalName: {
+    color: '#CBD5E1',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  intervalComponentLabel: {
+    color: '#475569',
+    fontSize: 11,
+    marginTop: 2,
+  },
+  intervalRemaining: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  addServiceBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 6,
+    backgroundColor: '#053d1e',
+    borderWidth: 1,
+    borderColor: '#4ade80',
+  },
+  addServiceText: {
+    color: '#4ade80',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  // Stats section
+  statBoxRow: {
     flexDirection: 'row',
     gap: 8,
-    marginBottom: 12,
+    marginBottom: 10,
   },
   statBox: {
     flex: 1,
@@ -493,7 +713,7 @@ const styles = StyleSheet.create({
   },
   statValue: {
     color: '#CBD5E1',
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '700',
   },
   statLabel: {
@@ -539,14 +759,7 @@ const styles = StyleSheet.create({
   },
   income: { color: '#4ade80' },
   expense: { color: '#f87171' },
-  sectionLabel: {
-    color: '#475569',
-    fontSize: 11,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    marginBottom: 6,
-    letterSpacing: 0.5,
-  },
+  // Ride log rows
   logRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -555,80 +768,51 @@ const styles = StyleSheet.create({
     borderColor: '#0E1A2B',
     gap: 8,
   },
-  logLeft: {
+  logLeft: { flex: 1 },
+  logDate: { color: '#64748B', fontSize: 12 },
+  logNotes: { color: '#475569', fontSize: 11, marginTop: 1 },
+  logRight: { alignItems: 'flex-end' },
+  logDelta: { color: '#4ade80', fontSize: 13, fontWeight: '700' },
+  logMeta: { color: '#64748B', fontSize: 11, marginTop: 1 },
+  // Asset actions modal
+  assetActionsBackdrop: {
     flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
   },
-  logDate: {
-    color: '#64748B',
-    fontSize: 12,
-  },
-  logNotes: {
-    color: '#475569',
-    fontSize: 11,
-    marginTop: 1,
-  },
-  logRight: {
-    alignItems: 'flex-end',
-  },
-  logDelta: {
-    color: '#4ade80',
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  logMeta: {
-    color: '#64748B',
-    fontSize: 11,
-    marginTop: 1,
-  },
-  logTotal: {
-    color: '#475569',
-    fontSize: 11,
-    marginTop: 1,
-  },
-  ownerActions: {
-    flexDirection: 'row',
-    gap: 8,
-    marginTop: 16,
-  },
-  editButton: {
-    flex: 1,
-    padding: 10,
-    borderRadius: 8,
-    borderWidth: 1,
+  assetActionsSheet: {
+    backgroundColor: '#0B1728',
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    borderTopWidth: 1,
     borderColor: '#1F3A59',
-    alignItems: 'center',
+    paddingBottom: 40,
   },
-  editButtonText: {
-    color: '#8FA8C9',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  deleteButton: {
-    paddingHorizontal: 16,
-    padding: 10,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#7f1d1d',
-    backgroundColor: '#0E1A2B',
-    alignItems: 'center',
-  },
-  deleteButtonText: {
-    color: '#f87171',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  addComponentBtn: {
+  sheetHandle: {
+    alignSelf: 'center',
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#1F3A59',
     marginTop: 8,
-    paddingVertical: 10,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderStyle: 'dashed' as const,
-    borderColor: '#1F3A59',
-    alignItems: 'center',
+    marginBottom: 4,
   },
-  addComponentText: {
-    color: '#3B6A9E',
-    fontSize: 13,
-    fontWeight: '600',
+  assetActionsTitle: {
+    color: '#64748B',
+    fontSize: 12,
+    textAlign: 'center',
+    marginBottom: 8,
+    paddingHorizontal: 20,
+  },
+  assetActionRow: {
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+  },
+  assetActionText: {
+    color: '#CBD5E1',
+    fontSize: 15,
+    fontWeight: '500',
+  },
+  destructiveText: {
+    color: '#f87171',
   },
 });

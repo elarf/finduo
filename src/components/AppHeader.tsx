@@ -22,13 +22,11 @@ interface Props {
 
 export default function AppHeader({ onBack, rightElement }: Props) {
   const navigation = useNavigation();
-  const { user } = useAuth();
+  const { user, avatarUrl } = useAuth();
   const { width } = useWindowDimensions();
   const { top } = useSafeAreaInsets();
   const isMobile = Platform.OS !== 'web' || width < 1024;
   const [avatarImgError, setAvatarImgError] = useState(false);
-
-  const avatarUrl = user?.user_metadata?.avatar_url as string | undefined;
   const handleBack = onBack ?? (() => navigation.goBack());
 
   const rightSlot = rightElement ?? (

@@ -1,0 +1,449 @@
+import React, { useCallback, useEffect, useState } from 'react';
+import {
+  View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert, Platform, Modal,
+} from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp, NativeStackScreenProps } from '@react-navigation/native-stack';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useAuth } from '../context/AuthContext';
+import { useServiceIntervals } from '../hooks/useServiceIntervals';
+import { useServiceRecords } from '../hooks/useServiceRecords';
+import ServiceRecordSheet from '../components/fingo/ServiceRecordSheet';
+import { supabase } from '../lib/supabase';
+import {
+  computeIntervalHealth, formatIntervalRemaining, healthColor, getTrackingValue,
+  trackingMethodLabel, trackingMethodUnit,
+} from '../lib/fingo/health';
+import { bottomInset } from '../lib/safeArea';
+import type { RootStackParamList } from '../navigation';
+import type { Component, ComponentServiceInterval } from '../types/fingo';
+
+type Props = NativeStackScreenProps<RootStackParamList, 'ServiceIntervalDetail'>;
+
+export default function ServiceIntervalDetailScreen({ route }: Props) {
+  const { intervalId, componentId, assetId } = route.params;
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const { session } = useAuth();
+  const user = session?.user ?? null;
+  const { bottom } = useSafeAreaInsets();
+
+  const { intervals, loadIntervals, deleteInterval, markServiced } = useServiceIntervals();
+  const { records, createRecord, loadRecords } = useServiceRecords(user);
+
+  const [component, setComponent] = useState<Component | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [showRecordSheet, setShowRecordSheet] = useState(false);
+  const [showActionsModal, setShowActionsModal] = useState(false);
+
+  const interval: ComponentServiceInterval | undefined = (intervals[componentId] ?? []).find((i) => i.id === intervalId);
+
+  const loadAll = useCallback(async () => {
+    setLoading(true);
+    try {
+      const { data } = await supabase.from('components').select('*').eq('id', componentId).single();
+      if (data) setComponent(data as Component);
+      await loadIntervals(componentId);
+      await loadRecords(assetId);
+    } finally {
+      setLoading(false);
+    }
+  }, [componentId, assetId, loadIntervals, loadRecords]);
+
+  useEffect(() => { void loadAll(); }, [loadAll]);
+
+  const handleDelete = useCallback(() => {
+    if (!interval) return;
+    const doDelete = async () => {
+      await deleteInterval(interval.id, componentId);
+      navigation.goBack();
+    };
+    if (Platform.OS === 'web') {
+      if (window.confirm(`Delete "${interval.name}"? This cannot be undone.`)) void doDelete();
+    } else {
+      Alert.alert('Delete interval', `Delete "${interval.name}"?`, [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete', style: 'destructive', onPress: () => void doDelete() },
+      ]);
+    }
+  }, [interval, componentId, deleteInterval, navigation]);
+
+  if (loading || !interval || !component) {
+    return (
+      <View style={styles.screen}>
+        <View style={[styles.topBar, { paddingTop: 16 }]}>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+            <Text style={styles.backText}>‹ Back</Text>
+          </TouchableOpacity>
+        </View>
+        <Text style={styles.loadingText}>{loading ? 'Loading…' : 'Interval not found'}</Text>
+      </View>
+    );
+  }
+
+  const health = computeIntervalHealth(interval, component);
+  const healthRatio = Math.max(0, Math.min(1, health.remaining / interval.interval_value));
+  const color = healthColor(health.remaining / interval.interval_value);
+  const barWidth = `${healthRatio * 100}%` as any;
+
+  return (
+    <View style={styles.screen}>
+      <View style={[styles.topBar, { paddingTop: 16 }]}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+          <Text style={styles.backText}>‹ Back</Text>
+        </TouchableOpacity>
+      </View>
+
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: bottomInset(24, bottom) }]}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* ── Identity ──────────────────────────────────────────────────────── */}
+        <Text style={styles.componentLabel}>{component.name}</Text>
+        <Text style={styles.intervalName}>{interval.name}</Text>
+
+        {/* ── Progress bar ──────────────────────────────────────────────────── */}
+        <View style={styles.progressCard}>
+          <View style={styles.progressBarTrack}>
+            <View style={[styles.progressBarFill, { width: barWidth, backgroundColor: color }]} />
+          </View>
+
+          <View style={styles.progressFooter}>
+            <Text style={[styles.progressRemaining, { color }]}>
+              {formatIntervalRemaining(health)}
+            </Text>
+            <Text style={styles.progressInterval}>
+              / {interval.interval_value.toLocaleString()} {trackingMethodUnit(interval.tracking_method)}
+            </Text>
+            {health.isOverdue && (
+              <View style={styles.overdueBadge}>
+                <Text style={styles.overdueBadgeText}>OVERDUE</Text>
+              </View>
+            )}
+          </View>
+
+          <View style={styles.progressMeta}>
+            <Text style={styles.progressMetaText}>
+              Tracked by: {trackingMethodLabel(interval.tracking_method)}
+            </Text>
+            <Text style={styles.progressMetaText}>
+              Since service: {health.totalSinceService.toLocaleString(undefined, { maximumFractionDigits: 1 })} {trackingMethodUnit(interval.tracking_method)}
+            </Text>
+          </View>
+        </View>
+
+        {/* ── Action buttons ─────────────────────────────────────────────────── */}
+        <View style={styles.actionRow}>
+          <TouchableOpacity
+            style={styles.addServiceBtn}
+            onPress={() => setShowRecordSheet(true)}
+          >
+            <Text style={styles.addServiceText}>+ Add Service</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.actionsBtn}
+            onPress={() => setShowActionsModal(true)}
+          >
+            <Text style={styles.actionsBtnText}>•••</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* ── Service history ────────────────────────────────────────────────── */}
+        {(() => {
+          const componentRecords = records.filter((r) => r.component_id === componentId);
+          return (
+            <>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>Services</Text>
+              </View>
+              {componentRecords.length === 0 ? (
+                <Text style={styles.emptyText}>No services logged yet.</Text>
+              ) : (
+                componentRecords.map((rec) => (
+                  <View key={rec.id} style={styles.serviceRow}>
+                    <View style={styles.serviceBody}>
+                      <Text style={styles.serviceName}>{rec.name}</Text>
+                      <Text style={styles.serviceMeta}>
+                        {new Date(rec.serviced_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
+                      </Text>
+                      {rec.notes ? <Text style={styles.serviceNotes} numberOfLines={2}>{rec.notes}</Text> : null}
+                    </View>
+                    {rec.cost != null && (
+                      <Text style={styles.serviceCost}>
+                        {rec.cost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </Text>
+                    )}
+                  </View>
+                ))
+              )}
+            </>
+          );
+        })()}
+      </ScrollView>
+
+      {/* ── Service record sheet ──────────────────────────────────────────────── */}
+      <ServiceRecordSheet
+        visible={showRecordSheet}
+        componentName={component.name}
+        intervals={[interval]}
+        component={component}
+        onSave={async (name, servicedAt, notes, cost, selectedIntervalIds) => {
+          await createRecord(assetId, componentId, name, servicedAt, notes, cost);
+          if (selectedIntervalIds.includes(interval.id)) {
+            const currentValue = getTrackingValue(component, interval.tracking_method);
+            await markServiced(interval.id, componentId, currentValue);
+            await loadIntervals(componentId);
+          }
+          await loadRecords(assetId);
+        }}
+        onClose={() => setShowRecordSheet(false)}
+      />
+
+      {/* ── Actions modal ─────────────────────────────────────────────────────── */}
+      <Modal
+        visible={showActionsModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowActionsModal(false)}
+      >
+        <TouchableOpacity
+          style={styles.actionsBackdrop}
+          activeOpacity={1}
+          onPress={() => setShowActionsModal(false)}
+        />
+        <View style={styles.actionsSheet}>
+          <View style={styles.sheetHandle} />
+          <Text style={styles.actionsTitle} numberOfLines={1}>{interval.name}</Text>
+          <TouchableOpacity
+            style={styles.actionSheetRow}
+            onPress={() => { setShowActionsModal(false); handleDelete(); }}
+          >
+            <Text style={[styles.actionSheetText, styles.destructiveText]}>🗑️  Delete interval</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.actionSheetRow}
+            onPress={() => {
+              setShowActionsModal(false);
+              // TODO: implement picture upload when image picker is integrated
+              Alert.alert('Set picture', 'Image picker integration coming soon.');
+            }}
+          >
+            <Text style={styles.actionSheetText}>📷  Set picture</Text>
+          </TouchableOpacity>
+        </View>
+      </Modal>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  screen: {
+    flex: 1,
+    backgroundColor: '#060D18',
+  },
+  topBar: {
+    paddingHorizontal: 16,
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+    borderColor: '#1F3A59',
+  },
+  backBtn: {
+    alignSelf: 'flex-start',
+    paddingVertical: 4,
+  },
+  backText: {
+    color: '#4ade80',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  loadingText: {
+    color: '#475569',
+    textAlign: 'center',
+    marginTop: 40,
+  },
+  scroll: { flex: 1 },
+  scrollContent: { padding: 16 },
+  // Identity
+  componentLabel: {
+    color: '#475569',
+    fontSize: 13,
+    marginBottom: 4,
+  },
+  intervalName: {
+    color: '#FFFFFF',
+    fontSize: 22,
+    fontWeight: '800',
+    marginBottom: 20,
+  },
+  // Progress card
+  progressCard: {
+    backgroundColor: '#0B1728',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#1F3A59',
+    padding: 16,
+    marginBottom: 20,
+  },
+  progressBarTrack: {
+    height: 10,
+    backgroundColor: '#1F3A59',
+    borderRadius: 5,
+    overflow: 'hidden',
+    marginBottom: 10,
+  },
+  progressBarFill: {
+    height: 10,
+    borderRadius: 5,
+  },
+  progressFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 10,
+  },
+  progressRemaining: {
+    fontSize: 18,
+    fontWeight: '800',
+  },
+  progressInterval: {
+    color: '#475569',
+    fontSize: 13,
+  },
+  overdueBadge: {
+    backgroundColor: '#7f1d1d',
+    borderRadius: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    marginLeft: 'auto' as any,
+  },
+  overdueBadgeText: {
+    color: '#fca5a5',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  progressMeta: {
+    gap: 4,
+  },
+  progressMetaText: {
+    color: '#475569',
+    fontSize: 12,
+  },
+  // Action buttons
+  actionRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  addServiceBtn: {
+    flex: 3,
+    paddingVertical: 12,
+    borderRadius: 8,
+    backgroundColor: '#053d1e',
+    borderWidth: 1,
+    borderColor: '#4ade80',
+    alignItems: 'center',
+  },
+  addServiceText: {
+    color: '#4ade80',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  actionsBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#1F3A59',
+    alignItems: 'center',
+  },
+  actionsBtnText: {
+    color: '#8FA8C9',
+    fontSize: 16,
+    letterSpacing: 2,
+  },
+  // Actions modal
+  actionsBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+  },
+  actionsSheet: {
+    backgroundColor: '#0B1728',
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    borderTopWidth: 1,
+    borderColor: '#1F3A59',
+    paddingBottom: 40,
+  },
+  sheetHandle: {
+    alignSelf: 'center',
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#1F3A59',
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  actionsTitle: {
+    color: '#64748B',
+    fontSize: 12,
+    textAlign: 'center',
+    marginBottom: 8,
+    paddingHorizontal: 20,
+  },
+  actionSheetRow: {
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+  },
+  actionSheetText: {
+    color: '#CBD5E1',
+    fontSize: 15,
+    fontWeight: '500',
+  },
+  destructiveText: { color: '#f87171' },
+  // Service history
+  sectionHeader: {
+    marginTop: 24,
+    marginBottom: 8,
+  },
+  sectionTitle: {
+    color: '#475569',
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.7,
+  },
+  emptyText: {
+    color: '#475569',
+    fontSize: 12,
+    textAlign: 'center',
+    paddingVertical: 10,
+  },
+  serviceRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderColor: '#0E1A2B',
+    gap: 8,
+  },
+  serviceBody: { flex: 1 },
+  serviceName: {
+    color: '#CBD5E1',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  serviceMeta: {
+    color: '#475569',
+    fontSize: 11,
+    marginTop: 2,
+  },
+  serviceNotes: {
+    color: '#475569',
+    fontSize: 11,
+    marginTop: 2,
+  },
+  serviceCost: {
+    color: '#f87171',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+});

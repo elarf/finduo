@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { logAPI, webAlert } from '../lib/devtools';
 import type { User } from '@supabase/supabase-js';
-import type { FinGoAsset, UsageEntry, UsageLog } from '../types/fingo';
+import type { FinGoAsset, UsageEntry, UsageLog, UsageSource } from '../types/fingo';
 
 export function useUsageLogs(user: User | null) {
   const [logs, setLogs] = useState<Record<string, UsageLog[]>>({});
@@ -27,6 +27,7 @@ export function useUsageLogs(user: User | null) {
     asset: FinGoAsset,
     entry: UsageEntry,
     linkedExpenseId?: string | null,
+    source?: UsageSource,
   ): Promise<boolean> => {
     if (!user) return false;
     try {
@@ -61,7 +62,7 @@ export function useUsageLogs(user: User | null) {
           usage_after: usageAfter,
           moving_time_delta: movingTimeMin,
           elevation_delta: elevationM,
-          source: 'odometer',
+          source: source ?? 'odometer',
           linked_expense_id: linkedExpenseId ?? null,
           notes: entry.notes ?? null,
         });

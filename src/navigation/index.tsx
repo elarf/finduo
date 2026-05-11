@@ -22,6 +22,9 @@ import PoolsScreen from '../screens/PoolsScreen';
 import LendingScreen from '../screens/LendingScreen';
 import SettlementsScreen from '../screens/SettlementsScreen';
 import ContactsScreen from '../screens/ContactsScreen';
+import ComponentDetailScreen from '../screens/ComponentDetailScreen';
+import ServiceIntervalDetailScreen from '../screens/ServiceIntervalDetailScreen';
+import HealthConnectScreen from '../screens/HealthConnectScreen';
 
 export type RootStackParamList = {
   // Auth
@@ -47,6 +50,11 @@ export type RootStackParamList = {
   Lending: undefined;
   Settlements: undefined;
   Contacts: undefined;
+
+  // FinGo detail screens
+  ComponentDetail: { componentId: string; assetId: string };
+  ServiceIntervalDetail: { intervalId: string; componentId: string; assetId: string };
+  HealthConnect: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -100,6 +108,11 @@ export default function RootNavigator() {
             <Stack.Screen name="Lending" component={LendingScreen} />
             <Stack.Screen name="Settlements" component={SettlementsScreen} />
             <Stack.Screen name="Contacts" component={ContactsScreen} />
+
+            {/* FinGo detail screens */}
+            <Stack.Screen name="ComponentDetail" component={ComponentDetailScreen} />
+            <Stack.Screen name="ServiceIntervalDetail" component={ServiceIntervalDetailScreen} />
+            <Stack.Screen name="HealthConnect" component={HealthConnectScreen} />
           </Stack.Navigator>
         </DashboardProvider>
       ) : (

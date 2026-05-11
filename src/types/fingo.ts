@@ -156,6 +156,19 @@ export type ComponentServiceRecord = {
   created_at: string;
 };
 
+export type ComponentSwap = {
+  id: string;
+  component_id: string;
+  asset_id?: string | null;
+  installed_at: string;
+  removed_at?: string | null;
+  notes?: string | null;
+  created_by: string;
+  created_at: string;
+  // client-side enriched
+  asset_name?: string;
+};
+
 export type ComponentTemplate = {
   key: string;
   name: string;

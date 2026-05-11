@@ -3,8 +3,11 @@ import {
   Modal, View, Text, TextInput, TouchableOpacity, StyleSheet,
   KeyboardAvoidingView, Platform, Switch, ScrollView,
 } from 'react-native';
+import ComponentIcon from './ComponentIcon';
 import type { Component, ComponentTemplate } from '../../types/fingo';
+import { getComponentIcon } from '../../lib/fingo/componentIcons';
 import { uiPath, uiProps, logUI } from '../../lib/devtools';
+import DateTimeFields from './DateTimeFields';
 
 interface AssetOption {
   id: string;
@@ -24,19 +27,22 @@ interface Props {
   onClose: () => void;
 }
 
-function toLocalDatetimeString(date: Date): string {
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+function toDateStr(d: Date): string {
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
 
-function safeIso(str: string): string | null {
+function toTimeStr(d: Date): string {
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+function combineDatetime(dateStr: string, timeStr: string): string {
   try {
-    const d = new Date(str);
-    if (isNaN(d.getTime())) return null;
-    return d.toISOString();
-  } catch {
-    return null;
-  }
+    const d = new Date(`${dateStr}T${timeStr}`);
+    if (!isNaN(d.getTime())) return d.toISOString();
+  } catch {}
+  return new Date().toISOString();
 }
 
 export default function ComponentFormSheet({
@@ -45,7 +51,8 @@ export default function ComponentFormSheet({
 }: Props) {
   const [name, setName] = useState('');
   const [notes, setNotes] = useState('');
-  const [installedAtStr, setInstalledAtStr] = useState('');
+  const [installDate, setInstallDate] = useState('');
+  const [installTime, setInstallTime] = useState('');
   const [sinceBeginning, setSinceBeginning] = useState(false);
   const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -57,27 +64,26 @@ export default function ComponentFormSheet({
     if (visible) {
       setName(editingComponent?.name ?? template?.name ?? initialName ?? '');
       setNotes(editingComponent?.notes ?? '');
-      const existingDate = editingComponent?.installed_at
-        ? toLocalDatetimeString(new Date(editingComponent.installed_at))
-        : toLocalDatetimeString(new Date());
-      setInstalledAtStr(existingDate);
-      setSinceBeginning(false);
+      const existingD = editingComponent?.installed_at
+        ? new Date(editingComponent.installed_at)
+        : new Date();
+      setInstallDate(toDateStr(existingD));
+      setInstallTime(toTimeStr(existingD));
+      const assetD = assetCreatedAt ? new Date(assetCreatedAt) : null;
+      setSinceBeginning(
+        isEdit && assetD !== null &&
+        toDateStr(existingD) === toDateStr(assetD) &&
+        toTimeStr(existingD) === toTimeStr(assetD),
+      );
       setSelectedAssetId(currentAssetId ?? null);
     }
   }, [visible, editingComponent, template, initialName, currentAssetId, isEdit]);
 
   const handleSinceBeginning = (val: boolean) => {
     setSinceBeginning(val);
-    if (val && assetCreatedAt) {
-      setInstalledAtStr(toLocalDatetimeString(new Date(assetCreatedAt)));
-    } else {
-      setInstalledAtStr(toLocalDatetimeString(new Date()));
-    }
-  };
-
-  const handleDateChange = (text: string) => {
-    setInstalledAtStr(text);
-    setSinceBeginning(false);
+    const d = val && assetCreatedAt ? new Date(assetCreatedAt) : new Date();
+    setInstallDate(toDateStr(d));
+    setInstallTime(toTimeStr(d));
   };
 
   const handleSave = async () => {
@@ -85,7 +91,7 @@ export default function ComponentFormSheet({
     setSaving(true);
     try {
       logUI(uiPath('fingo', 'component_form', 'save'), 'press');
-      const installedAt = safeIso(installedAtStr) ?? new Date().toISOString();
+      const installedAt = combineDatetime(installDate, installTime);
       await onSave(name.trim(), notes.trim() || null, installedAt, selectedAssetId);
       onClose();
     } finally {
@@ -104,9 +110,19 @@ export default function ComponentFormSheet({
         <TouchableOpacity style={styles.backdrop} activeOpacity={1} onPress={onClose} />
         <View style={styles.sheet}>
           <View style={styles.handle} />
-          <Text style={styles.title}>
-            {isEdit ? 'Edit Component' : template ? `Add ${template.name}` : 'Add Component'}
-          </Text>
+          <View style={styles.titleRow}>
+            <ComponentIcon
+              name={getComponentIcon(
+                template?.name ?? editingComponent?.name ?? '',
+                template?.key ?? editingComponent?.template_key,
+              )}
+              size={20}
+              color="#8FA8C9"
+            />
+            <Text style={styles.title}>
+              {isEdit ? 'Edit Component' : template ? `Add ${template.name}` : 'Add Component'}
+            </Text>
+          </View>
 
           {displayAssetName && (
             <Text style={styles.assetTag}>{displayAssetName}</Text>
@@ -156,15 +172,12 @@ export default function ComponentFormSheet({
                     />
                   </View>
                 </View>
-                <TextInput
-                  {...uiProps(uiPath('fingo', 'component_form', 'installed_at_input'))}
-                  style={[styles.input, sinceBeginning && styles.inputMuted]}
-                  value={installedAtStr}
-                  onChangeText={handleDateChange}
-                  placeholder="YYYY-MM-DDTHH:MM"
-                  placeholderTextColor="#475569"
-                  editable={!sinceBeginning}
-                  keyboardType="default"
+                <DateTimeFields
+                  dateStr={installDate}
+                  timeStr={installTime}
+                  onDateChange={(d) => { setInstallDate(d); setSinceBeginning(false); }}
+                  onTimeChange={(t) => { setInstallTime(t); setSinceBeginning(false); }}
+                  disabled={sinceBeginning}
                 />
             </>
 
@@ -236,11 +249,17 @@ const styles = StyleSheet.create({
     backgroundColor: '#1F3A59',
     marginBottom: 14,
   },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 4,
+  },
   title: {
     color: '#CBD5E1',
     fontSize: 16,
     fontWeight: '700',
-    marginBottom: 4,
+    flex: 1,
   },
   assetTag: {
     color: '#4ade80',

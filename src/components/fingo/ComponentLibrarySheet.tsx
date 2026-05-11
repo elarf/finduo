@@ -3,8 +3,10 @@ import {
   Modal, View, Text, TextInput, TouchableOpacity, SectionList,
   StyleSheet, Platform,
 } from 'react-native';
+import ComponentIcon from './ComponentIcon';
 import type { AssetType, Component, ComponentTemplate } from '../../types/fingo';
 import { getTemplates } from '../../lib/fingo/componentTemplates';
+import { getComponentIcon } from '../../lib/fingo/componentIcons';
 import { uiPath, uiProps, logUI } from '../../lib/devtools';
 
 export type LibrarySelection =
@@ -101,6 +103,11 @@ export default function ComponentLibrarySheet({
                       onClose();
                     }}
                   >
+                    <ComponentIcon
+                      name={getComponentIcon(item.name, item.template_key)}
+                      size={18}
+                      color="#3B6A9E"
+                    />
                     <View style={styles.rowLeft}>
                       <Text style={styles.rowName}>{item.name}</Text>
                       {item.notes ? (
@@ -124,6 +131,11 @@ export default function ComponentLibrarySheet({
                     onClose();
                   }}
                 >
+                  <ComponentIcon
+                    name={getComponentIcon(item.name, item.key)}
+                    size={18}
+                    color="#3B6A9E"
+                  />
                   <Text style={styles.rowName}>{item.name}</Text>
                   {alreadyInstalled && (
                     <View style={styles.installedBadge}>
@@ -239,7 +251,7 @@ const styles = StyleSheet.create({
     color: '#CBD5E1',
     fontSize: 15,
     fontWeight: '500',
-    flex: 1,
+    flexShrink: 1,
   },
   rowHint: {
     color: '#475569',

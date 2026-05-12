@@ -7,7 +7,7 @@ import ComponentIcon from './ComponentIcon';
 import type { User } from '@supabase/supabase-js';
 import type {
   FinGoAsset, AssetPart, AssetType, ComponentNode,
-  ComponentServiceInterval, Component, UsageLog, UsageEntry,
+  ComponentServiceInterval, ServiceIntervalType, Component, UsageLog, UsageEntry,
 } from '../../types/fingo';
 import type { AppCategory, AppTransaction } from '../../types/dashboard';
 import { useDashboard } from '../../context/DashboardContext';
@@ -19,6 +19,7 @@ import {
   computeIntervalHealth, healthColor, formatIntervalRemaining, worstIntervalHealth,
 } from '../../lib/fingo/health';
 import { getComponentIcon } from '../../lib/fingo/componentIcons';
+import { FINGO_ASSETS } from '../../lib/fingo/fingoAssets';
 import { uiPath, uiProps, logUI } from '../../lib/devtools';
 
 const ASSET_ICONS: Record<AssetType, ImageSourcePropType> = {
@@ -27,6 +28,13 @@ const ASSET_ICONS: Record<AssetType, ImageSourcePropType> = {
   bike:      require('../../../assets/ebike.png'),
   shoe:      require('../../../assets/shoes.png'),
   other:     require('../../../assets/car.png'),
+};
+
+const SERVICE_TYPE_ICONS: Record<ServiceIntervalType, any> = {
+  general:  FINGO_ASSETS.fix,
+  replace:  FINGO_ASSETS.change,
+  cleaning: FINGO_ASSETS.wipe,
+  charge:   FINGO_ASSETS.charge,
 };
 
 type Props = {
@@ -138,7 +146,7 @@ export default function AssetAccordion({
   };
 
   return (
-    <View {...uiProps(uiPath('fingo', 'asset_accordion', 'container', asset.id))}>
+    <View {...uiProps(uiPath('fingo', 'asset_accordion', 'container', asset.id))} style={styles.container}>
       {/* Header row */}
       {!bodyOnly && (
       <TouchableOpacity
@@ -156,25 +164,40 @@ export default function AssetAccordion({
             {asset.type === 'shoe' ? (
               <>
                 {asset.total_steps > 0 && (
-                  <Text style={styles.statChip}>👟 {asset.total_steps.toLocaleString()} steps</Text>
+                  <View style={styles.statChip}>
+                    <Image source={FINGO_ASSETS.step} style={styles.statChipIcon} resizeMode="contain" />
+                    <Text style={styles.statChipText}>{asset.total_steps.toLocaleString()} steps</Text>
+                  </View>
                 )}
                 {asset.total_moving_time > 0 && (
-                  <Text style={styles.statChip}>⏱ {formatMovingTime(asset.total_moving_time)}</Text>
+                  <View style={styles.statChip}>
+                    <Image source={FINGO_ASSETS.time} style={styles.statChipIcon} resizeMode="contain" />
+                    <Text style={styles.statChipText}>{formatMovingTime(asset.total_moving_time)}</Text>
+                  </View>
                 )}
               </>
             ) : (
               <>
                 {asset.total_distance > 0 && (
-                  <Text style={styles.statChip}>↔ {asset.total_distance.toLocaleString()} km</Text>
+                  <View style={styles.statChip}>
+                    <Image source={FINGO_ASSETS.route} style={styles.statChipIcon} resizeMode="contain" />
+                    <Text style={styles.statChipText}>{asset.total_distance.toLocaleString()} km</Text>
+                  </View>
                 )}
                 {asset.total_moving_time > 0 && (
-                  <Text style={styles.statChip}>⏱ {formatMovingTime(asset.total_moving_time)}</Text>
+                  <View style={styles.statChip}>
+                    <Image source={FINGO_ASSETS.time} style={styles.statChipIcon} resizeMode="contain" />
+                    <Text style={styles.statChipText}>{formatMovingTime(asset.total_moving_time)}</Text>
+                  </View>
                 )}
                 {asset.total_rides > 0 && (
-                  <Text style={styles.statChip}>↺ {asset.total_rides.toLocaleString()}</Text>
+                  <View style={styles.statChip}>
+                    <Image source={FINGO_ASSETS.ride} style={styles.statChipIcon} resizeMode="contain" />
+                    <Text style={styles.statChipText}>{asset.total_rides.toLocaleString()}</Text>
+                  </View>
                 )}
                 {asset.total_elevation > 0 && (
-                  <Text style={styles.statChip}>▲ {asset.total_elevation.toLocaleString()} m</Text>
+                  <Text style={styles.statChipText}>▲ {asset.total_elevation.toLocaleString()} m</Text>
                 )}
               </>
             )}
@@ -184,6 +207,7 @@ export default function AssetAccordion({
         {/* Asset "..." actions */}
         {isOwner && (
           <TouchableOpacity
+            {...uiProps(uiPath('fingo', 'asset_accordion', 'asset_dots_button', asset.id))}
             style={styles.dotsButton}
             onPress={(e) => {
               e.stopPropagation?.();
@@ -207,7 +231,7 @@ export default function AssetAccordion({
             setShowUsageModal(true);
           }}
         >
-          <Text style={styles.logButtonText}>＋</Text>
+          <Image source={FINGO_ASSETS.add} style={styles.logButtonIcon} resizeMode="contain" />
         </TouchableOpacity>
       </TouchableOpacity>
       )}
@@ -220,10 +244,11 @@ export default function AssetAccordion({
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Components</Text>
             <TouchableOpacity
+              {...uiProps(uiPath('fingo', 'asset_accordion', 'add_component_button', asset.id))}
               style={styles.sectionAddBtn}
               onPress={() => onAddComponent(null)}
             >
-              <Text style={styles.sectionAddText}>＋</Text>
+              <Image source={FINGO_ASSETS.add} style={styles.sectionAddIcon} resizeMode="contain" />
             </TouchableOpacity>
           </View>
 
@@ -239,28 +264,37 @@ export default function AssetAccordion({
               return (
                 <TouchableOpacity
                   key={comp.id}
+                  {...uiProps(uiPath('fingo', 'asset_accordion', 'component_card', comp.id))}
                   style={styles.componentRow}
                   onPress={() => onComponentPress(comp)}
                   activeOpacity={0.7}
                 >
+                  <View style={styles.componentIconWrap}>
+                    <ComponentIcon
+                      name={getComponentIcon(comp.name, comp.template_key)}
+                      size={44}
+                      color="#3B6A9E"
+                      stretch
+                    />
+                  </View>
                   {worst && (
                     <View style={[styles.healthDot, { backgroundColor: dotColor }]} />
                   )}
-                  <ComponentIcon
-                    name={getComponentIcon(comp.name, comp.template_key)}
-                    size={16}
-                    color="#3B6A9E"
-                  />
                   <View style={styles.componentRowBody}>
                     <Text style={styles.componentName}>{comp.name}</Text>
-                    {childCount > 0 && (
-                      <Text style={styles.componentMeta}>{childCount} part{childCount > 1 ? 's' : ''}</Text>
-                    )}
-                    {compIntervals.length > 0 && (
-                      <Text style={styles.componentMeta}>{compIntervals.length} interval{compIntervals.length > 1 ? 's' : ''}</Text>
-                    )}
+                  </View>
+                  <View style={styles.componentMetaCounts}>
+                    <View style={styles.componentMetaChip}>
+                      <Text style={styles.componentMeta}>{childCount}</Text>
+                      <Image source={FINGO_ASSETS.gear} style={styles.componentMetaIcon} resizeMode="contain" />
+                    </View>
+                    <View style={styles.componentMetaChip}>
+                      <Text style={styles.componentMeta}>{compIntervals.length}</Text>
+                      <Image source={FINGO_ASSETS.fix} style={styles.componentMetaIcon} resizeMode="contain" />
+                    </View>
                   </View>
                   <TouchableOpacity
+                    {...uiProps(uiPath('fingo', 'asset_accordion', 'component_action_button', comp.id))}
                     style={styles.componentActionBtn}
                     onPress={(e) => { e.stopPropagation?.(); setActionSheetComp(comp); }}
                     hitSlop={8}
@@ -278,10 +312,11 @@ export default function AssetAccordion({
             <Text style={styles.sectionTitle}>Service Intervals</Text>
             {allIntervals.length > 0 && (
               <TouchableOpacity
+                {...uiProps(uiPath('fingo', 'asset_accordion', 'add_service_button', asset.id))}
                 style={styles.addServiceBtn}
                 onPress={onAddService}
               >
-                <Text style={styles.addServiceText}>+ Add Service</Text>
+                <Image source={FINGO_ASSETS.fix} style={styles.addServiceIcon} resizeMode="contain" />
               </TouchableOpacity>
             )}
           </View>
@@ -295,10 +330,16 @@ export default function AssetAccordion({
               return (
                 <TouchableOpacity
                   key={interval.id}
+                  {...uiProps(uiPath('fingo', 'asset_accordion', 'interval_card', interval.id))}
                   style={styles.intervalRow}
                   onPress={() => onIntervalPress(interval, component)}
                   activeOpacity={0.7}
                 >
+                  <Image
+                    source={SERVICE_TYPE_ICONS[interval.service_type ?? 'general']}
+                    style={styles.intervalTypeIcon}
+                    resizeMode="contain"
+                  />
                   <View style={[styles.healthDot, { backgroundColor: color }]} />
                   <View style={styles.intervalRowBody}>
                     <Text style={styles.intervalName}>{interval.name}</Text>
@@ -315,6 +356,7 @@ export default function AssetAccordion({
 
           {/* ── Stats (collapsible) ────────────────────────────────────────────── */}
           <TouchableOpacity
+            {...uiProps(uiPath('fingo', 'asset_accordion', 'stats_toggle', asset.id))}
             style={[styles.sectionHeader, styles.sectionHeaderMt]}
             onPress={() => setStatsExpanded((v) => !v)}
             activeOpacity={0.7}
@@ -373,10 +415,11 @@ export default function AssetAccordion({
           <View style={[styles.sectionHeader, styles.sectionHeaderMt]}>
             <Text style={styles.sectionTitle}>Rides</Text>
             <TouchableOpacity
+              {...uiProps(uiPath('fingo', 'asset_accordion', 'add_ride_button', asset.id))}
               style={styles.sectionAddBtn}
               onPress={() => setShowUsageModal(true)}
             >
-              <Text style={styles.sectionAddText}>＋</Text>
+              <Image source={FINGO_ASSETS.add} style={styles.sectionAddIcon} resizeMode="contain" />
             </TouchableOpacity>
           </View>
 
@@ -384,31 +427,34 @@ export default function AssetAccordion({
             <Text style={styles.emptyText}>No rides logged yet.</Text>
           ) : (
             usageLogs.map((log) => (
-              <View key={log.id} style={styles.logRow}>
-                <View style={styles.logLeft}>
-                  <Text style={styles.logDate}>
-                    {new Date(log.recorded_at).toLocaleDateString(undefined, {
-                      month: 'short', day: 'numeric', year: 'numeric',
-                    })}
-                  </Text>
-                  {log.notes ? (
-                    <Text style={styles.logNotes} numberOfLines={1}>{log.notes}</Text>
-                  ) : null}
-                </View>
-                <View style={styles.logRight}>
-                  {asset.type === 'shoe' ? (
-                    <Text style={styles.logDelta}>+{log.usage_delta.toLocaleString()} steps</Text>
-                  ) : (
-                    <>
-                      <Text style={styles.logDelta}>+{log.usage_delta.toLocaleString()} km</Text>
-                      {log.moving_time_delta != null && (
-                        <Text style={styles.logMeta}>{formatMovingTime(log.moving_time_delta)}</Text>
-                      )}
-                      {asset.type === 'bike' && log.elevation_delta != null && (
-                        <Text style={styles.logMeta}>+{log.elevation_delta.toLocaleString()} m</Text>
-                      )}
-                    </>
-                  )}
+              <View key={log.id} {...uiProps(uiPath('fingo', 'asset_accordion', 'ride_log_row', log.id))} style={styles.logRow}>
+                <Image source={FINGO_ASSETS.ride} style={styles.logRideImage} resizeMode="contain" />
+                <View style={styles.logRowContent}>
+                  <View style={styles.logLeft}>
+                    <Text style={styles.logDate}>
+                      {new Date(log.recorded_at).toLocaleDateString(undefined, {
+                        month: 'short', day: 'numeric', year: 'numeric',
+                      })}
+                    </Text>
+                    {log.notes ? (
+                      <Text style={styles.logNotes} numberOfLines={1}>{log.notes}</Text>
+                    ) : null}
+                  </View>
+                  <View style={styles.logRight}>
+                    {asset.type === 'shoe' ? (
+                      <Text style={styles.logDelta}>+{log.usage_delta.toLocaleString()} steps</Text>
+                    ) : (
+                      <>
+                        <Text style={styles.logDelta}>+{log.usage_delta.toLocaleString()} km</Text>
+                        {log.moving_time_delta != null && (
+                          <Text style={styles.logMeta}>{formatMovingTime(log.moving_time_delta)}</Text>
+                        )}
+                        {asset.type === 'bike' && log.elevation_delta != null && (
+                          <Text style={styles.logMeta}>+{log.elevation_delta.toLocaleString()} m</Text>
+                        )}
+                      </>
+                    )}
+                  </View>
                 </View>
               </View>
             ))
@@ -477,6 +523,9 @@ export default function AssetAccordion({
 }
 
 const styles = StyleSheet.create({
+  container: {
+    backgroundColor: '#000000',
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'stretch',
@@ -507,7 +556,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   assetName: {
-    color: '#FFFFFF',
+    color: '#3fe3f2',
     fontSize: 14,
     fontWeight: '700',
   },
@@ -517,7 +566,16 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   statChip: {
-    color: '#FFFFFF',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+  },
+  statChipIcon: {
+    width: 11,
+    height: 11,
+  },
+  statChipText: {
+    color: '#3fe3f2',
     fontSize: 11,
     fontWeight: '500',
   },
@@ -528,7 +586,7 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
   },
   dotsText: {
-    color: '#475569',
+    color: '#3fe3f2',
     fontSize: 12,
     letterSpacing: 1,
     transform: [{ rotate: '90deg' }],
@@ -545,23 +603,17 @@ const styles = StyleSheet.create({
   logButton: {
     width: 28,
     height: 28,
-    borderRadius: 7,
-    backgroundColor: '#0D2137',
-    borderWidth: 1,
-    borderColor: '#1F3A59',
     alignItems: 'center',
     justifyContent: 'center',
     alignSelf: 'center',
     marginRight: 10,
   },
-  logButtonText: {
-    color: '#4ade80',
-    fontSize: 16,
-    fontWeight: '700',
-    lineHeight: 18,
+  logButtonIcon: {
+    width: 22,
+    height: 22,
   },
   body: {
-    backgroundColor: '#07111F',
+    backgroundColor: '#000000',
     borderWidth: 1,
     borderTopWidth: 0,
     borderColor: '#1F3A59',
@@ -580,7 +632,7 @@ const styles = StyleSheet.create({
     marginTop: 16,
   },
   sectionTitle: {
-    color: '#475569',
+    color: '#3fe3f2',
     fontSize: 11,
     fontWeight: '700',
     textTransform: 'uppercase',
@@ -589,62 +641,88 @@ const styles = StyleSheet.create({
   sectionAddBtn: {
     width: 24,
     height: 24,
-    borderRadius: 6,
-    backgroundColor: '#0D2137',
-    borderWidth: 1,
-    borderColor: '#1F3A59',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  sectionAddText: {
-    color: '#4ade80',
-    fontSize: 14,
-    fontWeight: '700',
-    lineHeight: 16,
+  sectionAddIcon: {
+    width: 20,
+    height: 20,
   },
   emptyText: {
-    color: '#475569',
+    color: '#3fe3f2',
     fontSize: 12,
     textAlign: 'center',
     paddingVertical: 10,
   },
   // Component rows
+  componentIconWrap: {
+    width: 44,
+    alignSelf: 'stretch',
+    overflow: 'hidden',
+  },
   componentRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#0E1A2B',
+    alignItems: 'stretch',
+    backgroundColor: '#000000',
     borderRadius: 8,
     borderWidth: 1,
     borderColor: '#1F3A59',
-    paddingHorizontal: 10,
-    paddingVertical: 10,
+    paddingRight: 10,
+    overflow: 'hidden',
     marginBottom: 5,
     gap: 8,
+    minHeight: 44,
+    maxHeight: 65,
   },
   healthDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
     flexShrink: 0,
+    alignSelf: 'center',
   },
   componentRowBody: {
     flex: 1,
+    paddingVertical: 10,
+    justifyContent: 'center',
+  },
+  componentMetaCounts: {
+    flexDirection: 'column',
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    gap: 4,
+  },
+  componentMetaRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 3,
+  },
+  componentMetaChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  componentMetaIcon: {
+    width: 30,
+    height: 30,
   },
   componentName: {
-    color: '#CBD5E1',
+    color: '#3fe3f2',
     fontSize: 14,
     fontWeight: '600',
   },
   componentMeta: {
-    color: '#475569',
+    color: '#3fe3f2',
     fontSize: 11,
     marginTop: 2,
   },
   componentActionBtn: {
     paddingHorizontal: 4,
+    alignSelf: 'center',
   },
   componentActionText: {
-    color: '#475569',
+    color: '#3fe3f2',
     fontSize: 12,
     letterSpacing: 1,
     transform: [{ rotate: '90deg' }],
@@ -653,49 +731,57 @@ const styles = StyleSheet.create({
     color: '#3B6A9E',
     fontSize: 18,
     fontWeight: '300',
+    alignSelf: 'center',
   },
   // Interval rows
   intervalRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#0E1A2B',
+    alignItems: 'stretch',
+    backgroundColor: '#000000',
     borderRadius: 8,
     borderWidth: 1,
     borderColor: '#1F3A59',
-    paddingHorizontal: 10,
-    paddingVertical: 10,
+    paddingRight: 10,
+    overflow: 'hidden',
     marginBottom: 5,
     gap: 8,
+    minHeight: 44,
+    maxHeight: 65,
   },
   intervalRowBody: {
     flex: 1,
+    paddingVertical: 10,
   },
   intervalName: {
-    color: '#CBD5E1',
+    color: '#3fe3f2',
     fontSize: 13,
     fontWeight: '600',
   },
   intervalComponentLabel: {
-    color: '#475569',
+    color: '#3fe3f2',
     fontSize: 11,
     marginTop: 2,
   },
   intervalRemaining: {
     fontSize: 11,
     fontWeight: '700',
+    alignSelf: 'center',
+  },
+  intervalTypeIcon: {
+    width: 44,
+    alignSelf: 'stretch',
+    flexShrink: 0,
+    maxHeight: 65,
   },
   addServiceBtn: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 6,
-    backgroundColor: '#053d1e',
-    borderWidth: 1,
-    borderColor: '#4ade80',
+    width: 28,
+    height: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  addServiceText: {
-    color: '#4ade80',
-    fontSize: 11,
-    fontWeight: '700',
+  addServiceIcon: {
+    width: 22,
+    height: 22,
   },
   // Stats section
   statBoxRow: {
@@ -713,12 +799,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   statValue: {
-    color: '#CBD5E1',
+    color: '#3fe3f2',
     fontSize: 15,
     fontWeight: '700',
   },
   statLabel: {
-    color: '#475569',
+    color: '#3fe3f2',
     fontSize: 10,
     marginTop: 2,
   },
@@ -745,7 +831,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   txDate: {
-    color: '#475569',
+    color: '#3fe3f2',
     fontSize: 11,
     width: 72,
   },
@@ -763,10 +849,24 @@ const styles = StyleSheet.create({
   // Ride log rows
   logRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 8,
+    alignItems: 'stretch',
+    backgroundColor: '#000000',
     borderBottomWidth: 1,
     borderColor: '#0E1A2B',
+    maxHeight: 65,
+  },
+  logRideImage: {
+    width: 44,
+    alignSelf: 'stretch',
+    backgroundColor: '#000000',
+    maxHeight: 65,
+  },
+  logRowContent: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingLeft: 8,
     gap: 8,
   },
   logLeft: { flex: 1 },
@@ -809,7 +909,7 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
   },
   assetActionText: {
-    color: '#CBD5E1',
+    color: '#3fe3f2',
     fontSize: 15,
     fontWeight: '500',
   },

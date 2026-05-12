@@ -4,6 +4,51 @@
 
 ---
 
+## [1.2.7] — 2026-05-12
+
+### Features
+
+#### FinGo — Custom PNG Asset Icon System
+
+- New `assets/fingo/` directory with 27 custom PNG icons covering UI actions (add, fix, gear, time, change, wipe, gps) and component types (chain, cassette, chainring, crank, derailleur, discpads, brake-rotor, tyre, tube, wheel, frame, fork, handlebar, saddle, cleatless, battery, charge)
+- New `src/lib/fingo/fingoAssets.ts` — centralized `FINGO_ASSETS` registry typed as `Record<string, ImageSourcePropType>`
+- `ComponentIcon` now resolves component names through `PNG_MAP` before falling back to bike SVG icons or Lucide icons; new `stretch` prop fills the parent height
+- Component icon mappings refined: `discpads`, `tyre`, `tube`, `wheel`, `frame`, `chainring`, `cleatless`, `crank` all resolve to dedicated PNGs; brake pads and tyres now use correct per-type icons
+
+#### FinGo — Service Interval Type
+
+- New `service_type` field on `ComponentServiceInterval`: `general` (Fix), `replace` (Replace), `cleaning` (Clean), `charge` (Charge)
+- `ServiceIntervalSheet` now shows a 4-option type picker (icon + label) when creating or editing an interval
+- Service interval rows in `AssetAccordion` and `ServiceIntervalDetailScreen` show the type icon next to the interval name
+- `useServiceIntervals` — `createInterval` accepts `serviceType` param; `updateInterval` patch type extended to include `service_type`
+
+### UI Improvements
+
+#### FinGo — Icon Refresh Throughout
+
+- Asset stat chips (distance, time, rides, steps) use PNG icons instead of Unicode symbols (`↔`, `⏱`, `↺`, `👟`)
+- Component cards in `AssetAccordion` show a large full-height PNG icon (was 16 px Lucide/SVG); meta counts display as icon+number chips
+- GoButton: "GO" text label replaced with `gps.png` icon
+- `ComponentLibrarySheet`: component icons enlarged to 40 px with dedicated `rowIconWrap` container
+- `ComponentDetailScreen`: component icon enlarged from 36 px to 72 px; service type icon on identity header; `fix.png` on service record rows
+- `ServiceIntervalDetailScreen`: service type icon on identity header; "Edit interval" action added to the actions modal (was "Set picture" placeholder); background `#060D18 → #000000`
+- All `＋` text add-buttons throughout FinGo replaced with `add.png`
+- HealthConnect: steps, distance, and exercise record icons now use `FINGO_ASSETS.step/route/ride` with emoji fallback for unsupported types
+- Ride log rows in `AssetAccordion` now lead with `ride.png`
+
+### Technical
+
+- `assets/fingo/` — 27 PNG icons (add, battery, cassette, chain, chainring, change, charge, cleatless, crank, derailleur, discpads, fix, fork, frame, gear, gps, handlebar, pressure, ride, rotor, route, step, time, tube, tyre, wheel, wipe)
+- `src/lib/fingo/fingoAssets.ts` — new file; exports `FINGO_ASSETS` typed registry
+- `src/components/fingo/ComponentIcon.tsx` — `PNG_MAP` lookup before SVG/Lucide fallback; `stretch` prop added
+- `src/lib/fingo/componentIcons.ts` — template key and keyword maps updated for new PNG icon names
+- `src/types/fingo.ts` — `ServiceIntervalType` union type added; `service_type` field added to `ComponentServiceInterval`
+- `src/hooks/useServiceIntervals.ts` — `serviceType` param in `createInterval`; `service_type` in `updateInterval` patch type
+- `supabase/migrations/20260512_fingo_service_interval_type.sql` — adds `service_type` column (text, default `'general'`, check constraint for `general | replace | cleaning`)
+- `supabase/migrations/20260513_fingo_service_interval_type_charge.sql` — extends check constraint to include `'charge'`
+
+---
+
 ## [1.2.6] — 2026-05-11
 
 ### Bug Fixes

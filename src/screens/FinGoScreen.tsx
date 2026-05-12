@@ -668,12 +668,12 @@ export default function FinGoScreen() {
         visible={showIntervalSheet}
         componentName={activeComponent?.name}
         editingInterval={editingInterval}
-        onSave={async (name, method, value) => {
+        onSave={async (name, method, value, serviceType) => {
           if (!activeComponent) return;
           if (editingInterval) {
-            await updateInterval(editingInterval.id, activeComponent.id, { name, tracking_method: method, interval_value: value });
+            await updateInterval(editingInterval.id, activeComponent.id, { name, tracking_method: method, interval_value: value, service_type: serviceType });
           } else {
-            await createInterval(activeComponent.id, name, method, value);
+            await createInterval(activeComponent.id, name, method, value, serviceType);
           }
         }}
         onClose={() => { setShowIntervalSheet(false); setEditingInterval(null); }}

@@ -1,21 +1,29 @@
 import React, { useEffect, useState } from 'react';
 import {
   Modal, View, Text, TextInput, TouchableOpacity, StyleSheet,
-  KeyboardAvoidingView, Platform, ScrollView,
+  KeyboardAvoidingView, Platform, ScrollView, Image,
 } from 'react-native';
-import type { ComponentServiceInterval, TrackingMethod } from '../../types/fingo';
+import type { ComponentServiceInterval, TrackingMethod, ServiceIntervalType } from '../../types/fingo';
 import { trackingMethodLabel, trackingMethodUnit } from '../../lib/fingo/health';
+import { FINGO_ASSETS } from '../../lib/fingo/fingoAssets';
 import { uiPath, uiProps, logUI } from '../../lib/devtools';
 
 const METHODS: TrackingMethod[] = [
   'distance', 'moving_time', 'elapsed_time', 'rides', 'elevation_gain',
 ];
 
+const SERVICE_TYPES: Array<{ value: ServiceIntervalType; label: string; icon: any }> = [
+  { value: 'general',  label: 'Fix',     icon: FINGO_ASSETS.fix },
+  { value: 'replace',  label: 'Replace', icon: FINGO_ASSETS.change },
+  { value: 'cleaning', label: 'Clean',   icon: FINGO_ASSETS.wipe },
+  { value: 'charge',   label: 'Charge',  icon: FINGO_ASSETS.charge },
+];
+
 interface Props {
   visible: boolean;
   componentName?: string;
   editingInterval?: ComponentServiceInterval | null;
-  onSave: (name: string, method: TrackingMethod, intervalValue: number) => Promise<void>;
+  onSave: (name: string, method: TrackingMethod, intervalValue: number, serviceType: ServiceIntervalType) => Promise<void>;
   onClose: () => void;
 }
 
@@ -25,6 +33,7 @@ export default function ServiceIntervalSheet({
   const [name, setName] = useState('');
   const [method, setMethod] = useState<TrackingMethod>('distance');
   const [valueStr, setValueStr] = useState('');
+  const [serviceType, setServiceType] = useState<ServiceIntervalType>('general');
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -32,6 +41,7 @@ export default function ServiceIntervalSheet({
       setName(editingInterval?.name ?? '');
       setMethod(editingInterval?.tracking_method ?? 'distance');
       setValueStr(editingInterval ? String(editingInterval.interval_value) : '');
+      setServiceType(editingInterval?.service_type ?? 'general');
     }
   }, [visible, editingInterval]);
 
@@ -43,7 +53,7 @@ export default function ServiceIntervalSheet({
     setSaving(true);
     try {
       logUI(uiPath('fingo', 'service_interval_sheet', 'save'), 'press');
-      await onSave(name.trim(), method, intervalValue);
+      await onSave(name.trim(), method, intervalValue, serviceType);
       onClose();
     } finally {
       setSaving(false);
@@ -77,6 +87,26 @@ export default function ServiceIntervalSheet({
               placeholderTextColor="#475569"
               autoFocus
             />
+
+            <Text style={styles.label}>Type</Text>
+            <View style={styles.typeRow}>
+              {SERVICE_TYPES.map(({ value, label, icon }) => (
+                <TouchableOpacity
+                  {...uiProps(uiPath('fingo', 'service_interval_sheet', 'type', value))}
+                  key={value}
+                  style={[styles.typeBtn, serviceType === value && styles.typeBtnActive]}
+                  onPress={() => {
+                    logUI(uiPath('fingo', 'service_interval_sheet', 'type', value), 'press');
+                    setServiceType(value);
+                  }}
+                >
+                  <Image source={icon} style={styles.typeIcon} resizeMode="contain" />
+                  <Text style={[styles.typeText, serviceType === value && styles.typeTextActive]}>
+                    {label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
 
             <Text style={styles.label}>Track by</Text>
             <View style={styles.methodGrid}>
@@ -185,6 +215,38 @@ const styles = StyleSheet.create({
     fontSize: 14,
     paddingHorizontal: 12,
     paddingVertical: 10,
+  },
+  typeRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  typeBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#1F3A59',
+    backgroundColor: '#0E1A2B',
+  },
+  typeBtnActive: {
+    backgroundColor: '#0D2137',
+    borderColor: '#3B6A9E',
+  },
+  typeIcon: {
+    width: 18,
+    height: 18,
+  },
+  typeText: {
+    color: '#475569',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  typeTextActive: {
+    color: '#8FA8C9',
   },
   methodGrid: {
     flexDirection: 'row',

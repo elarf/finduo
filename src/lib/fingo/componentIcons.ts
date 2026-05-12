@@ -1,31 +1,31 @@
 import { findTemplate } from './componentTemplates';
 
-/** Maps template_key → icon key (bike SVG name or Lucide name) */
+/** Maps template_key → icon key (PNG asset name or Lucide name) */
 const TEMPLATE_KEY_ICONS: Record<string, string> = {
   // ── Bike: Drivetrain ──────────────────────────────────────────────────────
   chain:              'chain',
   cassette:           'cassette',
-  chainring:          'cassette',
+  chainring:          'chainring',
   front_derailleur:   'derailleur',
   rear_derailleur:    'derailleur',
   shifter_left:       'derailleur',
   shifter_right:      'derailleur',
   cable_shift:        'wrench',
   // ── Bike: Braking ─────────────────────────────────────────────────────────
-  brake_pads_front:   'brake-rotor',
-  brake_pads_rear:    'brake-rotor',
+  brake_pads_front:   'discpads',
+  brake_pads_rear:    'discpads',
   brake_rotor_front:  'brake-rotor',
   brake_rotor_rear:   'brake-rotor',
   cable_brake:        'wrench',
   // ── Bike: Wheels ──────────────────────────────────────────────────────────
-  tyre_front:         'tire',
-  tyre_rear:          'tire',
-  inner_tube_front:   'tire',
-  inner_tube_rear:    'tire',
-  rim_front:          'tire',
-  rim_rear:           'tire',
-  spokes_front:       'tire',
-  spokes_rear:        'tire',
+  tyre_front:         'tyre',
+  tyre_rear:          'tyre',
+  inner_tube_front:   'tube',
+  inner_tube_rear:    'tube',
+  rim_front:          'wheel',
+  rim_rear:           'wheel',
+  spokes_front:       'wheel',
+  spokes_rear:        'wheel',
   // ── Bike: Bearings ────────────────────────────────────────────────────────
   bearings_bb:        'cassette',
   bearings_headset:   'cassette',
@@ -39,10 +39,10 @@ const TEMPLATE_KEY_ICONS: Record<string, string> = {
   // ── Bike: Contact ─────────────────────────────────────────────────────────
   saddle:             'saddle',
   seatpost:           'saddle',
-  pedals:             'box',
-  cleats:             'box',
+  pedals:             'cleatless',
+  cleats:             'cleatless',
   // ── Bike: Frame ───────────────────────────────────────────────────────────
-  frame:              'fork',
+  frame:              'frame',
   fork:               'fork',
   // ── Bike: Suspension ──────────────────────────────────────────────────────
   suspension_fork:    'fork',
@@ -73,20 +73,20 @@ const TEMPLATE_KEY_ICONS: Record<string, string> = {
   thermostat:         'thermometer',
   water_pump:         'droplets',
   // ── Vehicle: Braking ──────────────────────────────────────────────────────
-  brake_pads_fl:      'brake-rotor',
-  brake_pads_fr:      'brake-rotor',
-  brake_pads_rl:      'brake-rotor',
-  brake_pads_rr:      'brake-rotor',
+  brake_pads_fl:      'discpads',
+  brake_pads_fr:      'discpads',
+  brake_pads_rl:      'discpads',
+  brake_pads_rr:      'discpads',
   brake_disc_fl:      'brake-rotor',
   brake_disc_fr:      'brake-rotor',
   brake_disc_rl:      'brake-rotor',
   brake_disc_rr:      'brake-rotor',
   brake_fluid:        'droplets',
   // ── Vehicle: Tyres ────────────────────────────────────────────────────────
-  tyre_fl:            'tire',
-  tyre_fr:            'tire',
-  tyre_rl:            'tire',
-  tyre_rr:            'tire',
+  tyre_fl:            'tyre',
+  tyre_fr:            'tyre',
+  tyre_rl:            'tyre',
+  tyre_rr:            'tyre',
   // ── Vehicle: Electrical ───────────────────────────────────────────────────
   alternator:         'zap',
   starter_motor:      'zap',
@@ -121,15 +121,22 @@ const TEMPLATE_KEY_ICONS: Record<string, string> = {
 /** Keyword fallback for custom-named components */
 const KEYWORD_ICON_MAP: Array<{ keywords: string[]; icon: string }> = [
   { keywords: ['chain'],                                                        icon: 'chain' },
-  { keywords: ['cassette', 'chainring', 'sprocket', 'crankset'],               icon: 'cassette' },
+  { keywords: ['cassette', 'sprocket'],                                         icon: 'cassette' },
+  { keywords: ['chainring'],                                                    icon: 'chainring' },
+  { keywords: ['crankset', 'crank'],                                            icon: 'crank' },
   { keywords: ['derailleur', 'shifter'],                                        icon: 'derailleur' },
-  { keywords: ['brake', 'pad', 'rotor', 'disc', 'caliper'],                    icon: 'brake-rotor' },
-  { keywords: ['tyre', 'tire', 'tube', 'rim', 'spoke', 'wheel'],               icon: 'tire' },
-  { keywords: ['fork', 'frame'],                                                icon: 'fork' },
+  { keywords: ['brake', 'pad', 'caliper'],                                      icon: 'discpads' },
+  { keywords: ['rotor', 'disc'],                                                icon: 'brake-rotor' },
+  { keywords: ['tyre', 'tire'],                                                 icon: 'tyre' },
+  { keywords: ['tube'],                                                         icon: 'tube' },
+  { keywords: ['rim', 'spoke', 'wheel'],                                        icon: 'wheel' },
+  { keywords: ['frame'],                                                        icon: 'frame' },
+  { keywords: ['fork'],                                                         icon: 'fork' },
   { keywords: ['suspension', 'shock', 'damper'],                               icon: 'sliders' },
   { keywords: ['handlebar', 'stem', 'grip', 'bar tape', 'cockpit'],            icon: 'handlebar' },
   { keywords: ['saddle', 'seat', 'seatpost'],                                  icon: 'saddle' },
   { keywords: ['bearing', 'headset', 'hub', 'bottom bracket'],                 icon: 'cassette' },
+  { keywords: ['cleat', 'pedal'],                                               icon: 'cleatless' },
   { keywords: ['battery'],                                                      icon: 'battery' },
   { keywords: ['motor', 'alternator', 'starter', 'electric', 'spark'],         icon: 'zap' },
   { keywords: ['sensor', 'speed', 'cadence', 'power meter', 'computer'],       icon: 'gauge' },
@@ -157,7 +164,7 @@ export function getComponentIcon(name: string, templateKey?: string | null): str
       const cat = tmpl.category.toLowerCase();
       if (cat.includes('drivetrain') || cat.includes('transmission')) return 'cassette';
       if (cat.includes('braking')) return 'brake-rotor';
-      if (cat.includes('wheel') || cat.includes('tyre') || cat.includes('tire')) return 'tire';
+      if (cat.includes('wheel') || cat.includes('tyre') || cat.includes('tire')) return 'tyre';
       if (cat.includes('suspension')) return 'sliders';
       if (cat.includes('electric') || cat.includes('electron')) return 'zap';
       if (cat.includes('engine')) return 'wrench';

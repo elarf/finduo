@@ -6,9 +6,11 @@ Financial tracking app for couples and shared households. Track income, expenses
 
 ---
 
-## Latest Release — v1.2.6
+## Latest Release — v1.2.7
 
-- **Google avatar fix (AppHeader)** — Profile pictures now load correctly on Capacitor APK in all headers; `AppHeader` was bypassing the `AuthContext` fallback chain and reading `avatar_url` directly from user metadata
+- **FinGo — Custom PNG icons** — 27 new `assets/fingo/` PNGs replace emoji and text symbols throughout FinGo; `FINGO_ASSETS` registry centralizes all asset references
+- **Service interval type** — new `service_type` field on service intervals: Fix, Replace, Clean, or Charge; shown as an icon in interval rows, cards, and the detail screen; picker in the create/edit sheet
+- **FinGo UI refresh** — larger component icons, PNG stat chips, redesigned component cards with icon+count metadata, GoButton now shows GPS icon, ride log rows lead with ride icon
 
 Full history: [PATCHNOTES.md](./PATCHNOTES.md)
 
@@ -461,6 +463,8 @@ Then apply incremental migrations in order:
 8. `20260402f_pools_insert_policy.sql`
 9. `20260402g_pools_granular_rls.sql`
 10. `20260402h_pool_members_nullable_user_id.sql`
+11. `20260512_fingo_service_interval_type.sql`
+12. `20260513_fingo_service_interval_type_charge.sql`
 
 ### 5. Start development
 

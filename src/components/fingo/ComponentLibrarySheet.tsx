@@ -96,26 +96,31 @@ export default function ComponentLibrarySheet({
               if (isComponent(item)) {
                 return (
                   <TouchableOpacity
+                    {...uiProps(uiPath('fingo', 'component_library', 'storage_item', item.id))}
                     style={styles.row}
                     onPress={() => {
-                      logUI(uiPath('fingo', 'component_library', 'storage_item'), 'press');
+                      logUI(uiPath('fingo', 'component_library', 'storage_item', item.id), 'press');
                       onSelect({ type: 'storage', component: item });
                       onClose();
                     }}
                   >
-                    <ComponentIcon
-                      name={getComponentIcon(item.name, item.template_key)}
-                      size={18}
-                      color="#3B6A9E"
-                    />
-                    <View style={styles.rowLeft}>
-                      <Text style={styles.rowName}>{item.name}</Text>
-                      {item.notes ? (
-                        <Text style={styles.rowHint} numberOfLines={1}>{item.notes}</Text>
-                      ) : null}
+                    <View style={styles.rowIconWrap}>
+                      <ComponentIcon
+                        name={getComponentIcon(item.name, item.template_key)}
+                        size={40}
+                        color="#3B6A9E"
+                      />
                     </View>
-                    <View style={styles.storageBadge}>
-                      <Text style={styles.storageBadgeText}>in storage</Text>
+                    <View style={styles.rowBody}>
+                      <View style={styles.rowLeft}>
+                        <Text style={styles.rowName}>{item.name}</Text>
+                        {item.notes ? (
+                          <Text style={styles.rowHint} numberOfLines={1}>{item.notes}</Text>
+                        ) : null}
+                      </View>
+                      <View style={styles.storageBadge}>
+                        <Text style={styles.storageBadgeText}>in storage</Text>
+                      </View>
                     </View>
                   </TouchableOpacity>
                 );
@@ -124,6 +129,7 @@ export default function ComponentLibrarySheet({
               const alreadyInstalled = installedKeys.has(item.key);
               return (
                 <TouchableOpacity
+                  {...uiProps(uiPath('fingo', 'component_library', 'template_item', item.key))}
                   style={styles.row}
                   onPress={() => {
                     logUI(uiPath('fingo', 'component_library', 'template_item', item.key), 'press');
@@ -131,17 +137,21 @@ export default function ComponentLibrarySheet({
                     onClose();
                   }}
                 >
-                  <ComponentIcon
-                    name={getComponentIcon(item.name, item.key)}
-                    size={18}
-                    color="#3B6A9E"
-                  />
-                  <Text style={styles.rowName}>{item.name}</Text>
-                  {alreadyInstalled && (
-                    <View style={styles.installedBadge}>
-                      <Text style={styles.installedBadgeText}>installed</Text>
-                    </View>
-                  )}
+                  <View style={styles.rowIconWrap}>
+                    <ComponentIcon
+                      name={getComponentIcon(item.name, item.key)}
+                      size={40}
+                      color="#3B6A9E"
+                    />
+                  </View>
+                  <View style={styles.rowBody}>
+                    <Text style={styles.rowName}>{item.name}</Text>
+                    {alreadyInstalled && (
+                      <View style={styles.installedBadge}>
+                        <Text style={styles.installedBadgeText}>installed</Text>
+                      </View>
+                    )}
+                  </View>
                 </TouchableOpacity>
               );
             }}
@@ -239,11 +249,24 @@ const styles = StyleSheet.create({
   },
   row: {
     flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
+    alignItems: 'stretch',
+    backgroundColor: '#000000',
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderColor: '#1F3A59',
+  },
+  rowIconWrap: {
+    width: 48,
+    alignSelf: 'stretch',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  rowBody: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingLeft: 10,
+    paddingRight: 20,
     gap: 10,
   },
   rowLeft: { flex: 1 },

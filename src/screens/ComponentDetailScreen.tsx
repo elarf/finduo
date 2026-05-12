@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  Alert, Platform, Modal, TextInput,
+  Alert, Platform, Modal, TextInput, Image,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp, NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -17,10 +17,11 @@ import ComponentFormSheet from '../components/fingo/ComponentFormSheet';
 import ServiceIntervalSheet from '../components/fingo/ServiceIntervalSheet';
 import ServiceRecordSheet from '../components/fingo/ServiceRecordSheet';
 import { supabase } from '../lib/supabase';
-import { logAPI } from '../lib/devtools';
+import { logAPI, uiPath, uiProps } from '../lib/devtools';
 import { findTemplate } from '../lib/fingo/componentTemplates';
 import { getComponentIcon } from '../lib/fingo/componentIcons';
 import { computeIntervalHealth, formatIntervalRemaining, healthColor, getTrackingValue } from '../lib/fingo/health';
+import { FINGO_ASSETS } from '../lib/fingo/fingoAssets';
 import { bottomInset } from '../lib/safeArea';
 import type { RootStackParamList } from '../navigation';
 import ComponentIcon from '../components/fingo/ComponentIcon';
@@ -269,7 +270,7 @@ export default function ComponentDetailScreen({ route }: Props) {
     return (
       <View style={styles.screen}>
         <View style={[styles.topBar, { paddingTop: 16 }]}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+          <TouchableOpacity {...uiProps(uiPath('fingo', 'component_detail', 'back_button'))} onPress={() => navigation.goBack()} style={styles.backBtn}>
             <Text style={styles.backText}>‹ Back</Text>
           </TouchableOpacity>
         </View>
@@ -282,26 +283,26 @@ export default function ComponentDetailScreen({ route }: Props) {
   const visibleRides = showAllRides ? componentLogs : componentLogs.slice(0, 3);
 
   return (
-    <View style={styles.screen}>
+    <View {...uiProps(uiPath('fingo', 'component_detail', 'screen', componentId))} style={styles.screen}>
       {/* Top bar */}
-      <View style={[styles.topBar, { paddingTop: 16 }]}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+      <View {...uiProps(uiPath('fingo', 'component_detail', 'top_bar'))} style={[styles.topBar, { paddingTop: 16 }]}>
+        <TouchableOpacity {...uiProps(uiPath('fingo', 'component_detail', 'back_button'))} onPress={() => navigation.goBack()} style={styles.backBtn}>
           <Text style={styles.backText}>‹ Back</Text>
         </TouchableOpacity>
       </View>
 
-      <ScrollView style={styles.scroll} contentContainerStyle={[styles.scrollContent, { paddingBottom: bottomInset(24, bottom) }]} showsVerticalScrollIndicator={false}>
+      <ScrollView {...uiProps(uiPath('fingo', 'component_detail', 'scroll'))} style={styles.scroll} contentContainerStyle={[styles.scrollContent, { paddingBottom: bottomInset(24, bottom) }]} showsVerticalScrollIndicator={false}>
 
         {/* ── Component identity ─────────────────────────────────────────────── */}
-        <View style={styles.identityHeader}>
-          <View style={styles.identityIconWrap}>
+        <View {...uiProps(uiPath('fingo', 'component_detail', 'identity_header'))} style={styles.identityHeader}>
+          <View {...uiProps(uiPath('fingo', 'component_detail', 'identity_icon_wrap'))} style={styles.identityIconWrap}>
             <ComponentIcon
               name={getComponentIcon(component.name, component.template_key)}
-              size={36}
+              size={72}
               color="#8FA8C9"
             />
           </View>
-          <View style={styles.identityText}>
+          <View {...uiProps(uiPath('fingo', 'component_detail', 'identity_text'))} style={styles.identityText}>
             {templateInfo && (
               <View style={styles.typeBadge}>
                 <Text style={styles.typeText}>{templateInfo.name}</Text>
@@ -316,6 +317,7 @@ export default function ComponentDetailScreen({ route }: Props) {
 
         {/* ── Stats summary bar ──────────────────────────────────────────────── */}
         <TouchableOpacity
+          {...uiProps(uiPath('fingo', 'component_detail', 'stats_bar', componentId))}
           style={styles.statsSummaryBar}
           onPress={() => setStatsExpanded((v) => !v)}
           activeOpacity={0.8}
@@ -401,14 +403,17 @@ export default function ComponentDetailScreen({ route }: Props) {
         )}
 
         {/* ── Action buttons ─────────────────────────────────────────────────── */}
-        <View style={styles.actionRow}>
+        <View {...uiProps(uiPath('fingo', 'component_detail', 'action_row'))} style={styles.actionRow}>
           <TouchableOpacity
+            {...uiProps(uiPath('fingo', 'component_detail', 'add_service_button', componentId))}
             style={styles.addServiceBtn}
             onPress={() => setShowRecordSheet(true)}
           >
-            <Text style={styles.addServiceText}>+ Add Service</Text>
+            <Image source={FINGO_ASSETS.fix} style={styles.addServiceIcon} resizeMode="contain" />
+            <Text style={styles.addServiceText}>Add Service</Text>
           </TouchableOpacity>
           <TouchableOpacity
+            {...uiProps(uiPath('fingo', 'component_detail', 'actions_button', componentId))}
             style={styles.actionsBtn}
             onPress={() => setShowActionSheet(true)}
           >
@@ -417,13 +422,14 @@ export default function ComponentDetailScreen({ route }: Props) {
         </View>
 
         {/* ── Service Intervals ──────────────────────────────────────────────── */}
-        <View style={styles.sectionHeader}>
+        <View {...uiProps(uiPath('fingo', 'component_detail', 'section_intervals'))} style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Service Intervals</Text>
           <TouchableOpacity
+            {...uiProps(uiPath('fingo', 'component_detail', 'add_interval_button', componentId))}
             style={styles.sectionAddBtn}
             onPress={() => { setEditingInterval(null); setShowIntervalSheet(true); }}
           >
-            <Text style={styles.sectionAddText}>＋</Text>
+            <Image source={FINGO_ASSETS.add} style={styles.sectionAddIcon} resizeMode="contain" />
           </TouchableOpacity>
         </View>
         {componentIntervals.length === 0 ? (
@@ -435,6 +441,7 @@ export default function ComponentDetailScreen({ route }: Props) {
             return (
               <TouchableOpacity
                 key={interval.id}
+                {...uiProps(uiPath('fingo', 'component_detail', 'interval_card', interval.id))}
                 style={styles.intervalRow}
                 onPress={() => navigation.push('ServiceIntervalDetail', {
                   intervalId: interval.id,
@@ -460,13 +467,14 @@ export default function ComponentDetailScreen({ route }: Props) {
         )}
 
         {/* ── Parts (sub-components) ─────────────────────────────────────────── */}
-        <View style={[styles.sectionHeader, styles.sectionMt]}>
+        <View {...uiProps(uiPath('fingo', 'component_detail', 'section_parts'))} style={[styles.sectionHeader, styles.sectionMt]}>
           <Text style={styles.sectionTitle}>Parts</Text>
           <TouchableOpacity
+            {...uiProps(uiPath('fingo', 'component_detail', 'add_part_button', componentId))}
             style={styles.sectionAddBtn}
             onPress={() => setShowLibrary(true)}
           >
-            <Text style={styles.sectionAddText}>＋</Text>
+            <Image source={FINGO_ASSETS.add} style={styles.sectionAddIcon} resizeMode="contain" />
           </TouchableOpacity>
         </View>
         {subComponents.length === 0 ? (
@@ -475,6 +483,7 @@ export default function ComponentDetailScreen({ route }: Props) {
           subComponents.map((sub) => (
             <TouchableOpacity
               key={sub.id}
+              {...uiProps(uiPath('fingo', 'component_detail', 'sub_component_card', sub.id))}
               style={styles.subComponentRow}
               onPress={() => navigation.push('ComponentDetail', { componentId: sub.id, assetId })}
               activeOpacity={0.7}
@@ -491,13 +500,14 @@ export default function ComponentDetailScreen({ route }: Props) {
         )}
 
         {/* ── Swaps ──────────────────────────────────────────────────────────── */}
-        <View style={[styles.sectionHeader, styles.sectionMt]}>
+        <View {...uiProps(uiPath('fingo', 'component_detail', 'section_swaps'))} style={[styles.sectionHeader, styles.sectionMt]}>
           <Text style={styles.sectionTitle}>Swaps</Text>
           <TouchableOpacity
+            {...uiProps(uiPath('fingo', 'component_detail', 'add_swap_button', componentId))}
             style={styles.sectionAddBtn}
             onPress={() => openSwapModal(null)}
           >
-            <Text style={styles.sectionAddText}>＋</Text>
+            <Image source={FINGO_ASSETS.add} style={styles.sectionAddIcon} resizeMode="contain" />
           </TouchableOpacity>
         </View>
         {swaps.length === 0 ? (
@@ -506,6 +516,7 @@ export default function ComponentDetailScreen({ route }: Props) {
           swaps.map((swap) => (
             <TouchableOpacity
               key={swap.id}
+              {...uiProps(uiPath('fingo', 'component_detail', 'swap_card', swap.id))}
               style={styles.swapRow}
               onPress={() => openSwapModal(swap)}
               activeOpacity={0.7}
@@ -530,7 +541,7 @@ export default function ComponentDetailScreen({ route }: Props) {
         )}
 
         {/* ── Services ───────────────────────────────────────────────────────── */}
-        <View style={[styles.sectionHeader, styles.sectionMt]}>
+        <View {...uiProps(uiPath('fingo', 'component_detail', 'section_services'))} style={[styles.sectionHeader, styles.sectionMt]}>
           <Text style={styles.sectionTitle}>Services</Text>
         </View>
         {componentRecords.length === 0 ? (
@@ -538,7 +549,8 @@ export default function ComponentDetailScreen({ route }: Props) {
         ) : (
           <>
             {visibleServices.map((rec) => (
-              <View key={rec.id} style={styles.serviceRow}>
+              <View key={rec.id} {...uiProps(uiPath('fingo', 'component_detail', 'service_record_row', rec.id))} style={styles.serviceRow}>
+                <Image source={FINGO_ASSETS.fix} style={styles.serviceTypeIcon} resizeMode="contain" />
                 <View style={styles.serviceBody}>
                   <Text style={styles.serviceName}>{rec.name}</Text>
                   <Text style={styles.serviceMeta}>{toLocalDateString(rec.serviced_at)}</Text>
@@ -551,6 +563,7 @@ export default function ComponentDetailScreen({ route }: Props) {
             ))}
             {componentRecords.length > 3 && (
               <TouchableOpacity
+                {...uiProps(uiPath('fingo', 'component_detail', 'show_all_services_button', componentId))}
                 style={styles.showAllBtn}
                 onPress={() => setShowAllServices((v) => !v)}
               >
@@ -563,7 +576,7 @@ export default function ComponentDetailScreen({ route }: Props) {
         )}
 
         {/* ── Rides ──────────────────────────────────────────────────────────── */}
-        <View style={[styles.sectionHeader, styles.sectionMt]}>
+        <View {...uiProps(uiPath('fingo', 'component_detail', 'section_rides'))} style={[styles.sectionHeader, styles.sectionMt]}>
           <Text style={styles.sectionTitle}>Rides</Text>
         </View>
         {componentLogs.length === 0 ? (
@@ -571,7 +584,7 @@ export default function ComponentDetailScreen({ route }: Props) {
         ) : (
           <>
             {visibleRides.map((log) => (
-              <View key={log.id} style={styles.rideRow}>
+              <View key={log.id} {...uiProps(uiPath('fingo', 'component_detail', 'ride_row', log.id))} style={styles.rideRow}>
                 <View style={styles.rideLeft}>
                   <Text style={styles.rideDate}>
                     {new Date(log.recorded_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
@@ -591,6 +604,7 @@ export default function ComponentDetailScreen({ route }: Props) {
             ))}
             {componentLogs.length > 3 && (
               <TouchableOpacity
+                {...uiProps(uiPath('fingo', 'component_detail', 'show_all_rides_button', componentId))}
                 style={styles.showAllBtn}
                 onPress={() => setShowAllRides((v) => !v)}
               >
@@ -618,11 +632,11 @@ export default function ComponentDetailScreen({ route }: Props) {
         visible={showIntervalSheet}
         componentName={component.name}
         editingInterval={editingInterval}
-        onSave={async (name, method, value) => {
+        onSave={async (name, method, value, serviceType) => {
           if (editingInterval) {
-            await updateInterval(editingInterval.id, componentId, { name, tracking_method: method, interval_value: value });
+            await updateInterval(editingInterval.id, componentId, { name, tracking_method: method, interval_value: value, service_type: serviceType });
           } else {
-            await createInterval(componentId, name, method, value);
+            await createInterval(componentId, name, method, value, serviceType);
           }
         }}
         onClose={() => { setShowIntervalSheet(false); setEditingInterval(null); }}
@@ -775,7 +789,7 @@ export default function ComponentDetailScreen({ route }: Props) {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: '#060D18',
+    backgroundColor: '#000000',
   },
   topBar: {
     paddingHorizontal: 16,
@@ -799,7 +813,8 @@ const styles = StyleSheet.create({
   },
   scroll: { flex: 1 },
   scrollContent: {
-    padding: 16,
+    paddingTop: 5,
+    paddingHorizontal: 16,
   },
   // Identity
   identityHeader: {
@@ -809,15 +824,12 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   identityIconWrap: {
-    width: 56,
-    height: 56,
-    borderRadius: 12,
-    backgroundColor: '#0D2137',
-    borderWidth: 1,
-    borderColor: '#1F3A59',
+    width: 75,
+    height: 75,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
+    marginLeft: -11,
   },
   identityText: {
     flex: 1,
@@ -967,10 +979,14 @@ const styles = StyleSheet.create({
     flex: 2,
     paddingVertical: 12,
     borderRadius: 8,
-    backgroundColor: '#053d1e',
-    borderWidth: 1,
-    borderColor: '#4ade80',
     alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  addServiceIcon: {
+    width: 18,
+    height: 18,
   },
   addServiceText: {
     color: '#4ade80',
@@ -1008,18 +1024,12 @@ const styles = StyleSheet.create({
   sectionAddBtn: {
     width: 24,
     height: 24,
-    borderRadius: 6,
-    backgroundColor: '#0D2137',
-    borderWidth: 1,
-    borderColor: '#1F3A59',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  sectionAddText: {
-    color: '#4ade80',
-    fontSize: 14,
-    fontWeight: '700',
-    lineHeight: 16,
+  sectionAddIcon: {
+    width: 20,
+    height: 20,
   },
   emptyText: {
     color: '#475569',
@@ -1129,13 +1139,22 @@ const styles = StyleSheet.create({
   // Services
   serviceRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    paddingVertical: 8,
+    alignItems: 'stretch',
     borderBottomWidth: 1,
     borderColor: '#0E1A2B',
-    gap: 8,
+    maxHeight: 65,
   },
-  serviceBody: { flex: 1 },
+  serviceTypeIcon: {
+    width: 44,
+    alignSelf: 'stretch',
+    flexShrink: 0,
+    maxHeight: 65,
+  },
+  serviceBody: {
+    flex: 1,
+    paddingVertical: 8,
+    paddingLeft: 8,
+  },
   serviceName: {
     color: '#CBD5E1',
     fontSize: 13,

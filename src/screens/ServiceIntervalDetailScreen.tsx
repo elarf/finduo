@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert, Platform, Modal,
+  View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert, Platform, Modal, Image,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp, NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -9,14 +9,24 @@ import { useAuth } from '../context/AuthContext';
 import { useServiceIntervals } from '../hooks/useServiceIntervals';
 import { useServiceRecords } from '../hooks/useServiceRecords';
 import ServiceRecordSheet from '../components/fingo/ServiceRecordSheet';
+import ServiceIntervalSheet from '../components/fingo/ServiceIntervalSheet';
 import { supabase } from '../lib/supabase';
 import {
   computeIntervalHealth, formatIntervalRemaining, healthColor, getTrackingValue,
   trackingMethodLabel, trackingMethodUnit,
 } from '../lib/fingo/health';
+import { FINGO_ASSETS } from '../lib/fingo/fingoAssets';
 import { bottomInset } from '../lib/safeArea';
+import { uiPath, uiProps } from '../lib/devtools';
 import type { RootStackParamList } from '../navigation';
-import type { Component, ComponentServiceInterval } from '../types/fingo';
+import type { Component, ComponentServiceInterval, ServiceIntervalType } from '../types/fingo';
+
+const SERVICE_TYPE_ICONS: Record<ServiceIntervalType, any> = {
+  general:  FINGO_ASSETS.fix,
+  replace:  FINGO_ASSETS.change,
+  cleaning: FINGO_ASSETS.wipe,
+  charge:   FINGO_ASSETS.charge,
+};
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ServiceIntervalDetail'>;
 
@@ -27,13 +37,14 @@ export default function ServiceIntervalDetailScreen({ route }: Props) {
   const user = session?.user ?? null;
   const { bottom } = useSafeAreaInsets();
 
-  const { intervals, loadIntervals, deleteInterval, markServiced } = useServiceIntervals();
+  const { intervals, loadIntervals, deleteInterval, markServiced, updateInterval } = useServiceIntervals();
   const { records, createRecord, loadRecords } = useServiceRecords(user);
 
   const [component, setComponent] = useState<Component | null>(null);
   const [loading, setLoading] = useState(true);
   const [showRecordSheet, setShowRecordSheet] = useState(false);
   const [showActionsModal, setShowActionsModal] = useState(false);
+  const [showIntervalSheet, setShowIntervalSheet] = useState(false);
 
   const interval: ComponentServiceInterval | undefined = (intervals[componentId] ?? []).find((i) => i.id === intervalId);
 
@@ -99,8 +110,17 @@ export default function ServiceIntervalDetailScreen({ route }: Props) {
         showsVerticalScrollIndicator={false}
       >
         {/* ── Identity ──────────────────────────────────────────────────────── */}
-        <Text style={styles.componentLabel}>{component.name}</Text>
-        <Text style={styles.intervalName}>{interval.name}</Text>
+        <View {...uiProps(uiPath('fingo', 'service_interval_detail', 'identity_header'))} style={styles.identityHeader}>
+          <Image
+            source={SERVICE_TYPE_ICONS[interval.service_type ?? 'general']}
+            style={styles.identityIcon}
+            resizeMode="contain"
+          />
+          <View style={styles.identityText}>
+            <Text style={styles.componentLabel}>{component.name}</Text>
+            <Text style={styles.intervalName}>{interval.name}</Text>
+          </View>
+        </View>
 
         {/* ── Progress bar ──────────────────────────────────────────────────── */}
         <View style={styles.progressCard}>
@@ -135,10 +155,12 @@ export default function ServiceIntervalDetailScreen({ route }: Props) {
         {/* ── Action buttons ─────────────────────────────────────────────────── */}
         <View style={styles.actionRow}>
           <TouchableOpacity
+            {...uiProps(uiPath('fingo', 'service_interval_detail', 'add_service_button'))}
             style={styles.addServiceBtn}
             onPress={() => setShowRecordSheet(true)}
           >
-            <Text style={styles.addServiceText}>+ Add Service</Text>
+            <Image source={FINGO_ASSETS.fix} style={styles.addServiceIcon} resizeMode="contain" />
+            <Text style={styles.addServiceText}>Add Service</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.actionsBtn}
@@ -161,6 +183,7 @@ export default function ServiceIntervalDetailScreen({ route }: Props) {
               ) : (
                 componentRecords.map((rec) => (
                   <View key={rec.id} style={styles.serviceRow}>
+                    <Image source={FINGO_ASSETS.fix} style={styles.serviceTypeIcon} resizeMode="contain" />
                     <View style={styles.serviceBody}>
                       <Text style={styles.serviceName}>{rec.name}</Text>
                       <Text style={styles.serviceMeta}>
@@ -199,6 +222,19 @@ export default function ServiceIntervalDetailScreen({ route }: Props) {
         onClose={() => setShowRecordSheet(false)}
       />
 
+      <ServiceIntervalSheet
+        visible={showIntervalSheet}
+        componentName={component.name}
+        editingInterval={interval}
+        onSave={async (name, method, value, serviceType) => {
+          await updateInterval(interval.id, componentId, {
+            name, tracking_method: method, interval_value: value, service_type: serviceType,
+          });
+          await loadIntervals(componentId);
+        }}
+        onClose={() => setShowIntervalSheet(false)}
+      />
+
       {/* ── Actions modal ─────────────────────────────────────────────────────── */}
       <Modal
         visible={showActionsModal}
@@ -216,19 +252,15 @@ export default function ServiceIntervalDetailScreen({ route }: Props) {
           <Text style={styles.actionsTitle} numberOfLines={1}>{interval.name}</Text>
           <TouchableOpacity
             style={styles.actionSheetRow}
-            onPress={() => { setShowActionsModal(false); handleDelete(); }}
+            onPress={() => { setShowActionsModal(false); setShowIntervalSheet(true); }}
           >
-            <Text style={[styles.actionSheetText, styles.destructiveText]}>🗑️  Delete interval</Text>
+            <Text style={styles.actionSheetText}>✎  Edit interval</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.actionSheetRow}
-            onPress={() => {
-              setShowActionsModal(false);
-              // TODO: implement picture upload when image picker is integrated
-              Alert.alert('Set picture', 'Image picker integration coming soon.');
-            }}
+            onPress={() => { setShowActionsModal(false); handleDelete(); }}
           >
-            <Text style={styles.actionSheetText}>📷  Set picture</Text>
+            <Text style={[styles.actionSheetText, styles.destructiveText]}>🗑️  Delete interval</Text>
           </TouchableOpacity>
         </View>
       </Modal>
@@ -239,7 +271,7 @@ export default function ServiceIntervalDetailScreen({ route }: Props) {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: '#060D18',
+    backgroundColor: '#000000',
   },
   topBar: {
     paddingHorizontal: 16,
@@ -262,8 +294,24 @@ const styles = StyleSheet.create({
     marginTop: 40,
   },
   scroll: { flex: 1 },
-  scrollContent: { padding: 16 },
+  scrollContent: { paddingTop: 5, paddingHorizontal: 16 },
   // Identity
+  identityHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 14,
+    marginBottom: 20,
+  },
+  identityIcon: {
+    width: 75,
+    height: 75,
+    flexShrink: 0,
+    marginLeft: -11,
+  },
+  identityText: {
+    flex: 1,
+    paddingTop: 4,
+  },
   componentLabel: {
     color: '#475569',
     fontSize: 13,
@@ -273,7 +321,6 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 22,
     fontWeight: '800',
-    marginBottom: 20,
   },
   // Progress card
   progressCard: {
@@ -337,10 +384,14 @@ const styles = StyleSheet.create({
     flex: 3,
     paddingVertical: 12,
     borderRadius: 8,
-    backgroundColor: '#053d1e',
-    borderWidth: 1,
-    borderColor: '#4ade80',
     alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  addServiceIcon: {
+    width: 18,
+    height: 18,
   },
   addServiceText: {
     color: '#4ade80',
@@ -419,13 +470,22 @@ const styles = StyleSheet.create({
   },
   serviceRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    paddingVertical: 8,
+    alignItems: 'stretch',
     borderBottomWidth: 1,
     borderColor: '#0E1A2B',
-    gap: 8,
+    maxHeight: 65,
   },
-  serviceBody: { flex: 1 },
+  serviceTypeIcon: {
+    width: 44,
+    alignSelf: 'stretch',
+    flexShrink: 0,
+    maxHeight: 65,
+  },
+  serviceBody: {
+    flex: 1,
+    paddingVertical: 8,
+    paddingLeft: 8,
+  },
   serviceName: {
     color: '#CBD5E1',
     fontSize: 13,

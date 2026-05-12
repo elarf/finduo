@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  ActivityIndicator, Modal, FlatList,
+  ActivityIndicator, Modal, FlatList, Image,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -16,6 +16,7 @@ import { bottomInset } from '../lib/safeArea';
 import { uiPath, uiProps, logUI } from '../lib/devtools';
 import type { RootStackParamList } from '../navigation';
 import type { FinGoAsset } from '../types/fingo';
+import { FINGO_ASSETS } from '../lib/fingo/fingoAssets';
 
 type FilterType = 'all' | 'steps' | 'distance' | 'exercise' | 'calories';
 type RangeOption = { label: string; days: number };
@@ -26,8 +27,14 @@ const RANGE_OPTIONS: RangeOption[] = [
   { label: '30 days', days: 30 },
 ];
 
-const TYPE_ICONS: Record<HCRecord['type'], string> = {
-  steps: '👟',
+const TYPE_ICON_IMAGES: Partial<Record<HCRecord['type'], any>> = {
+  steps:    FINGO_ASSETS.step,
+  distance: FINGO_ASSETS.route,
+  exercise: FINGO_ASSETS.ride,
+};
+
+const TYPE_ICON_EMOJIS: Record<HCRecord['type'], string> = {
+  steps:    '👟',
   distance: '📏',
   exercise: '🚴',
   calories: '🔥',
@@ -238,7 +245,10 @@ export default function HealthConnectScreen() {
             const attachable = canAttach(r);
             return (
               <View key={r.id} style={styles.recordRow}>
-                <Text style={styles.recordIcon}>{TYPE_ICONS[r.type]}</Text>
+                {TYPE_ICON_IMAGES[r.type]
+                  ? <Image source={TYPE_ICON_IMAGES[r.type]} style={styles.recordIcon} resizeMode="contain" />
+                  : <Text style={styles.recordIconEmoji}>{TYPE_ICON_EMOJIS[r.type]}</Text>
+                }
                 <View style={styles.recordBody}>
                   <Text style={styles.recordType}>{TYPE_LABELS[r.type]}</Text>
                   <Text style={styles.recordValue}>{recordPrimaryValue(r)}</Text>
@@ -283,7 +293,10 @@ export default function HealthConnectScreen() {
           <Text style={styles.sheetTitle}>Attach to Asset</Text>
           {attachRecord && (
             <View style={styles.sheetRecordPreview}>
-              <Text style={styles.sheetRecordIcon}>{TYPE_ICONS[attachRecord.type]}</Text>
+              {TYPE_ICON_IMAGES[attachRecord.type]
+                ? <Image source={TYPE_ICON_IMAGES[attachRecord.type]} style={styles.sheetRecordIcon} resizeMode="contain" />
+                : <Text style={styles.sheetRecordIconEmoji}>{TYPE_ICON_EMOJIS[attachRecord.type]}</Text>
+              }
               <View>
                 <Text style={styles.sheetRecordValue}>{recordPrimaryValue(attachRecord)}</Text>
                 <Text style={styles.sheetRecordTime}>{formatTime(attachRecord.startTime)}</Text>
@@ -454,7 +467,8 @@ const styles = StyleSheet.create({
     gap: 10,
     marginBottom: 6,
   },
-  recordIcon: { fontSize: 22 },
+  recordIcon: { width: 22, height: 22 },
+  recordIconEmoji: { fontSize: 22 },
   recordBody: { flex: 1 },
   recordType: {
     color: '#64748B',
@@ -544,7 +558,8 @@ const styles = StyleSheet.create({
     padding: 10,
     marginBottom: 14,
   },
-  sheetRecordIcon: { fontSize: 24 },
+  sheetRecordIcon: { width: 24, height: 24 },
+  sheetRecordIconEmoji: { fontSize: 24 },
   sheetRecordValue: {
     color: '#CBD5E1',
     fontSize: 14,

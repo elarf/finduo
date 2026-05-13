@@ -17,6 +17,7 @@ export type RawRecord = {
   count?: number;
   distanceMeters?: number;
   exerciseType?: number;
+  dataOrigin?: string;
   energyKcal?: number;
 };
 

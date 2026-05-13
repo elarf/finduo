@@ -31,10 +31,11 @@ type DaySteps = {
 type AggregatedWorkout = {
   sessionId: string;
   date: string;
-  activityType: string;
+  activityName: string;
   distanceKm: number | null;
   durationMin: number;
   isBiking: boolean;
+  dataOrigin?: string;
   rawRecord: HCRecord;
 };
 
@@ -64,6 +65,54 @@ const TYPE_LABELS: Record<HCRecord['type'], string> = {
   calories: 'Calories',
 };
 
+const HC_EXERCISE_NAMES: Record<number, string> = {
+  0: 'Other', 2: 'Back Extension', 4: 'Badminton', 5: 'Barbell Shoulder Press',
+  6: 'Baseball', 7: 'Basketball', 8: 'Cycling', 9: 'Cycling (Stationary)',
+  10: 'Boot Camp', 11: 'Boxing', 13: 'Cricket', 14: 'Cross Country Skiing',
+  15: 'CrossFit', 16: 'Curling', 17: 'Dancing', 18: 'Deadlift',
+  26: 'Elliptical', 27: 'Exercise Class', 29: 'Frisbee', 31: 'Golf',
+  32: 'Guided Breathing', 33: 'Gymnastics', 34: 'Handball', 35: 'HIIT',
+  36: 'Hiking', 37: 'Ice Hockey', 38: 'Ice Skating', 39: 'Jumping Jacks',
+  40: 'Jump Rope', 42: 'Lunge', 43: 'Martial Arts', 44: 'Meditation',
+  45: 'Paddling', 47: 'Pilates', 48: 'Plank', 49: 'Racquetball',
+  50: 'Rock Climbing', 52: 'Rowing', 53: 'Rowing Machine', 54: 'Rugby',
+  56: 'Running', 57: 'Treadmill', 58: 'Sailing', 59: 'Scuba Diving',
+  60: 'Skating', 61: 'Skiing', 62: 'Snowboarding', 63: 'Snowshoeing',
+  64: 'Soccer', 65: 'Softball', 66: 'Squash', 67: 'Stair Climbing',
+  68: 'Stair Climbing Machine', 69: 'Strength Training', 70: 'Stretching',
+  71: 'Surfing', 72: 'Open Water Swimming', 73: 'Pool Swimming',
+  74: 'Table Tennis', 75: 'Tennis', 76: 'Volleyball', 77: 'Walking',
+  78: 'Water Polo', 79: 'Weightlifting', 81: 'Wheelchair', 82: 'Yoga',
+};
+
+const BIKING_HC_TYPES = new Set([8, 9]);
+
+function getHCActivityName(activityType: string): string {
+  const n = parseInt(activityType, 10);
+  if (!isNaN(n) && HC_EXERCISE_NAMES[n]) return HC_EXERCISE_NAMES[n]!;
+  return activityType || 'Workout';
+}
+
+function isBikingHC(activityType: string): boolean {
+  return BIKING_HC_TYPES.has(parseInt(activityType, 10));
+}
+
+const DATA_ORIGIN_NAMES: Record<string, string> = {
+  'com.strava': 'Strava',
+  'com.samsung.shealth': 'Samsung Health',
+  'com.samsung.android.shealth': 'Samsung Health',
+  'com.google.android.apps.fitness': 'Google Fit',
+  'com.garmin.android.apps.connectmobile': 'Garmin Connect',
+  'com.polar.polarbeatapp': 'Polar Beat',
+  'com.wahoo.fitness': 'Wahoo',
+  'com.suunto.android': 'Suunto',
+};
+
+function formatDataOrigin(pkg?: string): string | null {
+  if (!pkg) return null;
+  return DATA_ORIGIN_NAMES[pkg] ?? (pkg.split('.').pop() ?? pkg);
+}
+
 function formatTime(iso: string): string {
   return new Date(iso).toLocaleString(undefined, {
     month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
@@ -79,16 +128,22 @@ function formatDuration(startIso: string, endIso: string): string {
 }
 
 function formatDurationMin(mins: number): string {
-  if (mins < 60) return `${mins}m`;
-  const h = Math.floor(mins / 60);
-  const m = mins % 60;
-  return m > 0 ? `${h}h ${m}m` : `${h}h`;
+  const totalSecs = Math.round(mins * 60);
+  const h = Math.floor(totalSecs / 3600);
+  const m = Math.floor((totalSecs % 3600) / 60);
+  const s = totalSecs % 60;
+  if (h > 0) return s > 0 ? `${h}h ${m}m ${s}s` : `${h}h ${m}m`;
+  return s > 0 ? `${m}m ${s}s` : `${m}m`;
 }
 
 function formatDate(dateStr: string): string {
   return new Date(dateStr + 'T00:00:00').toLocaleDateString(undefined, {
     weekday: 'short', month: 'short', day: 'numeric',
   });
+}
+
+function formatTimeOnly(iso: string): string {
+  return new Date(iso).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
 }
 
 function recordPrimaryValue(r: HCRecord): string {
@@ -106,6 +161,37 @@ function recordPrimaryValue(r: HCRecord): string {
 
 function canAttach(r: HCRecord): boolean {
   return r.type !== 'calories';
+}
+
+function detectDuplicates(workouts: AggregatedWorkout[]): Set<string> {
+  const dupes = new Set<string>();
+  for (let i = 0; i < workouts.length; i++) {
+    if (dupes.has(workouts[i]!.sessionId)) continue;
+    for (let j = i + 1; j < workouts.length; j++) {
+      if (dupes.has(workouts[j]!.sessionId)) continue;
+      const a = workouts[i]!;
+      const b = workouts[j]!;
+      const timeDiff = Math.abs(
+        new Date(a.rawRecord.startTime).getTime() - new Date(b.rawRecord.startTime).getTime(),
+      );
+      if (timeDiff > 4 * 60 * 60 * 1000) continue;
+      const durationDiff = Math.abs(a.durationMin - b.durationMin);
+      if (durationDiff > Math.max(5, Math.min(a.durationMin, b.durationMin) * 0.1)) continue;
+      const aDist = a.distanceKm ?? 0;
+      const bDist = b.distanceKm ?? 0;
+      if (aDist > 0 && bDist > 0) {
+        const distDiff = Math.abs(aDist - bDist);
+        if (distDiff > Math.max(0.5, Math.min(aDist, bDist) * 0.1)) continue;
+      }
+      // Keep the one with more distance; on tie keep longer duration
+      if (aDist >= bDist && (aDist > bDist || a.durationMin >= b.durationMin)) {
+        dupes.add(b.sessionId);
+      } else {
+        dupes.add(a.sessionId);
+      }
+    }
+  }
+  return dupes;
 }
 
 export default function HealthConnectScreen() {
@@ -129,6 +215,11 @@ export default function HealthConnectScreen() {
   const [attaching, setAttaching] = useState(false);
   const [attachedIds, setAttachedIds] = useState<Set<string>>(new Set());
 
+  // Workout visibility — manual overrides on top of auto-detected duplicates
+  const [manualHiddenIds, setManualHiddenIds] = useState<Set<string>>(new Set());
+  const [manualUnhiddenIds, setManualUnhiddenIds] = useState<Set<string>>(new Set());
+  const [showHidden, setShowHidden] = useState(false);
+
   useEffect(() => {
     void loadAssets();
     void fetchLoggedExternalIds('health_connect').then(setAttachedIds);
@@ -148,6 +239,8 @@ export default function HealthConnectScreen() {
 
   const handleRangeChange = useCallback((days: number) => {
     setSelectedDays(days);
+    setManualHiddenIds(new Set());
+    setManualUnhiddenIds(new Set());
     void fetchRecords(days);
   }, [fetchRecords]);
 
@@ -164,10 +257,12 @@ export default function HealthConnectScreen() {
     setAttaching(true);
     try {
       const entry = buildEntry(attachRecord, asset);
-      await addUsageLog(asset, entry, null, 'health_connect', attachRecord.id);
-      setAttachedIds((prev) => new Set([...prev, attachRecord.id]));
-      setAttachRecord(null);
-      logUI(uiPath('fingo', 'health_connect', 'attach_confirm'), 'press');
+      const success = await addUsageLog(asset, entry, null, 'health_connect', attachRecord.id);
+      if (success) {
+        setAttachedIds((prev) => new Set([...prev, attachRecord.id]));
+        setAttachRecord(null);
+        logUI(uiPath('fingo', 'health_connect', 'attach_confirm'), 'press');
+      }
     } finally {
       setAttaching(false);
     }
@@ -211,21 +306,38 @@ export default function HealthConnectScreen() {
 
       const durationMin =
         session.movingTimeMin ??
-        Math.round(
-          (new Date(session.endTime).getTime() - new Date(session.startTime).getTime()) / 60000,
-        );
+        (new Date(session.endTime).getTime() - new Date(session.startTime).getTime()) / 60000;
 
-      const activityType = session.activityType ?? 'Workout';
-      const isBiking = /bik|cycl/i.test(activityType);
+      const activityType = session.activityType ?? '';
 
-      return { sessionId: session.id, date: session.startTime.slice(0, 10), activityType, distanceKm, durationMin, isBiking, rawRecord: session };
+      return {
+        sessionId: session.id,
+        date: session.startTime.slice(0, 10),
+        activityName: getHCActivityName(activityType),
+        distanceKm,
+        durationMin,
+        isBiking: isBikingHC(activityType),
+        dataOrigin: session.dataOrigin,
+        rawRecord: session,
+      };
     }).sort((a, b) => b.date.localeCompare(a.date));
   }, [records]);
+
+  const autoDuplicateIds = useMemo(() => detectDuplicates(aggregatedWorkouts), [aggregatedWorkouts]);
+
+  const effectiveHiddenIds = useMemo(() => {
+    const result = new Set<string>();
+    for (const id of autoDuplicateIds) {
+      if (!manualUnhiddenIds.has(id)) result.add(id);
+    }
+    for (const id of manualHiddenIds) result.add(id);
+    return result;
+  }, [autoDuplicateIds, manualHiddenIds, manualUnhiddenIds]);
 
   // ─── Early exits ─────────────────────────────────────────────────────────────
   if (!isAvailable || sdkAvailable === false) {
     return (
-      <View {...uiProps(uiPath('fingo', 'health_connect', 'screen'))} style={styles.screen}>
+      <View {...uiProps(uiPath('fingo', 'health_connect', 'screen'))} style={[styles.screen, { paddingBottom: bottom }]}>
         <DashboardHeader onBack={() => navigation.goBack()} />
         <View style={styles.unavailableContainer}>
           <Text style={styles.unavailableIcon}>💚</Text>
@@ -240,7 +352,7 @@ export default function HealthConnectScreen() {
 
   if (sdkAvailable === null) {
     return (
-      <View style={styles.screen}>
+      <View style={[styles.screen, { paddingBottom: bottom }]}>
         <DashboardHeader onBack={() => navigation.goBack()} />
         <View style={styles.centeredRow}>
           <ActivityIndicator color="#4ade80" />
@@ -250,7 +362,7 @@ export default function HealthConnectScreen() {
   }
 
   return (
-    <View {...uiProps(uiPath('fingo', 'health_connect', 'screen'))} style={styles.screen}>
+    <View {...uiProps(uiPath('fingo', 'health_connect', 'screen'))} style={[styles.screen, { paddingBottom: bottom }]}>
       <DashboardHeader onBack={() => navigation.goBack()} />
 
       {/* Tab toggle */}
@@ -275,20 +387,32 @@ export default function HealthConnectScreen() {
 
       {/* Filters row */}
       <View style={styles.filtersBar}>
-        {/* Time range (always shown) */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pillRow}>
-          {RANGE_OPTIONS.map((opt) => (
+        {/* Time range (always shown) + visibility toggle for aggregated tab */}
+        <View style={styles.filterRowWithToggle}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pillRow} style={{ flex: 1 }}>
+            {RANGE_OPTIONS.map((opt) => (
+              <TouchableOpacity
+                key={opt.days}
+                style={[styles.pill, selectedDays === opt.days && styles.pillActive]}
+                onPress={() => handleRangeChange(opt.days)}
+              >
+                <Text style={[styles.pillText, selectedDays === opt.days && styles.pillTextActive]}>
+                  {opt.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+          {viewTab === 'aggregated' && effectiveHiddenIds.size > 0 && (
             <TouchableOpacity
-              key={opt.days}
-              style={[styles.pill, selectedDays === opt.days && styles.pillActive]}
-              onPress={() => handleRangeChange(opt.days)}
+              style={[styles.pill, styles.visibilityPill, showHidden && styles.pillActive]}
+              onPress={() => setShowHidden((v) => !v)}
             >
-              <Text style={[styles.pillText, selectedDays === opt.days && styles.pillTextActive]}>
-                {opt.label}
+              <Text style={[styles.pillText, showHidden && styles.pillTextActive]}>
+                {showHidden ? '👁 Showing hidden' : `👁 ${effectiveHiddenIds.size} hidden`}
               </Text>
             </TouchableOpacity>
-          ))}
-        </ScrollView>
+          )}
+        </View>
 
         {/* Type filter (raw tab only) */}
         {viewTab === 'raw' && (
@@ -337,7 +461,13 @@ export default function HealthConnectScreen() {
           workouts={aggregatedWorkouts}
           attachedIds={attachedIds}
           onAttach={openAttachSheet}
-          bottom={bottom}
+          hiddenWorkoutIds={effectiveHiddenIds}
+          showHidden={showHidden}
+          onHideWorkout={(id) => setManualHiddenIds((prev) => new Set([...prev, id]))}
+          onUnhideWorkout={(id) => {
+            setManualHiddenIds((prev) => { const next = new Set(prev); next.delete(id); return next; });
+            if (autoDuplicateIds.has(id)) setManualUnhiddenIds((prev) => new Set([...prev, id]));
+          }}
         />
       ) : filteredRecords.length === 0 ? (
         <View style={styles.centeredRow}>
@@ -346,7 +476,7 @@ export default function HealthConnectScreen() {
       ) : (
         <ScrollView
           style={styles.scroll}
-          contentContainerStyle={[styles.scrollContent, { paddingBottom: bottomInset(24, bottom) }]}
+          contentContainerStyle={[styles.scrollContent, { paddingBottom: 24 }]}
           showsVerticalScrollIndicator={false}
         >
           {filteredRecords.map((r) => {
@@ -458,10 +588,13 @@ type AggregatedViewProps = {
   workouts: AggregatedWorkout[];
   attachedIds: Set<string>;
   onAttach: (r: HCRecord) => void;
-  bottom: number;
+  hiddenWorkoutIds: Set<string>;
+  showHidden: boolean;
+  onHideWorkout: (id: string) => void;
+  onUnhideWorkout: (id: string) => void;
 };
 
-function AggregatedView({ steps, workouts, attachedIds, onAttach, bottom }: AggregatedViewProps) {
+function AggregatedView({ steps, workouts, attachedIds, onAttach, hiddenWorkoutIds, showHidden, onHideWorkout, onUnhideWorkout }: AggregatedViewProps) {
   if (steps.length === 0 && workouts.length === 0) {
     return (
       <View style={styles.centeredRow}>
@@ -470,24 +603,50 @@ function AggregatedView({ steps, workouts, attachedIds, onAttach, bottom }: Aggr
     );
   }
 
+  const visibleWorkouts = showHidden
+    ? workouts
+    : workouts.filter((w) => !hiddenWorkoutIds.has(w.sessionId));
+
   return (
     <ScrollView
       style={styles.scroll}
-      contentContainerStyle={[styles.scrollContent, { paddingBottom: bottomInset(24, bottom) }]}
+      contentContainerStyle={[styles.scrollContent, { paddingBottom: 24 }]}
       showsVerticalScrollIndicator={false}
     >
       {workouts.length > 0 && (
         <>
           <Text style={styles.sectionHeader}>Workouts</Text>
-          {workouts.map((w) => {
+          {visibleWorkouts.map((w) => {
             const attached = attachedIds.has(w.sessionId);
+            const isHidden = hiddenWorkoutIds.has(w.sessionId);
+            const originLabel = formatDataOrigin(w.dataOrigin);
+            const avgSpeedKmh =
+              w.distanceKm != null && w.distanceKm > 0 && w.durationMin > 0
+                ? (w.distanceKm / w.durationMin) * 60
+                : null;
+
             return (
-              <View key={w.sessionId} style={[styles.workoutCard, w.isBiking && styles.workoutCardBike]}>
+              <View
+                key={w.sessionId}
+                style={[
+                  styles.workoutCard,
+                  w.isBiking && styles.workoutCardBike,
+                  isHidden && styles.workoutCardHidden,
+                ]}
+              >
                 <View style={styles.workoutCardHeader}>
-                  <Text style={[styles.workoutActivity, w.isBiking && styles.workoutActivityBike]}>
-                    {w.isBiking ? '🚴 ' : '🏃 '}{w.activityType}
-                  </Text>
+                  <View style={styles.workoutTitleRow}>
+                    <Text style={[styles.workoutActivity, w.isBiking && styles.workoutActivityBike]}>
+                      {w.isBiking ? '🚴 ' : '🏃 '}{w.activityName}
+                    </Text>
+                    {originLabel && (
+                      <View style={styles.originBadge}>
+                        <Text style={styles.originBadgeText}>{originLabel}</Text>
+                      </View>
+                    )}
+                  </View>
                   <Text style={styles.workoutDate}>{formatDate(w.date)}</Text>
+                  <Text style={styles.workoutTime}>{formatTimeOnly(w.rawRecord.startTime)}</Text>
                 </View>
                 <View style={styles.workoutStats}>
                   {w.distanceKm != null && (
@@ -500,21 +659,33 @@ function AggregatedView({ steps, workouts, attachedIds, onAttach, bottom }: Aggr
                     <Text style={styles.workoutStatValue}>{formatDurationMin(w.durationMin)}</Text>
                     <Text style={styles.workoutStatLabel}>duration</Text>
                   </View>
+                  {avgSpeedKmh != null && (
+                    <View style={styles.workoutStat}>
+                      <Text style={styles.workoutStatValue}>{avgSpeedKmh.toFixed(1)}</Text>
+                      <Text style={styles.workoutStatLabel}>km/h avg</Text>
+                    </View>
+                  )}
                 </View>
-                {w.isBiking && (
+                {w.isBiking && !isHidden && !attached && (
                   <Text style={styles.bikeBadge}>Bike ride — eligible for part tracking</Text>
                 )}
-                {attached ? (
-                  <View style={[styles.attachedBadge, { alignSelf: 'flex-start', marginTop: 8 }]}>
-                    <Text style={styles.attachedText}>✓ Logged</Text>
+                {!attached && (
+                  <View style={styles.workoutCardActions}>
+                    {!isHidden ? (
+                      <TouchableOpacity
+                        style={[styles.attachBtn, { marginTop: 8 }]}
+                        onPress={() => onAttach({ ...w.rawRecord, distanceKm: w.distanceKm ?? w.rawRecord.distanceKm })}
+                      >
+                        <Text style={styles.attachBtnText}>Attach →</Text>
+                      </TouchableOpacity>
+                    ) : null}
+                    <TouchableOpacity
+                      style={[styles.hideBtn, { marginTop: 8 }]}
+                      onPress={() => isHidden ? onUnhideWorkout(w.sessionId) : onHideWorkout(w.sessionId)}
+                    >
+                      <Text style={styles.hideBtnText}>{isHidden ? 'Unhide' : 'Hide'}</Text>
+                    </TouchableOpacity>
                   </View>
-                ) : (
-                  <TouchableOpacity
-                    style={[styles.attachBtn, { alignSelf: 'flex-start', marginTop: 8 }]}
-                    onPress={() => onAttach(w.rawRecord)}
-                  >
-                    <Text style={styles.attachBtnText}>Attach →</Text>
-                  </TouchableOpacity>
                 )}
               </View>
             );
@@ -545,7 +716,7 @@ function AggregatedView({ steps, workouts, attachedIds, onAttach, bottom }: Aggr
   );
 }
 
-function buildEntry(r: HCRecord, asset: FinGoAsset) {
+function buildEntry(r: HCRecord, _asset: FinGoAsset) {
   switch (r.type) {
     case 'steps':
       return { steps: r.steps ?? 0 };
@@ -554,7 +725,7 @@ function buildEntry(r: HCRecord, asset: FinGoAsset) {
     case 'exercise':
       return {
         distance: r.distanceKm,
-        movingTime: r.movingTimeMin,
+        movingTime: r.movingTimeMin != null ? Math.round(r.movingTimeMin) : undefined,
         elevation: r.elevationGainM,
       };
     default:
@@ -596,6 +767,15 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderColor: '#1F3A59',
     gap: 4,
+  },
+  filterRowWithToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingRight: 12,
+  },
+  visibilityPill: {
+    flexShrink: 0,
+    marginLeft: 4,
   },
   pillRow: {
     paddingHorizontal: 12,
@@ -701,11 +881,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   recordIcon: {
-    position: 'absolute',
-    top: 0,
-    bottom: 0,
-    left: 0,
-    right: 0,
+    width: 36,
+    height: 36,
   },
   recordIconEmoji: { fontSize: 22 },
   recordBody: { flex: 1, padding: 12 },
@@ -789,11 +966,21 @@ const styles = StyleSheet.create({
     borderColor: '#4ade80',
     backgroundColor: '#061a0e',
   },
+  workoutCardHidden: {
+    opacity: 0.45,
+  },
   workoutCardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     marginBottom: 10,
+  },
+  workoutTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flex: 1,
+    flexWrap: 'wrap',
   },
   workoutActivity: {
     color: '#CBD5E1',
@@ -806,6 +993,11 @@ const styles = StyleSheet.create({
   workoutDate: {
     color: '#475569',
     fontSize: 11,
+  },
+  workoutTime: {
+    color: '#334155',
+    fontSize: 11,
+    marginTop: 2,
   },
   workoutStats: {
     flexDirection: 'row',
@@ -829,6 +1021,37 @@ const styles = StyleSheet.create({
     color: '#4ade80',
     fontSize: 11,
     marginTop: 8,
+    fontWeight: '600',
+  },
+  originBadge: {
+    backgroundColor: '#0E1A2B',
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: '#1F3A59',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  originBadgeText: {
+    color: '#64748B',
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  workoutCardActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  hideBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#1F3A59',
+    backgroundColor: '#0E1A2B',
+  },
+  hideBtnText: {
+    color: '#475569',
+    fontSize: 12,
     fontWeight: '600',
   },
   // Aggregated — steps rows

@@ -6,11 +6,13 @@ Financial tracking app for couples and shared households. Track income, expenses
 
 ---
 
-## Latest Release — v1.2.8
+## Latest Release — v1.2.9
 
-- **HealthConnect Aggregated view** — new Aggregated/Raw tab toggle; workouts shown as cards with distance, duration, and biking highlight; daily steps merged per day; attached state persists across remounts via `external_id` deduplication
-- **Usage log `external_id`** — `usage_logs` now stores the originating record UUID (e.g. Health Connect session ID); `fetchLoggedExternalIds` on `useUsageLogs` enables duplicate-import detection
-- **DB migration** — `external_id TEXT` column added to `usage_logs`
+- **HealthConnect named exercise types** — workout cards show human-readable activity names (Running, Cycling, HIIT, Yoga, etc.) resolved from Health Connect integer exercise type codes
+- **Data origin badges** — each workout card shows the source app (Strava, Samsung Health, Google Fit, Garmin Connect, etc.)
+- **Workout deduplication** — auto-detects duplicate sessions from different sources and hides them; manual hide/unhide per card; hidden count pill in filter bar
+- **Avg speed, sub-minute duration, start time** — additional stats on workout cards
+- **DB migration baseline consolidation** — all incremental migrations folded into `0000_baseline.sql`; `20260513c_grant_all_tables.sql` added
 
 Full history: [PATCHNOTES.md](./PATCHNOTES.md)
 
@@ -402,18 +404,9 @@ finduo/
     db/
       schema.md                    Human-readable schema reference (tables, columns, RLS)
     migrations/
-      0000_baseline.sql            Full schema baseline (all tables, indexes, RLS, functions)
-      20260401_unified_pool_participants.sql
-      20260401c_clean_rls_baseline.sql
-      20260401e_production_full_fix.sql
-      20260402b_temp_categories_on_revoke.sql
-      20260402c_global_transfer_categories.sql
-      20260402d_cleanup_leftover_transfer_categories.sql
-      20260402e_transfer_category_icon.sql
-      20260402f_pools_insert_policy.sql
-      20260402g_pools_granular_rls.sql
-      20260402h_pool_members_nullable_user_id.sql
-      archive/                     Superseded incremental migrations (history only)
+      0000_baseline.sql            Full schema baseline (all tables, indexes, RLS, functions — all migrations consolidated)
+      20260513c_grant_all_tables.sql
+      archive/                     All incremental migrations (archived; consolidated into baseline)
 ```
 
 ---
@@ -453,19 +446,7 @@ npx supabase db push
 
 Then apply incremental migrations in order:
 
-1. `20260401_unified_pool_participants.sql`
-2. `20260401c_clean_rls_baseline.sql`
-3. `20260401e_production_full_fix.sql`
-4. `20260402b_temp_categories_on_revoke.sql`
-5. `20260402c_global_transfer_categories.sql`
-6. `20260402d_cleanup_leftover_transfer_categories.sql`
-7. `20260402e_transfer_category_icon.sql`
-8. `20260402f_pools_insert_policy.sql`
-9. `20260402g_pools_granular_rls.sql`
-10. `20260402h_pool_members_nullable_user_id.sql`
-11. `20260512_fingo_service_interval_type.sql`
-12. `20260513_fingo_service_interval_type_charge.sql`
-13. `20260513b_fingo_usage_log_external_id.sql`
+1. `20260513c_grant_all_tables.sql`
 
 ### 5. Start development
 

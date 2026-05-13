@@ -12,6 +12,7 @@ export type HCRecord = {
   movingTimeMin?: number;
   elevationGainM?: number;
   activityType?: string;
+  dataOrigin?: string;
   calories?: number;
 };
 
@@ -91,6 +92,7 @@ export async function readHealthConnectData(startDate: Date, endDate: Date): Pro
         endTime: r.endTime,
         movingTimeMin,
         activityType: String(r.exerciseType ?? ''),
+        dataOrigin: r.dataOrigin,
       });
     }
   }

@@ -4,6 +4,31 @@
 
 ---
 
+## [1.2.9] — 2026-05-13
+
+### Improvements
+
+#### HealthConnect — Workout Enhancements
+
+- **Named exercise types** — workout cards now display human-readable activity names (Running, Cycling, HIIT, Yoga, etc.) resolved from Health Connect integer exercise type codes via a full `HC_EXERCISE_NAMES` lookup table; biking detection uses the integer codes directly
+- **Data origin badges** — each workout card shows the source app name (Strava, Samsung Health, Google Fit, Garmin Connect, Polar Beat, Wahoo, Suunto) as a badge; unknown package IDs fall back to the last segment of the package name
+- **Workout deduplication** — auto-detects duplicate sessions (same date, duration, and distance from different sources); duplicates are hidden by default; a **"N hidden"** pill appears in the filter bar and toggles visibility
+- **Manual hide/unhide** — each workout card has a **Hide** / **Unhide** button; manually hidden workouts count toward the hidden total; auto-hidden duplicates can be individually restored
+- **Average speed** — workouts display an avg km/h stat when distance and duration are both present
+- **Sub-minute duration** — duration now shows seconds when under an hour (e.g. `45m 30s` instead of `45m`)
+- **Start time** — each workout card shows the session start time below the date
+- **Attach fix** — `addUsageLog` return value checked; session is only marked as logged on success; distance value now correctly passed to the usage log entry
+- **Range change reset** — switching the time range now clears manual hide/unhide state
+
+### Technical
+
+- `src/lib/fingo/tracking/HealthConnectCapacitorBridge.ts` — `dataOrigin?: string` added to `RawRecord` type
+- `src/lib/fingo/tracking/HealthConnectTrackingProvider.ts` — `dataOrigin?: string` added to `HCRecord`; passed through in `readHealthConnectData`
+- `src/screens/HealthConnectScreen.tsx` — `HC_EXERCISE_NAMES` (60-entry lookup), `DATA_ORIGIN_NAMES` map, `getHCActivityName`, `isBikingHC`, `formatDataOrigin` helpers; `detectDuplicates` auto-hides same-date/duration/distance sessions; `manualHiddenIds` + `manualUnhiddenIds` state; `effectiveHiddenIds` derived from auto + manual sets; visibility toggle pill in filter bar; `workoutCardHidden` style (opacity 0.45); `paddingBottom` applied to all screen states; `movingTime` rounded in `buildEntry`
+- `supabase/migrations/` — all incremental migration files consolidated into `0000_baseline.sql` and archived to `archive/`; `20260513c_grant_all_tables.sql` added
+
+---
+
 ## [1.2.8] — 2026-05-13
 
 ### Features

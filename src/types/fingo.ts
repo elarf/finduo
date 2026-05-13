@@ -66,6 +66,7 @@ export type UsageLog = {
   moving_time_delta?: number | null;  // minutes (bike, vehicle)
   elevation_delta?: number | null;    // meters (bike)
   source: UsageSource;
+  external_id?: string | null;
   recorded_at: string;
   linked_expense_id?: string | null;
   notes?: string | null;

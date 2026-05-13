@@ -4,6 +4,31 @@
 
 ---
 
+## [1.2.8] — 2026-05-13
+
+### Features
+
+#### HealthConnect — Aggregated View
+
+- New **Aggregated / Raw** tab toggle on the HealthConnect screen
+- **Aggregated tab** (default): workouts shown as cards with activity type, distance, and duration; biking sessions highlighted in green with an "eligible for part tracking" badge; daily steps merged into a single row per day with a "N records merged" hint when multiple records exist
+- **Attach** button on each workout card opens the asset-attach sheet; persists attached state across remounts by fetching already-logged external IDs on screen mount
+
+#### FinGo — `external_id` Deduplication for Usage Logs
+
+- `usage_logs` table gains an `external_id` column for storing the originating source's record UUID (e.g. Health Connect session ID)
+- `addUsageLog` accepts an optional `externalId` parameter and stores it alongside the log entry
+- New `fetchLoggedExternalIds(source)` on `useUsageLogs` — queries all `external_id` values already recorded for a given source, enabling duplicate-import detection after screen remounts
+
+### Technical
+
+- `src/types/fingo.ts` — `external_id?: string | null` added to `UsageLog`
+- `src/hooks/useUsageLogs.ts` — `fetchLoggedExternalIds(source)` added; `externalId` param added to `addUsageLog`; both exported from the hook
+- `src/screens/HealthConnectScreen.tsx` — Aggregated/Raw tab bar; `AggregatedView` sub-component with `DaySteps` and `AggregatedWorkout` types; `aggregatedSteps` and `aggregatedWorkouts` memos; calls `fetchLoggedExternalIds('health_connect')` on mount; stores `attachRecord.id` as `externalId` when attaching; type-filter pill row shown on Raw tab only; raw record row refactored to icon-panel + body layout
+- `supabase/migrations/20260513b_fingo_usage_log_external_id.sql` — `ALTER TABLE usage_logs ADD COLUMN IF NOT EXISTS external_id text`
+
+---
+
 ## [1.2.7] — 2026-05-12
 
 ### Features

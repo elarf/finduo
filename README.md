@@ -6,11 +6,11 @@ Financial tracking app for couples and shared households. Track income, expenses
 
 ---
 
-## Latest Release — v1.2.7
+## Latest Release — v1.2.8
 
-- **FinGo — Custom PNG icons** — 27 new `assets/fingo/` PNGs replace emoji and text symbols throughout FinGo; `FINGO_ASSETS` registry centralizes all asset references
-- **Service interval type** — new `service_type` field on service intervals: Fix, Replace, Clean, or Charge; shown as an icon in interval rows, cards, and the detail screen; picker in the create/edit sheet
-- **FinGo UI refresh** — larger component icons, PNG stat chips, redesigned component cards with icon+count metadata, GoButton now shows GPS icon, ride log rows lead with ride icon
+- **HealthConnect Aggregated view** — new Aggregated/Raw tab toggle; workouts shown as cards with distance, duration, and biking highlight; daily steps merged per day; attached state persists across remounts via `external_id` deduplication
+- **Usage log `external_id`** — `usage_logs` now stores the originating record UUID (e.g. Health Connect session ID); `fetchLoggedExternalIds` on `useUsageLogs` enables duplicate-import detection
+- **DB migration** — `external_id TEXT` column added to `usage_logs`
 
 Full history: [PATCHNOTES.md](./PATCHNOTES.md)
 
@@ -465,6 +465,7 @@ Then apply incremental migrations in order:
 10. `20260402h_pool_members_nullable_user_id.sql`
 11. `20260512_fingo_service_interval_type.sql`
 12. `20260513_fingo_service_interval_type_charge.sql`
+13. `20260513b_fingo_usage_log_external_id.sql`
 
 ### 5. Start development
 

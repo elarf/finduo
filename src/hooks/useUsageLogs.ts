@@ -23,11 +23,27 @@ export function useUsageLogs(user: User | null) {
     }
   }, []);
 
+  const fetchLoggedExternalIds = useCallback(async (source: UsageSource): Promise<Set<string>> => {
+    if (!user) return new Set();
+    try {
+      const { data } = await supabase
+        .from('usage_logs')
+        .select('external_id')
+        .eq('source', source)
+        .eq('recorded_by', user.id)
+        .not('external_id', 'is', null);
+      return new Set((data ?? []).map((r: { external_id: string | null }) => r.external_id).filter(Boolean) as string[]);
+    } catch {
+      return new Set();
+    }
+  }, [user]);
+
   const addUsageLog = useCallback(async (
     asset: FinGoAsset,
     entry: UsageEntry,
     linkedExpenseId?: string | null,
     source?: UsageSource,
+    externalId?: string | null,
   ): Promise<boolean> => {
     if (!user) return false;
     try {
@@ -63,6 +79,7 @@ export function useUsageLogs(user: User | null) {
           moving_time_delta: movingTimeMin,
           elevation_delta: elevationM,
           source: source ?? 'odometer',
+          external_id: externalId ?? null,
           linked_expense_id: linkedExpenseId ?? null,
           notes: entry.notes ?? null,
         });
@@ -136,5 +153,5 @@ export function useUsageLogs(user: User | null) {
     }
   }, [loadLogs]);
 
-  return { logs, loadLogs, addUsageLog, deleteLog };
+  return { logs, loadLogs, addUsageLog, deleteLog, fetchLoggedExternalIds };
 }

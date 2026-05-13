@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   ActivityIndicator, Modal, FlatList, Image,
@@ -20,6 +20,23 @@ import { FINGO_ASSETS } from '../lib/fingo/fingoAssets';
 
 type FilterType = 'all' | 'steps' | 'distance' | 'exercise' | 'calories';
 type RangeOption = { label: string; days: number };
+type ViewTab = 'aggregated' | 'raw';
+
+type DaySteps = {
+  date: string;
+  totalSteps: number;
+  recordCount: number;
+};
+
+type AggregatedWorkout = {
+  sessionId: string;
+  date: string;
+  activityType: string;
+  distanceKm: number | null;
+  durationMin: number;
+  isBiking: boolean;
+  rawRecord: HCRecord;
+};
 
 const RANGE_OPTIONS: RangeOption[] = [
   { label: 'Today', days: 1 },
@@ -61,6 +78,19 @@ function formatDuration(startIso: string, endIso: string): string {
   return m > 0 ? `${h}h ${m}m` : `${h}h`;
 }
 
+function formatDurationMin(mins: number): string {
+  if (mins < 60) return `${mins}m`;
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return m > 0 ? `${h}h ${m}m` : `${h}h`;
+}
+
+function formatDate(dateStr: string): string {
+  return new Date(dateStr + 'T00:00:00').toLocaleDateString(undefined, {
+    weekday: 'short', month: 'short', day: 'numeric',
+  });
+}
+
 function recordPrimaryValue(r: HCRecord): string {
   switch (r.type) {
     case 'steps':    return r.steps != null ? `${r.steps.toLocaleString()} steps` : '—';
@@ -85,12 +115,13 @@ export default function HealthConnectScreen() {
   const { bottom } = useSafeAreaInsets();
 
   const { assets, loadAssets } = useAssets(user);
-  const { addUsageLog } = useUsageLogs(user);
+  const { addUsageLog, fetchLoggedExternalIds } = useUsageLogs(user);
   const { isAvailable, records, loading, error, hasPermission, requestPermissions, fetchRecords, checkSdkAvailable } = useHealthConnect();
 
   const [sdkAvailable, setSdkAvailable] = useState<boolean | null>(null);
   const [selectedDays, setSelectedDays] = useState(7);
   const [filter, setFilter] = useState<FilterType>('all');
+  const [viewTab, setViewTab] = useState<ViewTab>('aggregated');
 
   // Attach sheet state
   const [attachRecord, setAttachRecord] = useState<HCRecord | null>(null);
@@ -100,6 +131,7 @@ export default function HealthConnectScreen() {
 
   useEffect(() => {
     void loadAssets();
+    void fetchLoggedExternalIds('health_connect').then(setAttachedIds);
     if (isAvailable) {
       void checkSdkAvailable().then((ok) => {
         setSdkAvailable(ok);
@@ -132,7 +164,7 @@ export default function HealthConnectScreen() {
     setAttaching(true);
     try {
       const entry = buildEntry(attachRecord, asset);
-      await addUsageLog(asset, entry, null, 'health_connect');
+      await addUsageLog(asset, entry, null, 'health_connect', attachRecord.id);
       setAttachedIds((prev) => new Set([...prev, attachRecord.id]));
       setAttachRecord(null);
       logUI(uiPath('fingo', 'health_connect', 'attach_confirm'), 'press');
@@ -142,6 +174,53 @@ export default function HealthConnectScreen() {
   }, [attachRecord, selectedAssetId, assets, addUsageLog]);
 
   const filteredRecords = filter === 'all' ? records : records.filter((r) => r.type === filter);
+
+  // ─── Aggregated data ──────────────────────────────────────────────────────────
+  const aggregatedSteps = useMemo((): DaySteps[] => {
+    const map = new Map<string, { total: number; count: number }>();
+    records.filter((r) => r.type === 'steps').forEach((r) => {
+      const date = r.startTime.slice(0, 10);
+      const prev = map.get(date) ?? { total: 0, count: 0 };
+      map.set(date, { total: prev.total + (r.steps ?? 0), count: prev.count + 1 });
+    });
+    return Array.from(map.entries())
+      .map(([date, { total, count }]) => ({ date, totalSteps: total, recordCount: count }))
+      .sort((a, b) => b.date.localeCompare(a.date));
+  }, [records]);
+
+  const aggregatedWorkouts = useMemo((): AggregatedWorkout[] => {
+    const exerciseRecords = records.filter((r) => r.type === 'exercise');
+    const distanceRecords = records.filter((r) => r.type === 'distance');
+
+    return exerciseRecords.map((session) => {
+      let distanceKm = session.distanceKm ?? null;
+
+      // Fall back to distance records that fall within this session's time window
+      if (distanceKm == null) {
+        const sessionStart = new Date(session.startTime).getTime();
+        const sessionEnd = new Date(session.endTime).getTime();
+        const matched = distanceRecords.filter((d) => {
+          const dStart = new Date(d.startTime).getTime();
+          const dEnd = new Date(d.endTime).getTime();
+          return dStart >= sessionStart && dEnd <= sessionEnd;
+        });
+        if (matched.length > 0) {
+          distanceKm = matched.reduce((sum, d) => sum + (d.distanceKm ?? 0), 0);
+        }
+      }
+
+      const durationMin =
+        session.movingTimeMin ??
+        Math.round(
+          (new Date(session.endTime).getTime() - new Date(session.startTime).getTime()) / 60000,
+        );
+
+      const activityType = session.activityType ?? 'Workout';
+      const isBiking = /bik|cycl/i.test(activityType);
+
+      return { sessionId: session.id, date: session.startTime.slice(0, 10), activityType, distanceKm, durationMin, isBiking, rawRecord: session };
+    }).sort((a, b) => b.date.localeCompare(a.date));
+  }, [records]);
 
   // ─── Early exits ─────────────────────────────────────────────────────────────
   if (!isAvailable || sdkAvailable === false) {
@@ -174,9 +253,29 @@ export default function HealthConnectScreen() {
     <View {...uiProps(uiPath('fingo', 'health_connect', 'screen'))} style={styles.screen}>
       <DashboardHeader onBack={() => navigation.goBack()} />
 
+      {/* Tab toggle */}
+      <View style={styles.tabBar}>
+        <TouchableOpacity
+          style={[styles.tabBtn, viewTab === 'aggregated' && styles.tabBtnActive]}
+          onPress={() => setViewTab('aggregated')}
+        >
+          <Text style={[styles.tabBtnText, viewTab === 'aggregated' && styles.tabBtnTextActive]}>
+            Aggregated
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tabBtn, viewTab === 'raw' && styles.tabBtnActive]}
+          onPress={() => setViewTab('raw')}
+        >
+          <Text style={[styles.tabBtnText, viewTab === 'raw' && styles.tabBtnTextActive]}>
+            Raw
+          </Text>
+        </TouchableOpacity>
+      </View>
+
       {/* Filters row */}
       <View style={styles.filtersBar}>
-        {/* Time range */}
+        {/* Time range (always shown) */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pillRow}>
           {RANGE_OPTIONS.map((opt) => (
             <TouchableOpacity
@@ -191,20 +290,22 @@ export default function HealthConnectScreen() {
           ))}
         </ScrollView>
 
-        {/* Type filter */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pillRow}>
-          {(['all', 'steps', 'distance', 'exercise', 'calories'] as FilterType[]).map((f) => (
-            <TouchableOpacity
-              key={f}
-              style={[styles.pill, filter === f && styles.pillActive]}
-              onPress={() => setFilter(f)}
-            >
-              <Text style={[styles.pillText, filter === f && styles.pillTextActive]}>
-                {f === 'all' ? 'All' : TYPE_LABELS[f as HCRecord['type']]}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
+        {/* Type filter (raw tab only) */}
+        {viewTab === 'raw' && (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pillRow}>
+            {(['all', 'steps', 'distance', 'exercise', 'calories'] as FilterType[]).map((f) => (
+              <TouchableOpacity
+                key={f}
+                style={[styles.pill, filter === f && styles.pillActive]}
+                onPress={() => setFilter(f)}
+              >
+                <Text style={[styles.pillText, filter === f && styles.pillTextActive]}>
+                  {f === 'all' ? 'All' : TYPE_LABELS[f as HCRecord['type']]}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        )}
       </View>
 
       {/* Body */}
@@ -230,6 +331,14 @@ export default function HealthConnectScreen() {
             <Text style={styles.grantBtnText}>Grant Permission</Text>
           </TouchableOpacity>
         </View>
+      ) : viewTab === 'aggregated' ? (
+        <AggregatedView
+          steps={aggregatedSteps}
+          workouts={aggregatedWorkouts}
+          attachedIds={attachedIds}
+          onAttach={openAttachSheet}
+          bottom={bottom}
+        />
       ) : filteredRecords.length === 0 ? (
         <View style={styles.centeredRow}>
           <Text style={styles.emptyText}>No records found for this range.</Text>
@@ -245,10 +354,12 @@ export default function HealthConnectScreen() {
             const attachable = canAttach(r);
             return (
               <View key={r.id} style={styles.recordRow}>
-                {TYPE_ICON_IMAGES[r.type]
-                  ? <Image source={TYPE_ICON_IMAGES[r.type]} style={styles.recordIcon} resizeMode="contain" />
-                  : <Text style={styles.recordIconEmoji}>{TYPE_ICON_EMOJIS[r.type]}</Text>
-                }
+                <View style={styles.recordIconPanel}>
+                  {TYPE_ICON_IMAGES[r.type]
+                    ? <Image source={TYPE_ICON_IMAGES[r.type]} style={styles.recordIcon} resizeMode="contain" />
+                    : <Text style={styles.recordIconEmoji}>{TYPE_ICON_EMOJIS[r.type]}</Text>
+                  }
+                </View>
                 <View style={styles.recordBody}>
                   <Text style={styles.recordType}>{TYPE_LABELS[r.type]}</Text>
                   <Text style={styles.recordValue}>{recordPrimaryValue(r)}</Text>
@@ -341,6 +452,99 @@ export default function HealthConnectScreen() {
   );
 }
 
+// ─── Aggregated sub-component ─────────────────────────────────────────────────
+type AggregatedViewProps = {
+  steps: DaySteps[];
+  workouts: AggregatedWorkout[];
+  attachedIds: Set<string>;
+  onAttach: (r: HCRecord) => void;
+  bottom: number;
+};
+
+function AggregatedView({ steps, workouts, attachedIds, onAttach, bottom }: AggregatedViewProps) {
+  if (steps.length === 0 && workouts.length === 0) {
+    return (
+      <View style={styles.centeredRow}>
+        <Text style={styles.emptyText}>No records found for this range.</Text>
+      </View>
+    );
+  }
+
+  return (
+    <ScrollView
+      style={styles.scroll}
+      contentContainerStyle={[styles.scrollContent, { paddingBottom: bottomInset(24, bottom) }]}
+      showsVerticalScrollIndicator={false}
+    >
+      {workouts.length > 0 && (
+        <>
+          <Text style={styles.sectionHeader}>Workouts</Text>
+          {workouts.map((w) => {
+            const attached = attachedIds.has(w.sessionId);
+            return (
+              <View key={w.sessionId} style={[styles.workoutCard, w.isBiking && styles.workoutCardBike]}>
+                <View style={styles.workoutCardHeader}>
+                  <Text style={[styles.workoutActivity, w.isBiking && styles.workoutActivityBike]}>
+                    {w.isBiking ? '🚴 ' : '🏃 '}{w.activityType}
+                  </Text>
+                  <Text style={styles.workoutDate}>{formatDate(w.date)}</Text>
+                </View>
+                <View style={styles.workoutStats}>
+                  {w.distanceKm != null && (
+                    <View style={styles.workoutStat}>
+                      <Text style={styles.workoutStatValue}>{w.distanceKm.toFixed(2)}</Text>
+                      <Text style={styles.workoutStatLabel}>km</Text>
+                    </View>
+                  )}
+                  <View style={styles.workoutStat}>
+                    <Text style={styles.workoutStatValue}>{formatDurationMin(w.durationMin)}</Text>
+                    <Text style={styles.workoutStatLabel}>duration</Text>
+                  </View>
+                </View>
+                {w.isBiking && (
+                  <Text style={styles.bikeBadge}>Bike ride — eligible for part tracking</Text>
+                )}
+                {attached ? (
+                  <View style={[styles.attachedBadge, { alignSelf: 'flex-start', marginTop: 8 }]}>
+                    <Text style={styles.attachedText}>✓ Logged</Text>
+                  </View>
+                ) : (
+                  <TouchableOpacity
+                    style={[styles.attachBtn, { alignSelf: 'flex-start', marginTop: 8 }]}
+                    onPress={() => onAttach(w.rawRecord)}
+                  >
+                    <Text style={styles.attachBtnText}>Attach →</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            );
+          })}
+        </>
+      )}
+
+      {steps.length > 0 && (
+        <>
+          <Text style={[styles.sectionHeader, workouts.length > 0 && { marginTop: 16 }]}>
+            Daily Steps
+          </Text>
+          {steps.map((day) => (
+            <View key={day.date} style={styles.stepsRow}>
+              <View style={styles.stepsBody}>
+                <Text style={styles.stepsDate}>{formatDate(day.date)}</Text>
+                {day.recordCount > 1 && (
+                  <Text style={styles.stepsCount}>{day.recordCount} records merged</Text>
+                )}
+              </View>
+              <Text style={styles.stepsValue}>{day.totalSteps.toLocaleString()}</Text>
+              <Text style={styles.stepsUnit}>steps</Text>
+            </View>
+          ))}
+        </>
+      )}
+    </ScrollView>
+  );
+}
+
 function buildEntry(r: HCRecord, asset: FinGoAsset) {
   switch (r.type) {
     case 'steps':
@@ -362,6 +566,30 @@ const styles = StyleSheet.create({
   screen: {
     flex: 1,
     backgroundColor: '#060D18',
+  },
+  // Tab bar
+  tabBar: {
+    flexDirection: 'row',
+    borderBottomWidth: 1,
+    borderColor: '#1F3A59',
+  },
+  tabBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    alignItems: 'center',
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
+  },
+  tabBtnActive: {
+    borderBottomColor: '#4ade80',
+  },
+  tabBtnText: {
+    color: '#475569',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  tabBtnTextActive: {
+    color: '#4ade80',
   },
   filtersBar: {
     paddingTop: 8,
@@ -455,21 +683,32 @@ const styles = StyleSheet.create({
     color: '#4ade80',
     fontWeight: '700',
   },
-  // Records
+  // Raw records
   recordRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#0B1728',
+    alignItems: 'stretch',
+    backgroundColor: '#000000',
     borderRadius: 10,
     borderWidth: 1,
     borderColor: '#1F3A59',
-    padding: 12,
-    gap: 10,
+    overflow: 'hidden',
     marginBottom: 6,
   },
-  recordIcon: { width: 22, height: 22 },
+  recordIconPanel: {
+    width: 56,
+    backgroundColor: '#000000',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  recordIcon: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: 0,
+    right: 0,
+  },
   recordIconEmoji: { fontSize: 22 },
-  recordBody: { flex: 1 },
+  recordBody: { flex: 1, padding: 12 },
   recordType: {
     color: '#64748B',
     fontSize: 10,
@@ -489,6 +728,8 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   attachBtn: {
+    alignSelf: 'center',
+    marginRight: 12,
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 6,
@@ -502,6 +743,8 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   attachedBadge: {
+    alignSelf: 'center',
+    marginRight: 12,
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 6,
@@ -514,10 +757,110 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   noAttachBadge: {
+    alignSelf: 'center',
+    marginRight: 12,
     paddingHorizontal: 8,
     paddingVertical: 6,
   },
   noAttachText: {
+    color: '#475569',
+    fontSize: 11,
+  },
+  // Aggregated — section header
+  sectionHeader: {
+    color: '#64748B',
+    fontSize: 10,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginBottom: 6,
+    marginTop: 4,
+  },
+  // Aggregated — workout cards
+  workoutCard: {
+    backgroundColor: '#0B1728',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#1F3A59',
+    padding: 14,
+    marginBottom: 8,
+  },
+  workoutCardBike: {
+    borderColor: '#4ade80',
+    backgroundColor: '#061a0e',
+  },
+  workoutCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  workoutActivity: {
+    color: '#CBD5E1',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  workoutActivityBike: {
+    color: '#4ade80',
+  },
+  workoutDate: {
+    color: '#475569',
+    fontSize: 11,
+  },
+  workoutStats: {
+    flexDirection: 'row',
+    gap: 20,
+  },
+  workoutStat: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 4,
+  },
+  workoutStatValue: {
+    color: '#CBD5E1',
+    fontSize: 20,
+    fontWeight: '700',
+  },
+  workoutStatLabel: {
+    color: '#475569',
+    fontSize: 11,
+  },
+  bikeBadge: {
+    color: '#4ade80',
+    fontSize: 11,
+    marginTop: 8,
+    fontWeight: '600',
+  },
+  // Aggregated — steps rows
+  stepsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#0B1728',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#1F3A59',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginBottom: 6,
+    gap: 8,
+  },
+  stepsBody: { flex: 1 },
+  stepsDate: {
+    color: '#CBD5E1',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  stepsCount: {
+    color: '#475569',
+    fontSize: 10,
+    marginTop: 2,
+  },
+  stepsValue: {
+    color: '#4ade80',
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  stepsUnit: {
     color: '#475569',
     fontSize: 11,
   },

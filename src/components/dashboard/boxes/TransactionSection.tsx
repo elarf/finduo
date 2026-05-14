@@ -4,6 +4,100 @@ import { logUI, uiPath, uiProps } from '../../../lib/devtools';
 import { useDashboard } from '../../../context/DashboardContext';
 import Icon from '../../Icon';
 import { styles } from '../../../screens/DashboardScreen.styles';
+import { todayIso } from '../../../types/dashboard';
+import type { AppTransaction } from '../../../types/dashboard';
+
+// ── Daily summary helpers ────────────────────────────────────────────────────
+
+type DailyListItem =
+  | { kind: 'tx'; tx: AppTransaction }
+  | { kind: 'summary'; date: string; expense: number; income: number; endBalance: number };
+
+function formatDayDate(dateStr: string): string {
+  const d = new Date(dateStr + 'T00:00:00');
+  const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  return `${days[d.getDay()]}, ${d.getDate()} ${months[d.getMonth()]}`;
+}
+
+function buildDailyList(
+  txs: AppTransaction[],         // newest-first
+  openingBalance: number,
+  snapshotCutoff: string | null, // transactions at/before this date are baked into openingBalance
+  todayStr: string,
+): DailyListItem[] {
+  // Group transactions by date, preserving original (newest-first) order
+  const datesNewestFirst: string[] = [];
+  const datesSeen = new Set<string>();
+  const byDate = new Map<string, AppTransaction[]>();
+  for (const tx of txs) {
+    if (!datesSeen.has(tx.date)) {
+      datesSeen.add(tx.date);
+      datesNewestFirst.push(tx.date);
+      byDate.set(tx.date, []);
+    }
+    byDate.get(tx.date)!.push(tx);
+  }
+
+  // Walk oldest-to-newest to compute running end-of-day balances
+  let running = openingBalance;
+  const dayStats = new Map<string, { expense: number; income: number; endBalance: number }>();
+  for (const date of [...datesNewestFirst].reverse()) {
+    if (snapshotCutoff && date <= snapshotCutoff) continue;
+    let expense = 0;
+    let income = 0;
+    for (const tx of byDate.get(date)!) {
+      const n = Number(tx.amount) || 0;
+      if (tx.type === 'income') { income += n; running += n; }
+      else { expense += n; running -= n; }
+    }
+    dayStats.set(date, { expense, income, endBalance: running });
+  }
+
+  // Build render list: summary above each qualifying past day, then its transactions
+  const result: DailyListItem[] = [];
+  for (const date of datesNewestFirst) {
+    const stats = dayStats.get(date);
+    if (stats && date < todayStr) {
+      result.push({ kind: 'summary', date, ...stats });
+    }
+    for (const tx of byDate.get(date)!) {
+      result.push({ kind: 'tx', tx });
+    }
+  }
+  return result;
+}
+
+function DailySummaryRow({
+  date, expense, income, endBalance, formatCurrency,
+}: {
+  date: string;
+  expense: number;
+  income: number;
+  endBalance: number;
+  formatCurrency: (n: number) => string;
+}) {
+  const showNet = expense > 0 && income > 0;
+  const net = income - expense;
+  return (
+    <View style={dailyRowStyles.row}>
+      <Text style={dailyRowStyles.date}>{formatDayDate(date)}</Text>
+      <View style={dailyRowStyles.right}>
+        {expense > 0 && <Text style={dailyRowStyles.expense}>−{formatCurrency(expense)}</Text>}
+        {income > 0 && <Text style={dailyRowStyles.income}>+{formatCurrency(income)}</Text>}
+        {showNet && (
+          <Text style={net >= 0 ? dailyRowStyles.income : dailyRowStyles.expense}>
+            {net >= 0 ? '+' : '−'}{formatCurrency(Math.abs(net))}
+          </Text>
+        )}
+        <View style={dailyRowStyles.divider} />
+        <Text style={endBalance < 0 ? dailyRowStyles.expense : dailyRowStyles.balance}>
+          {formatCurrency(endBalance)}
+        </Text>
+      </View>
+    </View>
+  );
+}
 
 export default function TransactionSection() {
   const {
@@ -28,6 +122,7 @@ export default function TransactionSection() {
     filterIsExpense,
     inviteToken,
     shareInvite,
+    selectedSummary,
   } = useDashboard();
 
   const [searchMode, setSearchMode] = useState(false);
@@ -205,7 +300,30 @@ export default function TransactionSection() {
             : showOnlyTransfers
             ? visibleSelectedTxs.filter((tx) => tx.category_id != null && transferCategoryIds.includes(tx.category_id))
             : (selectedCategoryFilter ? categoryFilteredTxsVisible ?? [] : visibleSelectedTxs);
-          return txSource.map((tx) => {
+
+          const showDailySummaries = searchedTransactions === null
+            && !showAccountOverviewPicker
+            && !showOnlyTransfers
+            && !selectedCategoryFilter;
+
+          const items: DailyListItem[] = showDailySummaries
+            ? buildDailyList(txSource, selectedSummary.openingBalance, selectedSummary.snapshotCutoff, todayIso())
+            : txSource.map((tx) => ({ kind: 'tx' as const, tx }));
+
+          return items.map((item) => {
+            if (item.kind === 'summary') {
+              return (
+                <DailySummaryRow
+                  key={`daily-${item.date}`}
+                  date={item.date}
+                  expense={item.expense}
+                  income={item.income}
+                  endBalance={item.endBalance}
+                  formatCurrency={formatCurrency}
+                />
+              );
+            }
+            const tx = item.tx;
             const isTransfer = tx.category_id != null && transferCategoryIds.includes(tx.category_id);
             const acct = showAccountOverviewPicker ? accountsById[tx.account_id] : null;
             const txCat = tx.category_id ? categoriesById[tx.category_id] : null;
@@ -306,6 +424,51 @@ export default function TransactionSection() {
     </>
   );
 }
+
+const dailyRowStyles = StyleSheet.create({
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 5,
+    paddingHorizontal: 4,
+    backgroundColor: '#0B1825',
+    borderBottomColor: '#263E5F',
+    borderBottomWidth: 1,
+  },
+  date: {
+    color: '#5E789A',
+    fontSize: 11,
+    fontWeight: '600',
+    letterSpacing: 0.2,
+  },
+  right: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  expense: {
+    color: '#f87171',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  income: {
+    color: '#4ade80',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  divider: {
+    width: 1,
+    height: 10,
+    backgroundColor: '#2D4A68',
+    marginHorizontal: 2,
+  },
+  balance: {
+    color: '#8FA8C9',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+});
 
 const searchStyles = StyleSheet.create({
   searchInputContainer: {

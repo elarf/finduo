@@ -55,6 +55,7 @@ import { useCategoriesQuery, categoriesQueryKey } from '../hooks/useCategoriesQu
 import type { CategoriesQueryData } from '../hooks/useCategoriesQuery';
 import { useTagsQuery, tagsQueryKey } from '../hooks/useTagsQuery';
 import { useAccountSettingsQuery, accountSettingsQueryKey } from '../hooks/useAccountSettingsQuery';
+import { useBalanceSnapshotsQuery, balanceSnapshotsQueryKey, type BalanceSnapshot } from '../hooks/useBalanceSnapshotsQuery';
 import type { ResolvedFriend, ResolvedRequest } from '../types/friends';
 import type { AppDebt } from '../types/pools';
 
@@ -67,6 +68,7 @@ export type AccountSummary = {
   transferOut: number;
   openingBalance: number;
   net: number;
+  snapshotCutoff: string | null;
 };
 
 export type IncludedAccountSummaryItem = {
@@ -511,6 +513,36 @@ export function DashboardProvider({
   const settingsQ = useAccountSettingsQuery(accounts);
   const accountSettings: Record<string, AccountSetting> = settingsQ.data ?? {};
 
+  const snapshotsQ = useBalanceSnapshotsQuery(accountIds);
+  const balanceSnapshots: BalanceSnapshot[] = snapshotsQ.data ?? [];
+
+  // Bootstrap: compute snapshots for accounts that have transactions but no snapshots yet.
+  // Runs once per session; covers existing users migrating to this feature.
+  const snapshotBootstrapDoneRef = useRef(false);
+  useEffect(() => {
+    if (snapshotBootstrapDoneRef.current) return;
+    if (snapshotsQ.isLoading || transactionsQ.isLoading) return;
+    if (accountIds.length === 0) return;
+
+    const needsBootstrap = accountIds.filter(
+      (id) =>
+        transactions.some((t) => t.account_id === id) &&
+        !balanceSnapshots.some((s) => s.account_id === id),
+    );
+    if (needsBootstrap.length === 0) { snapshotBootstrapDoneRef.current = true; return; }
+
+    snapshotBootstrapDoneRef.current = true;
+    Promise.all(
+      needsBootstrap.map((id) =>
+        supabase.rpc('refresh_account_snapshots', { p_account_id: id, p_from_date: null }),
+      ),
+    ).then(() =>
+      queryClient.invalidateQueries({
+        queryKey: balanceSnapshotsQueryKey(_sortedAccountKeyRef.current),
+      }),
+    );
+  }, [snapshotsQ.isLoading, transactionsQ.isLoading, accountIds, balanceSnapshots, transactions, queryClient]);
+
   // loading = true only when there is truly no cached data yet (first-ever load)
   const loading = !accountsQ.data && (accountsQ.isPending || accountsQ.isFetching);
 
@@ -683,10 +715,21 @@ export function DashboardProvider({
       queryClient.invalidateQueries({ queryKey: ['transactions', key] }),
       queryClient.invalidateQueries({ queryKey: ['tags', user.id] }),
       queryClient.invalidateQueries({ queryKey: ['account_settings', key] }),
+      queryClient.invalidateQueries({ queryKey: ['balance_snapshots', key] }),
     ]);
     setReloadKey((k) => k + 1);
     animateIn();
   }, [reloading, user, queryClient, animateIn, setReloading]);
+
+  const refreshAccountSnapshots = useCallback(async (accountId: string, fromDate?: string) => {
+    await supabase.rpc('refresh_account_snapshots', {
+      p_account_id: accountId,
+      p_from_date: fromDate ?? null,
+    });
+    queryClient.invalidateQueries({
+      queryKey: balanceSnapshotsQueryKey(_sortedAccountKeyRef.current),
+    });
+  }, [queryClient]);
 
   const {
     friends,
@@ -1042,15 +1085,45 @@ export function DashboardProvider({
     const initialBalance = Number(setting?.initial_balance ?? 0);
     const carryOver = setting?.carry_over_balance ?? true;
 
+    const getSnapshotBefore = (acctId: string, date: string): BalanceSnapshot | null => {
+      let best: BalanceSnapshot | null = null;
+      for (const s of balanceSnapshots) {
+        if (s.account_id === acctId && s.snapshot_date < date) {
+          if (!best || s.snapshot_date > best.snapshot_date) best = s;
+        }
+      }
+      return best;
+    };
+
     let openingBalance = 0;
+    let snapshotCutoff: string | null = null; // exclude transactions at/before this date from income/expense
+
     if (interval === 'all') {
-      openingBalance = initialBalance;
+      const snap = getSnapshotBefore(accountId, todayIso());
+      if (snap) {
+        openingBalance = snap.balance;
+        snapshotCutoff = snap.snapshot_date;
+      } else {
+        openingBalance = initialBalance;
+      }
     } else if (carryOver && intervalBounds.start) {
-      openingBalance = initialBalance;
-      for (const tx of transactions) {
-        if (tx.account_id !== accountId || tx.date >= intervalBounds.start) continue;
-        const n = Number(tx.amount) || 0;
-        openingBalance += tx.type === 'income' ? n : -n;
+      const snap = getSnapshotBefore(accountId, intervalBounds.start);
+      if (snap) {
+        openingBalance = snap.balance;
+        // bridge: transactions between snapshot_date and interval start (usually 0 for monthly)
+        for (const tx of transactions) {
+          if (tx.account_id !== accountId) continue;
+          if (tx.date <= snap.snapshot_date || tx.date >= intervalBounds.start) continue;
+          const n = Number(tx.amount) || 0;
+          openingBalance += tx.type === 'income' ? n : -n;
+        }
+      } else {
+        openingBalance = initialBalance;
+        for (const tx of transactions) {
+          if (tx.account_id !== accountId || tx.date >= intervalBounds.start) continue;
+          const n = Number(tx.amount) || 0;
+          openingBalance += tx.type === 'income' ? n : -n;
+        }
       }
     }
 
@@ -1060,6 +1133,7 @@ export function DashboardProvider({
     let transferOut = 0;
     for (const tx of transactions) {
       if (tx.account_id !== accountId || !inInterval(tx.date)) continue;
+      if (snapshotCutoff && tx.date <= snapshotCutoff) continue;
       const n = Number(tx.amount) || 0;
       const isTransfer = tx.category_id != null && transferCategoryIds.includes(tx.category_id);
       if (isTransfer) {
@@ -1078,12 +1152,13 @@ export function DashboardProvider({
       transferOut,
       openingBalance,
       net: openingBalance + income - expense + transferIn - transferOut,
+      snapshotCutoff,
     };
-  }, [accountSettings, inInterval, interval, intervalBounds.start, transactions, transferCategoryIds]);
+  }, [accountSettings, balanceSnapshots, inInterval, interval, intervalBounds.start, transactions, transferCategoryIds]);
 
   const selectedSummary = useMemo(() => {
     if (!selectedAccountId) {
-      return { income: 0, expense: 0, net: 0, openingBalance: 0, transferIn: 0, transferOut: 0 };
+      return { income: 0, expense: 0, net: 0, openingBalance: 0, transferIn: 0, transferOut: 0, snapshotCutoff: null };
     }
     return buildAccountSummary(selectedAccountId);
   }, [buildAccountSummary, selectedAccountId]);
@@ -1185,6 +1260,7 @@ export function DashboardProvider({
       transferOut,
       openingBalance,
       net: openingBalance + income - expense + transferIn - transferOut,
+      snapshotCutoff: null,
     };
   }, [includedAccountSummaries]);
 
@@ -1654,6 +1730,7 @@ export function DashboardProvider({
 
   const deleteTransaction = useCallback(async (txId: string) => {
     setSaving(true);
+    const txToDelete = transactions.find((t) => t.id === txId);
     try {
       const { error: tagsError } = await supabase
         .from('transaction_tags')
@@ -1667,12 +1744,13 @@ export function DashboardProvider({
         .eq('id', txId);
       if (error) throw error;
       setTransactions((prev) => prev.filter((tx) => tx.id !== txId));
+      if (txToDelete) refreshAccountSnapshots(txToDelete.account_id, txToDelete.date);
     } catch (err) {
       Alert.alert('Delete failed', err instanceof Error ? err.message : 'Unknown error');
     } finally {
       setSaving(false);
     }
-  }, [setTransactions, setSaving]);
+  }, [setTransactions, setSaving, transactions, refreshAccountSnapshots]);
 
   const toggleCategoryHidden = useCallback(async (categoryId: string) => {
     if (!user) return;
@@ -1907,6 +1985,13 @@ export function DashboardProvider({
         setTransactions((prev) => [newTx, ...prev].sort((a, b) => b.date.localeCompare(a.date)));
       }
 
+      // Refresh snapshots from the earliest affected date (fire-and-forget)
+      const oldDate = editingTransactionId
+        ? transactions.find((t) => t.id === editingTransactionId)?.date
+        : undefined;
+      const fromDate = oldDate && oldDate < entryDate ? oldDate : entryDate;
+      refreshAccountSnapshots(entryAccountId, fromDate);
+
     } catch (err) {
       Alert.alert('Save entry failed', err instanceof Error ? err.message : 'Unknown error');
     } finally {
@@ -1923,6 +2008,8 @@ export function DashboardProvider({
     user,
     setTransactions,
     setSaving,
+    transactions,
+    refreshAccountSnapshots,
   ]);
 
   const saveAccount = useCallback(async (editingAccountId?: string | null) => {

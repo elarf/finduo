@@ -19,6 +19,7 @@
     "@capacitor/browser": "^7.0.0",
     "@capacitor/core": "^7.0.0",
     "@capacitor/geolocation": "^7.0.0",
+    "@capacitor/local-notifications": "^7.0.0",
     "@capacitor/status-bar": "^7.0.0",
     "@expo/vector-icons": "^15.0.2",
     "@react-native-async-storage/async-storage": "2.2.0",

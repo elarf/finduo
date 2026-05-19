@@ -1,4 +1,3 @@
-import { LocalNotifications } from '@capacitor/local-notifications';
 import { Capacitor } from '@capacitor/core';
 import { supabase } from '../supabase';
 import { computeIntervalHealth, formatIntervalRemaining, trackingMethodUnit } from './health';
@@ -21,6 +20,7 @@ function intervalNotifId(intervalId: string): number {
 
 export async function setupFinGoChannels(): Promise<void> {
   if (!Capacitor.isNativePlatform()) return;
+  const { LocalNotifications } = await import('@capacitor/local-notifications');
   try {
     await LocalNotifications.createChannel({
       id: CHANNEL_ID,
@@ -41,6 +41,7 @@ export async function notifyDueIntervals(
 ): Promise<void> {
   if (!Capacitor.isNativePlatform() || componentIds.length === 0) return;
 
+  const { LocalNotifications } = await import('@capacitor/local-notifications');
   const { display } = await LocalNotifications.checkPermissions();
   if (display !== 'granted') {
     const { display: after } = await LocalNotifications.requestPermissions();

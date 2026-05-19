@@ -201,7 +201,7 @@ export default function HealthConnectScreen() {
   const { bottom } = useSafeAreaInsets();
 
   const { assets, loadAssets } = useAssets(user);
-  const { addUsageLog, fetchLoggedExternalIds } = useUsageLogs(user);
+  const { addUsageLog, fetchLoggedExternalIds, pruneHCDuplicateLogs } = useUsageLogs(user);
   const { isAvailable, records, loading, error, hasPermission, requestPermissions, fetchRecords, checkSdkAvailable } = useHealthConnect();
 
   const [sdkAvailable, setSdkAvailable] = useState<boolean | null>(null);
@@ -259,21 +259,39 @@ export default function HealthConnectScreen() {
 
       // Auto-attach cycling exercise sessions to active bike
       if (activeBike) {
+        const distanceRecs = records.filter((d) => d.type === 'distance');
         const unloggedRides = records.filter(
           (r) => r.type === 'exercise' && isBikingHC(r.activityType ?? '') && !attachedIds.has(r.id),
         );
-        for (const r of unloggedRides) {
-          const distR = records.filter((d) => d.type === 'distance').find((d) => {
+
+        // Build enriched workout objects to run duplicate detection before logging
+        const rideWorkouts: AggregatedWorkout[] = unloggedRides.map((r) => {
+          const distR = distanceRecs.find((d) => {
             const ds = new Date(d.startTime).getTime();
             const de = new Date(d.endTime).getTime();
             const rs = new Date(r.startTime).getTime();
             const re = new Date(r.endTime).getTime();
             return ds >= rs && de <= re;
           });
-          const enriched = { ...r, distanceKm: r.distanceKm ?? distR?.distanceKm ?? undefined };
+          return {
+            sessionId: r.id,
+            date: r.startTime.slice(0, 10),
+            activityName: '',
+            distanceKm: r.distanceKm ?? distR?.distanceKm ?? null,
+            durationMin: r.movingTimeMin ??
+              (new Date(r.endTime).getTime() - new Date(r.startTime).getTime()) / 60000,
+            isBiking: true,
+            rawRecord: r,
+          };
+        });
+        const dupeRideIds = detectDuplicates(rideWorkouts);
+
+        for (const workout of rideWorkouts) {
+          if (dupeRideIds.has(workout.sessionId)) continue;
+          const enriched = { ...workout.rawRecord, distanceKm: workout.distanceKm ?? undefined };
           const entry = buildEntry(enriched, activeBike);
-          const ok = await addUsageLog(activeBike, entry, null, 'health_connect', r.id);
-          if (ok) { newIds.push(r.id); count++; }
+          const ok = await addUsageLog(activeBike, entry, null, 'health_connect', workout.rawRecord.id);
+          if (ok) { newIds.push(workout.rawRecord.id); count++; }
         }
       }
 
@@ -308,6 +326,10 @@ export default function HealthConnectScreen() {
         setAttachedIds((prev) => new Set([...prev, ...newIds]));
         setAutoAttachCount((n) => n + count);
       }
+
+      // Prune any previously logged HC duplicates from DB (e.g. from prior syncs before dedup was active)
+      if (activeBike) void pruneHCDuplicateLogs(activeBike);
+      if (activeShoe) void pruneHCDuplicateLogs(activeShoe);
     })();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [records, assets]);

@@ -25,6 +25,7 @@ import { FINGO_ASSETS } from '../lib/fingo/fingoAssets';
 import { bottomInset } from '../lib/safeArea';
 import { registerBackHandler } from '../lib/capacitorBack';
 import type { RootStackParamList } from '../navigation';
+import AppHeader from '../components/AppHeader';
 import ComponentIcon from '../components/fingo/ComponentIcon';
 import type {
   Component, ComponentServiceInterval, ComponentServiceRecord,
@@ -132,7 +133,7 @@ export default function ComponentDetailScreen({ route }: Props) {
     if (m.showIntervalSheet) { setShowIntervalSheet(false); return true; }
     if (m.showRecordSheet) { setShowRecordSheet(false); return true; }
     if (m.showActionSheet) { setShowActionSheet(false); return true; }
-    return false;
+    navigation.goBack(); return true;
   }), []);
 
   // ─── Fetch base data ─────────────────────────────────────────────────────────
@@ -286,11 +287,7 @@ export default function ComponentDetailScreen({ route }: Props) {
   if (loading || !component) {
     return (
       <View style={styles.screen}>
-        <View style={[styles.topBar, { paddingTop: 16 }]}>
-          <TouchableOpacity {...uiProps(uiPath('fingo', 'component_detail', 'back_button'))} onPress={() => navigation.goBack()} style={styles.backBtn}>
-            <Image source={require('../../assets/fingo/back.png')} style={styles.backIcon} resizeMode="contain" />
-          </TouchableOpacity>
-        </View>
+        <AppHeader onBack={() => navigation.goBack()} />
         <Text style={styles.loadingText}>{loading ? 'Loading…' : 'Component not found'}</Text>
       </View>
     );
@@ -301,12 +298,7 @@ export default function ComponentDetailScreen({ route }: Props) {
 
   return (
     <View {...uiProps(uiPath('fingo', 'component_detail', 'screen', componentId))} style={styles.screen}>
-      {/* Top bar */}
-      <View {...uiProps(uiPath('fingo', 'component_detail', 'top_bar'))} style={[styles.topBar, { paddingTop: 16 }]}>
-        <TouchableOpacity {...uiProps(uiPath('fingo', 'component_detail', 'back_button'))} onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Text style={styles.backText}>‹ Back</Text>
-        </TouchableOpacity>
-      </View>
+      <AppHeader onBack={() => navigation.goBack()} />
 
       <ScrollView {...uiProps(uiPath('fingo', 'component_detail', 'scroll'))} style={styles.scroll} contentContainerStyle={[styles.scrollContent, { paddingBottom: bottomInset(24, bottom) }]} showsVerticalScrollIndicator={false}>
 
@@ -807,26 +799,6 @@ const styles = StyleSheet.create({
   screen: {
     flex: 1,
     backgroundColor: '#000000',
-  },
-  topBar: {
-    paddingHorizontal: 16,
-    paddingBottom: 8,
-    borderBottomWidth: 1,
-    borderColor: '#1F3A59',
-  },
-  backBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    overflow: 'hidden',
-    borderWidth: 2,
-    borderColor: '#1F3A59',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  backIcon: {
-    width: 22,
-    height: 22,
   },
   loadingText: {
     color: '#475569',

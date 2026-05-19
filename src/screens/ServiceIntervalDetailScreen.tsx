@@ -10,6 +10,7 @@ import { useServiceIntervals } from '../hooks/useServiceIntervals';
 import { useServiceRecords } from '../hooks/useServiceRecords';
 import ServiceRecordSheet from '../components/fingo/ServiceRecordSheet';
 import ServiceIntervalSheet from '../components/fingo/ServiceIntervalSheet';
+import AppHeader from '../components/AppHeader';
 import { supabase } from '../lib/supabase';
 import {
   computeIntervalHealth, formatIntervalRemaining, healthColor, getTrackingValue,
@@ -57,7 +58,7 @@ export default function ServiceIntervalDetailScreen({ route }: Props) {
     if (m.showIntervalSheet) { setShowIntervalSheet(false); return true; }
     if (m.showRecordSheet) { setShowRecordSheet(false); return true; }
     if (m.showActionsModal) { setShowActionsModal(false); return true; }
-    return false;
+    navigation.goBack(); return true;
   }), []);
 
   const interval: ComponentServiceInterval | undefined = (intervals[componentId] ?? []).find((i) => i.id === intervalId);
@@ -95,11 +96,7 @@ export default function ServiceIntervalDetailScreen({ route }: Props) {
   if (loading || !interval || !component) {
     return (
       <View style={styles.screen}>
-        <View style={[styles.topBar, { paddingTop: 16 }]}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-            <Image source={require('../../assets/fingo/back.png')} style={styles.backIcon} resizeMode="contain" />
-          </TouchableOpacity>
-        </View>
+      <AppHeader onBack={() => navigation.goBack()} />
         <Text style={styles.loadingText}>{loading ? 'Loading…' : 'Interval not found'}</Text>
       </View>
     );
@@ -112,11 +109,7 @@ export default function ServiceIntervalDetailScreen({ route }: Props) {
 
   return (
     <View style={styles.screen}>
-      <View style={[styles.topBar, { paddingTop: 16 }]}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Text style={styles.backText}>‹ Back</Text>
-        </TouchableOpacity>
-      </View>
+      <AppHeader onBack={() => navigation.goBack()} />
 
       <ScrollView
         style={styles.scroll}
@@ -286,26 +279,6 @@ const styles = StyleSheet.create({
   screen: {
     flex: 1,
     backgroundColor: '#000000',
-  },
-  topBar: {
-    paddingHorizontal: 16,
-    paddingBottom: 8,
-    borderBottomWidth: 1,
-    borderColor: '#1F3A59',
-  },
-  backBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    overflow: 'hidden',
-    borderWidth: 2,
-    borderColor: '#1F3A59',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  backIcon: {
-    width: 22,
-    height: 22,
   },
   loadingText: {
     color: '#475569',

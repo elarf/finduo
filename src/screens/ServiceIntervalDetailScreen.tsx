@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert, Platform, Modal, Image,
 } from 'react-native';
@@ -17,6 +17,7 @@ import {
 } from '../lib/fingo/health';
 import { FINGO_ASSETS } from '../lib/fingo/fingoAssets';
 import { bottomInset } from '../lib/safeArea';
+import { registerBackHandler } from '../lib/capacitorBack';
 import { uiPath, uiProps } from '../lib/devtools';
 import type { RootStackParamList } from '../navigation';
 import type { Component, ComponentServiceInterval, ServiceIntervalType } from '../types/fingo';
@@ -45,6 +46,19 @@ export default function ServiceIntervalDetailScreen({ route }: Props) {
   const [showRecordSheet, setShowRecordSheet] = useState(false);
   const [showActionsModal, setShowActionsModal] = useState(false);
   const [showIntervalSheet, setShowIntervalSheet] = useState(false);
+
+  // Android back button: close internal modals before navigating away
+  const modalRef = useRef({ showRecordSheet, showActionsModal, showIntervalSheet });
+  useEffect(() => {
+    modalRef.current = { showRecordSheet, showActionsModal, showIntervalSheet };
+  });
+  useEffect(() => registerBackHandler(() => {
+    const m = modalRef.current;
+    if (m.showIntervalSheet) { setShowIntervalSheet(false); return true; }
+    if (m.showRecordSheet) { setShowRecordSheet(false); return true; }
+    if (m.showActionsModal) { setShowActionsModal(false); return true; }
+    return false;
+  }), []);
 
   const interval: ComponentServiceInterval | undefined = (intervals[componentId] ?? []).find((i) => i.id === intervalId);
 
@@ -83,7 +97,7 @@ export default function ServiceIntervalDetailScreen({ route }: Props) {
       <View style={styles.screen}>
         <View style={[styles.topBar, { paddingTop: 16 }]}>
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-            <Text style={styles.backText}>‹ Back</Text>
+            <Image source={require('../../assets/fingo/back.png')} style={styles.backIcon} resizeMode="contain" />
           </TouchableOpacity>
         </View>
         <Text style={styles.loadingText}>{loading ? 'Loading…' : 'Interval not found'}</Text>
@@ -280,13 +294,18 @@ const styles = StyleSheet.create({
     borderColor: '#1F3A59',
   },
   backBtn: {
-    alignSelf: 'flex-start',
-    paddingVertical: 4,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    overflow: 'hidden',
+    borderWidth: 2,
+    borderColor: '#1F3A59',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  backText: {
-    color: '#4ade80',
-    fontSize: 16,
-    fontWeight: '600',
+  backIcon: {
+    width: 22,
+    height: 22,
   },
   loadingText: {
     color: '#475569',

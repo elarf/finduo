@@ -26,13 +26,14 @@ import ServiceRecordSheet from '../components/fingo/ServiceRecordSheet';
 import type { ComponentActionType } from '../components/fingo/ComponentActionSheet';
 import type {
   FinGoAsset, AssetPart, AssetType, FinGoSortOrder,
-  Component, ComponentServiceInterval, ComponentTemplate, UsageEntry,
+  Component, ComponentServiceInterval, ComponentTemplate,
 } from '../types/fingo';
 
 type IntervalWithComponent = { interval: ComponentServiceInterval; component: Component };import type { AppCategory } from '../types/dashboard';
 import { supabase } from '../lib/supabase';
 import { uiPath, uiProps, logUI } from '../lib/devtools';
 import { getTrackingValue } from '../lib/fingo/health';
+import { setupFinGoChannels } from '../lib/fingo/notifications';
 import { registerBackHandler } from '../lib/capacitorBack';
 import { bottomInset } from '../lib/safeArea';
 
@@ -45,9 +46,9 @@ export default function FinGoScreen() {
   const { bottom } = useSafeAreaInsets();
 
   // ─── Existing hooks ──────────────────────────────────────────────────────────
-  const { assets, loading, loadAssets, createAsset, updateAsset, deleteAsset } = useAssets(user);
+  const { assets, loading, loadAssets, createAsset, updateAsset, setActiveAsset, deleteAsset } = useAssets(user);
   const { parts, loadParts, servicePart } = useAssetParts();
-  const { logs, loadLogs, addUsageLog } = useUsageLogs(user);
+  const { logs, loadLogs, addUsageLog, updateLog } = useUsageLogs(user);
   const { categoryLinks, transactions, loadAssetStats, linkCategory, unlinkCategory } = useAssetTransactions();
 
   // ─── New component hooks ──────────────────────────────────────────────────────
@@ -85,6 +86,7 @@ export default function FinGoScreen() {
   const [editingAsset, setEditingAsset] = useState<FinGoAsset | null>(null);
   const [assetName, setAssetName] = useState('');
   const [assetType, setAssetType] = useState<AssetType>('vehicle');
+  const [assetIsActive, setAssetIsActive] = useState(false);
   const [assetSaving, setAssetSaving] = useState(false);
 
   // Component sheet state
@@ -92,6 +94,8 @@ export default function FinGoScreen() {
   const [showComponentForm, setShowComponentForm] = useState(false);
   const [showIntervalSheet, setShowIntervalSheet] = useState(false);
   const [showRecordSheet, setShowRecordSheet] = useState(false);
+
+  useEffect(() => { setupFinGoChannels(); }, []);
 
   // Android back button: close internal modals before navigating away
   const fingoModalRef = useRef({ showAssetModal: false, showLibrary: false, showComponentForm: false, showIntervalSheet: false, showRecordSheet: false });
@@ -155,6 +159,7 @@ export default function FinGoScreen() {
     setEditingAsset(null);
     setAssetName('');
     setAssetType('vehicle');
+    setAssetIsActive(false);
     setShowAssetModal(true);
   }, []);
 
@@ -162,6 +167,7 @@ export default function FinGoScreen() {
     setEditingAsset(asset);
     setAssetName(asset.name);
     setAssetType(asset.type);
+    setAssetIsActive(asset.is_active ?? false);
     setShowAssetModal(true);
   }, []);
 
@@ -171,8 +177,16 @@ export default function FinGoScreen() {
     try {
       if (editingAsset) {
         await updateAsset(editingAsset.id, { name: assetName.trim(), type: assetType });
+        if (assetIsActive && !editingAsset.is_active) {
+          await setActiveAsset(editingAsset.id, assetType);
+        } else if (!assetIsActive && editingAsset.is_active) {
+          await updateAsset(editingAsset.id, { is_active: false });
+        }
       } else {
-        await createAsset(assetName.trim(), assetType);
+        const created = await createAsset(assetName.trim(), assetType);
+        if (assetIsActive && created) {
+          await setActiveAsset(created.id, assetType);
+        }
       }
       setShowAssetModal(false);
     } finally {
@@ -209,6 +223,7 @@ export default function FinGoScreen() {
     if (selection.type === 'storage') {
       // Reinstall directly
       await installComponent(selection.component.id, pendingAsset.id, pendingParentId);
+      void loadAssets();
       return;
     }
 
@@ -230,6 +245,7 @@ export default function FinGoScreen() {
       );
       setActiveComponent(null);
       setLibraryForReplace(false);
+      void loadAssets();
       return;
     }
 
@@ -237,7 +253,7 @@ export default function FinGoScreen() {
     setPendingTemplate(selection.template);
     setPendingCustomName('');
     setShowComponentForm(true);
-  }, [pendingAsset, pendingParentId, libraryForReplace, activeComponent, installComponent, replaceComponent]);
+  }, [pendingAsset, pendingParentId, libraryForReplace, activeComponent, installComponent, replaceComponent, loadAssets]);
 
   /** Save from ComponentFormSheet */
   const handleComponentFormSave = useCallback(async (name: string, notes: string | null, installedAt: string | null, targetAssetId: string | null) => {
@@ -264,7 +280,8 @@ export default function FinGoScreen() {
     }
     setActiveComponent(null);
     setPendingTemplate(null);
-  }, [pendingAsset, pendingParentId, pendingTemplate, activeComponent, libraryForReplace, updateComponent, createComponent, moveComponent]);
+    void loadAssets();
+  }, [pendingAsset, pendingParentId, pendingTemplate, activeComponent, libraryForReplace, updateComponent, createComponent, moveComponent, loadAssets]);
 
   /** Action sheet fired */
   const handleComponentAction = useCallback((action: ComponentActionType, component: Component, asset: FinGoAsset) => {
@@ -302,11 +319,11 @@ export default function FinGoScreen() {
         break;
 
       case 'uninstall':
-        void uninstallComponent(component.id, asset.id);
+        void uninstallComponent(component.id, asset.id).then(() => void loadAssets());
         break;
 
       case 'install':
-        void installComponent(component.id, asset.id, null);
+        void installComponent(component.id, asset.id, null).then(() => void loadAssets());
         break;
 
       case 'replace_same':
@@ -316,7 +333,7 @@ export default function FinGoScreen() {
           component.parent_component_id ?? null,
           component.template_key ?? null,
           component.name,
-        );
+        ).then(() => void loadAssets());
         break;
 
       case 'replace_new':
@@ -327,11 +344,11 @@ export default function FinGoScreen() {
         break;
 
       case 'retire':
-        void retireComponent(component.id, asset.id);
+        void retireComponent(component.id, asset.id).then(() => void loadAssets());
         break;
 
       case 'delete': {
-        const doDelete = () => void deleteComponent(component.id, asset.id);
+        const doDelete = () => void deleteComponent(component.id, asset.id).then(() => void loadAssets());
         if (Platform.OS === 'web') {
           if (window.confirm(`Delete "${component.name}"? This cannot be undone.`)) doDelete();
         } else {
@@ -345,7 +362,7 @@ export default function FinGoScreen() {
     }
   }, [
     loadStorageComponents, uninstallComponent, installComponent,
-    replaceComponent, retireComponent, deleteComponent,
+    replaceComponent, retireComponent, deleteComponent, loadAssets,
   ]);
 
   const handleIntervalAction = useCallback((
@@ -360,7 +377,7 @@ export default function FinGoScreen() {
       setEditingInterval(interval);
       setShowIntervalSheet(true);
     } else {
-      const doDelete = () => void deleteInterval(interval.id, component.id);
+      const doDelete = () => void deleteInterval(interval.id, component.id).then(() => void loadAssets());
       if (Platform.OS === 'web') {
         if (window.confirm(`Delete "${interval.name}" interval?`)) doDelete();
       } else {
@@ -370,7 +387,7 @@ export default function FinGoScreen() {
         ]);
       }
     }
-  }, [deleteInterval]);
+  }, [deleteInterval, loadAssets]);
 
   const handleAddService = useCallback((asset: FinGoAsset) => {
     const allComponents = getAllComponents(asset.id);
@@ -423,6 +440,10 @@ export default function FinGoScreen() {
             categories={categories}
             onLogUsage={async (entry) => {
               await addUsageLog(focusedAsset, entry);
+              await Promise.all([loadAssets(), loadComponents(focusedAsset.id)]);
+            }}
+            onEditLog={async (log, entry) => {
+              await updateLog(log, focusedAsset, entry);
               await Promise.all([loadAssets(), loadComponents(focusedAsset.id)]);
             }}
             onServicePart={(part) => void handleServicePart(part, focusedAsset)}
@@ -479,6 +500,10 @@ export default function FinGoScreen() {
               await addUsageLog(focusedAsset, entry);
               await Promise.all([loadAssets(), loadComponents(focusedAsset.id)]);
             }}
+            onEditLog={async (log, entry) => {
+              await updateLog(log, focusedAsset, entry);
+              await Promise.all([loadAssets(), loadComponents(focusedAsset.id)]);
+            }}
             onServicePart={(part) => void handleServicePart(part, focusedAsset)}
             onLinkCategory={(catId) => void linkCategory(focusedAsset.id, catId)}
             onUnlinkCategory={(catId) => void unlinkCategory(focusedAsset.id, catId)}
@@ -529,6 +554,10 @@ export default function FinGoScreen() {
                   categories={categories}
                   onLogUsage={async (entry) => {
                     await addUsageLog(asset, entry);
+                    await Promise.all([loadAssets(), loadComponents(asset.id)]);
+                  }}
+                  onEditLog={async (log, entry) => {
+                    await updateLog(log, asset, entry);
                     await Promise.all([loadAssets(), loadComponents(asset.id)]);
                   }}
                   onServicePart={(part) => void handleServicePart(part, asset)}
@@ -624,6 +653,16 @@ export default function FinGoScreen() {
               ))}
             </View>
 
+            <TouchableOpacity
+              style={[styles.activeToggle, assetIsActive && styles.activeToggleOn]}
+              onPress={() => setAssetIsActive((v) => !v)}
+            >
+              <View style={[styles.activeToggleDot, assetIsActive && styles.activeToggleDotOn]} />
+              <Text style={[styles.activeToggleText, assetIsActive && styles.activeToggleTextOn]}>
+                Set as active {assetType === 'shoe' ? 'shoe' : assetType === 'bike' ? 'bike' : 'vehicle'} (auto-sync from Health Connect)
+              </Text>
+            </TouchableOpacity>
+
             <View style={styles.modalActions}>
               <TouchableOpacity style={styles.cancelButton} onPress={() => setShowAssetModal(false)}>
                 <Text style={styles.cancelText}>Cancel</Text>
@@ -675,6 +714,7 @@ export default function FinGoScreen() {
           } else {
             await createInterval(activeComponent.id, name, method, value, serviceType);
           }
+          void loadAssets();
         }}
         onClose={() => { setShowIntervalSheet(false); setEditingInterval(null); }}
       />
@@ -723,6 +763,7 @@ export default function FinGoScreen() {
               );
             }
           }
+          void loadAssets();
         }}
         onClose={() => { setShowRecordSheet(false); setPendingAllIntervals([]); }}
       />
@@ -888,6 +929,43 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   optionTextActive: { color: '#8FA8C9' },
+  activeToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginTop: 14,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#1F3A59',
+    backgroundColor: '#0E1A2B',
+  },
+  activeToggleOn: {
+    borderColor: '#4ade80',
+    backgroundColor: '#053d1e',
+  },
+  activeToggleDot: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#1F3A59',
+    backgroundColor: '#0B1728',
+  },
+  activeToggleDotOn: {
+    borderColor: '#4ade80',
+    backgroundColor: '#4ade80',
+  },
+  activeToggleText: {
+    flex: 1,
+    color: '#475569',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  activeToggleTextOn: {
+    color: '#4ade80',
+  },
   modalActions: {
     flexDirection: 'row',
     gap: 10,

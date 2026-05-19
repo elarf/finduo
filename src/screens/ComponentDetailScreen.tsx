@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   Alert, Platform, Modal, TextInput, Image,
@@ -23,6 +23,7 @@ import { getComponentIcon } from '../lib/fingo/componentIcons';
 import { computeIntervalHealth, formatIntervalRemaining, healthColor, getTrackingValue } from '../lib/fingo/health';
 import { FINGO_ASSETS } from '../lib/fingo/fingoAssets';
 import { bottomInset } from '../lib/safeArea';
+import { registerBackHandler } from '../lib/capacitorBack';
 import type { RootStackParamList } from '../navigation';
 import ComponentIcon from '../components/fingo/ComponentIcon';
 import type {
@@ -117,6 +118,22 @@ export default function ComponentDetailScreen({ route }: Props) {
   const [statsExpanded, setStatsExpanded] = useState(false);
   const [showAllServices, setShowAllServices] = useState(false);
   const [showAllRides, setShowAllRides] = useState(false);
+
+  // Android back button: close internal modals before navigating away
+  const modalRef = useRef({ showActionSheet, showIntervalSheet, showRecordSheet, showLibrary, showComponentForm, showSwapModal });
+  useEffect(() => {
+    modalRef.current = { showActionSheet, showIntervalSheet, showRecordSheet, showLibrary, showComponentForm, showSwapModal };
+  });
+  useEffect(() => registerBackHandler(() => {
+    const m = modalRef.current;
+    if (m.showComponentForm) { setShowComponentForm(false); return true; }
+    if (m.showLibrary) { setShowLibrary(false); return true; }
+    if (m.showSwapModal) { setShowSwapModal(false); return true; }
+    if (m.showIntervalSheet) { setShowIntervalSheet(false); return true; }
+    if (m.showRecordSheet) { setShowRecordSheet(false); return true; }
+    if (m.showActionSheet) { setShowActionSheet(false); return true; }
+    return false;
+  }), []);
 
   // ─── Fetch base data ─────────────────────────────────────────────────────────
   const loadData = useCallback(async () => {
@@ -271,7 +288,7 @@ export default function ComponentDetailScreen({ route }: Props) {
       <View style={styles.screen}>
         <View style={[styles.topBar, { paddingTop: 16 }]}>
           <TouchableOpacity {...uiProps(uiPath('fingo', 'component_detail', 'back_button'))} onPress={() => navigation.goBack()} style={styles.backBtn}>
-            <Text style={styles.backText}>‹ Back</Text>
+            <Image source={require('../../assets/fingo/back.png')} style={styles.backIcon} resizeMode="contain" />
           </TouchableOpacity>
         </View>
         <Text style={styles.loadingText}>{loading ? 'Loading…' : 'Component not found'}</Text>
@@ -798,13 +815,18 @@ const styles = StyleSheet.create({
     borderColor: '#1F3A59',
   },
   backBtn: {
-    alignSelf: 'flex-start',
-    paddingVertical: 4,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    overflow: 'hidden',
+    borderWidth: 2,
+    borderColor: '#1F3A59',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  backText: {
-    color: '#4ade80',
-    fontSize: 16,
-    fontWeight: '600',
+  backIcon: {
+    width: 22,
+    height: 22,
   },
   loadingText: {
     color: '#475569',

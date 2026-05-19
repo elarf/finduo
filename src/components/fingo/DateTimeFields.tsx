@@ -19,10 +19,10 @@ function openWebTimePicker(currentTime: string, onPick: (time: string) => void) 
   input.type = 'time';
   input.value = currentTime;
   Object.assign(input.style, { position: 'fixed', top: '-200px', left: '-200px', opacity: '0' });
-  input.onchange = () => { if (input.value) onPick(input.value); };
-  input.onblur = () => {
-    setTimeout(() => { try { document.body.removeChild(input); } catch {} }, 200);
-  };
+  const cleanup = () => { try { document.body.removeChild(input); } catch {} };
+  input.onchange = () => { if (input.value) onPick(input.value); cleanup(); };
+  // 'cancel' fires when the user dismisses the picker without selecting
+  input.addEventListener('cancel', cleanup);
   document.body.appendChild(input);
   input.focus();
   try { (input as any).showPicker(); } catch {}

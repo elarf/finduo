@@ -219,6 +219,7 @@ export default function HealthConnectScreen() {
   const [manualHiddenIds, setManualHiddenIds] = useState<Set<string>>(new Set());
   const [manualUnhiddenIds, setManualUnhiddenIds] = useState<Set<string>>(new Set());
   const [showHidden, setShowHidden] = useState(false);
+  const [autoAttachCount, setAutoAttachCount] = useState(0);
 
   useEffect(() => {
     void loadAssets();
@@ -243,6 +244,73 @@ export default function HealthConnectScreen() {
     setManualUnhiddenIds(new Set());
     void fetchRecords(days);
   }, [fetchRecords]);
+
+  // Auto-attach to active assets whenever records or attachedIds change
+  useEffect(() => {
+    if (records.length === 0 || assets.length === 0) return;
+
+    const activeBike = assets.find((a) => a.type === 'bike' && a.is_active);
+    const activeShoe = assets.find((a) => a.type === 'shoe' && a.is_active);
+    if (!activeBike && !activeShoe) return;
+
+    void (async () => {
+      let count = 0;
+      const newIds: string[] = [];
+
+      // Auto-attach cycling exercise sessions to active bike
+      if (activeBike) {
+        const unloggedRides = records.filter(
+          (r) => r.type === 'exercise' && isBikingHC(r.activityType ?? '') && !attachedIds.has(r.id),
+        );
+        for (const r of unloggedRides) {
+          const distR = records.filter((d) => d.type === 'distance').find((d) => {
+            const ds = new Date(d.startTime).getTime();
+            const de = new Date(d.endTime).getTime();
+            const rs = new Date(r.startTime).getTime();
+            const re = new Date(r.endTime).getTime();
+            return ds >= rs && de <= re;
+          });
+          const enriched = { ...r, distanceKm: r.distanceKm ?? distR?.distanceKm ?? undefined };
+          const entry = buildEntry(enriched, activeBike);
+          const ok = await addUsageLog(activeBike, entry, null, 'health_connect', r.id);
+          if (ok) { newIds.push(r.id); count++; }
+        }
+      }
+
+      // Auto-attach daily steps to active shoe (one log per day)
+      if (activeShoe) {
+        const stepsByDay = new Map<string, { total: number; firstId: string; lastEndTime: string }>();
+        for (const r of records.filter((r) => r.type === 'steps')) {
+          const date = r.startTime.slice(0, 10);
+          const syntheticId = `steps-${date}`;
+          if (attachedIds.has(syntheticId) || newIds.includes(syntheticId)) continue;
+          const prev = stepsByDay.get(date);
+          if (prev) {
+            stepsByDay.set(date, {
+              total: prev.total + (r.steps ?? 0),
+              firstId: prev.firstId,
+              lastEndTime: r.endTime > prev.lastEndTime ? r.endTime : prev.lastEndTime,
+            });
+          } else {
+            stepsByDay.set(date, { total: r.steps ?? 0, firstId: syntheticId, lastEndTime: r.endTime });
+          }
+        }
+        for (const [date, { total, lastEndTime }] of stepsByDay) {
+          const syntheticId = `steps-${date}`;
+          if (total <= 0) continue;
+          const entry = { steps: total, recordedAt: lastEndTime };
+          const ok = await addUsageLog(activeShoe, entry, null, 'health_connect', syntheticId);
+          if (ok) { newIds.push(syntheticId); count++; }
+        }
+      }
+
+      if (newIds.length > 0) {
+        setAttachedIds((prev) => new Set([...prev, ...newIds]));
+        setAutoAttachCount((n) => n + count);
+      }
+    })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [records, assets]);
 
   const openAttachSheet = useCallback((r: HCRecord) => {
     setAttachRecord(r);
@@ -364,6 +432,17 @@ export default function HealthConnectScreen() {
   return (
     <View {...uiProps(uiPath('fingo', 'health_connect', 'screen'))} style={[styles.screen, { paddingBottom: bottom }]}>
       <DashboardHeader onBack={() => navigation.goBack()} />
+
+      {autoAttachCount > 0 && (
+        <TouchableOpacity
+          style={styles.autoAttachBanner}
+          onPress={() => setAutoAttachCount(0)}
+        >
+          <Text style={styles.autoAttachText}>
+            ✓ Auto-logged {autoAttachCount} item{autoAttachCount !== 1 ? 's' : ''} to active asset{autoAttachCount !== 1 ? 's' : ''}  ✕
+          </Text>
+        </TouchableOpacity>
+      )}
 
       {/* Tab toggle */}
       <View style={styles.tabBar}>
@@ -719,14 +798,15 @@ function AggregatedView({ steps, workouts, attachedIds, onAttach, hiddenWorkoutI
 function buildEntry(r: HCRecord, _asset: FinGoAsset) {
   switch (r.type) {
     case 'steps':
-      return { steps: r.steps ?? 0 };
+      return { steps: r.steps ?? 0, recordedAt: r.startTime };
     case 'distance':
-      return { distance: r.distanceKm ?? 0 };
+      return { distance: r.distanceKm ?? 0, recordedAt: r.startTime };
     case 'exercise':
       return {
         distance: r.distanceKm,
         movingTime: r.movingTimeMin != null ? Math.round(r.movingTimeMin) : undefined,
         elevation: r.elevationGainM,
+        recordedAt: r.startTime,
       };
     default:
       return {};
@@ -737,6 +817,19 @@ const styles = StyleSheet.create({
   screen: {
     flex: 1,
     backgroundColor: '#060D18',
+  },
+  autoAttachBanner: {
+    backgroundColor: '#053d1e',
+    borderBottomWidth: 1,
+    borderColor: '#4ade80',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  autoAttachText: {
+    color: '#4ade80',
+    fontSize: 12,
+    fontWeight: '600',
+    textAlign: 'center',
   },
   // Tab bar
   tabBar: {

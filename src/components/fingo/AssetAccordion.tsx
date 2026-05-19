@@ -8,8 +8,7 @@ import type { User } from '@supabase/supabase-js';
 import type {
   FinGoAsset, AssetPart, AssetType, ComponentNode,
   ComponentServiceInterval, ServiceIntervalType, Component, UsageLog, UsageEntry,
-} from '../../types/fingo';
-import type { AppCategory, AppTransaction } from '../../types/dashboard';
+} from '../../types/fingo';import type { AppCategory, AppTransaction } from '../../types/dashboard';
 import { useDashboard } from '../../context/DashboardContext';
 import UsageLogModal from './UsageLogModal';
 import AssetCategoryPicker from './AssetCategoryPicker';
@@ -48,6 +47,7 @@ type Props = {
   usageLogs: UsageLog[];
   categories: AppCategory[];
   onLogUsage: (entry: UsageEntry) => Promise<void>;
+  onEditLog: (log: UsageLog, entry: UsageEntry) => Promise<void>;
   onServicePart: (part: AssetPart) => void;
   onLinkCategory: (categoryId: string) => void;
   onUnlinkCategory: (categoryId: string) => void;
@@ -95,6 +95,7 @@ export default function AssetAccordion({
   usageLogs,
   categories,
   onLogUsage,
+  onEditLog,
   onServicePart,
   onLinkCategory,
   onUnlinkCategory,
@@ -112,6 +113,7 @@ export default function AssetAccordion({
   bodyOnly = false,
 }: Props) {
   const [showUsageModal, setShowUsageModal] = useState(false);
+  const [editingLog, setEditingLog] = useState<UsageLog | null>(null);
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
   const [showAssetActions, setShowAssetActions] = useState(false);
   const [actionSheetComp, setActionSheetComp] = useState<Component | null>(null);
@@ -159,7 +161,14 @@ export default function AssetAccordion({
       >
         <Image source={ASSET_ICONS[asset.type]} style={styles.assetTypeIcon} resizeMode="contain" />
         <View style={styles.headerInfo}>
-          <Text style={styles.assetName}>{asset.name}</Text>
+          <View style={styles.assetNameRow}>
+            <Text style={styles.assetName}>{asset.name}</Text>
+            {asset.is_active && (
+              <View style={styles.activeBadge}>
+                <Text style={styles.activeBadgeText}>active</Text>
+              </View>
+            )}
+          </View>
           <View style={styles.headerStats}>
             {asset.type === 'shoe' ? (
               <>
@@ -427,7 +436,13 @@ export default function AssetAccordion({
             <Text style={styles.emptyText}>No rides logged yet.</Text>
           ) : (
             usageLogs.map((log) => (
-              <View key={log.id} {...uiProps(uiPath('fingo', 'asset_accordion', 'ride_log_row', log.id))} style={styles.logRow}>
+              <TouchableOpacity
+                key={log.id}
+                {...uiProps(uiPath('fingo', 'asset_accordion', 'ride_log_row', log.id))}
+                style={styles.logRow}
+                onPress={() => setEditingLog(log)}
+                activeOpacity={0.7}
+              >
                 <Image source={FINGO_ASSETS.ride} style={styles.logRideImage} resizeMode="contain" />
                 <View style={styles.logRowContent}>
                   <View style={styles.logLeft}>
@@ -454,9 +469,10 @@ export default function AssetAccordion({
                         )}
                       </>
                     )}
+                    <Text style={styles.logEditHint}>tap to edit</Text>
                   </View>
                 </View>
-              </View>
+              </TouchableOpacity>
             ))
           )}
         </View>
@@ -464,10 +480,17 @@ export default function AssetAccordion({
 
       {/* ── Modals ───────────────────────────────────────────────────────────────── */}
       <UsageLogModal
-        visible={showUsageModal}
+        visible={showUsageModal || !!editingLog}
         asset={asset}
-        onClose={() => setShowUsageModal(false)}
-        onSubmit={onLogUsage}
+        editingLog={editingLog}
+        onClose={() => { setShowUsageModal(false); setEditingLog(null); }}
+        onSubmit={async (entry) => {
+          if (editingLog) {
+            await onEditLog(editingLog, entry);
+          } else {
+            await onLogUsage(entry);
+          }
+        }}
       />
 
       <AssetCategoryPicker
@@ -555,10 +578,30 @@ const styles = StyleSheet.create({
     gap: 4,
     justifyContent: 'center',
   },
+  assetNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
   assetName: {
     color: '#3fe3f2',
     fontSize: 14,
     fontWeight: '700',
+  },
+  activeBadge: {
+    backgroundColor: '#053d1e',
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: '#4ade80',
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+  },
+  activeBadgeText: {
+    color: '#4ade80',
+    fontSize: 9,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   headerStats: {
     flexDirection: 'row',
@@ -875,6 +918,7 @@ const styles = StyleSheet.create({
   logRight: { alignItems: 'flex-end' },
   logDelta: { color: '#4ade80', fontSize: 13, fontWeight: '700' },
   logMeta: { color: '#64748B', fontSize: 11, marginTop: 1 },
+  logEditHint: { color: '#334155', fontSize: 9, marginTop: 2 },
   // Asset actions modal
   assetActionsBackdrop: {
     flex: 1,

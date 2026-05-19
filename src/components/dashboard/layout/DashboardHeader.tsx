@@ -90,7 +90,7 @@ export default function DashboardHeader({ onBack, rightElement }: DashboardHeade
           }}
           {...uiProps(uiPath('dashboard', 'header', 'back_button'))}
         >
-          <Icon name="arrow-left" size={24} color="#00F5D4" />
+          <Image source={require('../../../../assets/fingo/back.png')} style={{ width: 22, height: 22 }} resizeMode="contain" />
         </TouchableOpacity>
       ) : (
         <View {...avatarToSpinnerPan.panHandlers}>

@@ -1,14 +1,16 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Modal, View, Text, TextInput, TouchableOpacity,
   StyleSheet,
 } from 'react-native';
-import type { FinGoAsset, UsageEntry } from '../../types/fingo';
+import type { FinGoAsset, UsageEntry, UsageLog } from '../../types/fingo';
 import { uiPath, uiProps, logUI } from '../../lib/devtools';
+import DateTimeFields from './DateTimeFields';
 
 type Props = {
   visible: boolean;
   asset: FinGoAsset | null;
+  editingLog?: UsageLog | null;
   onClose: () => void;
   onSubmit: (entry: UsageEntry) => Promise<void>;
 };
@@ -40,7 +42,25 @@ function formatMinutes(mins: number): string {
   return `${h}h ${m}m`;
 }
 
-export default function UsageLogModal({ visible, asset, onClose, onSubmit }: Props) {
+function isoToDateStr(iso: string): string {
+  return iso.slice(0, 10);
+}
+
+function isoToTimeStr(iso: string): string {
+  const d = new Date(iso);
+  const h = String(d.getHours()).padStart(2, '0');
+  const m = String(d.getMinutes()).padStart(2, '0');
+  return `${h}:${m}`;
+}
+
+function buildIso(dateStr: string, timeStr: string): string {
+  if (!dateStr) return new Date().toISOString();
+  const [h = '00', m = '00'] = (timeStr || '00:00').split(':');
+  const d = new Date(`${dateStr}T${h.padStart(2, '0')}:${m.padStart(2, '0')}:00`);
+  return isNaN(d.getTime()) ? new Date().toISOString() : d.toISOString();
+}
+
+export default function UsageLogModal({ visible, asset, editingLog, onClose, onSubmit }: Props) {
   const [inputMode, setInputMode] = useState<'distance' | 'odometer'>('distance');
   const [distance, setDistance] = useState('');
   const [odometer, setOdometer] = useState('');
@@ -48,7 +68,45 @@ export default function UsageLogModal({ visible, asset, onClose, onSubmit }: Pro
   const [elevation, setElevation] = useState('');
   const [steps, setSteps] = useState('');
   const [notes, setNotes] = useState('');
+  const [dateStr, setDateStr] = useState('');
+  const [timeStr, setTimeStr] = useState('');
   const [submitting, setSubmitting] = useState(false);
+
+  const isEditMode = !!editingLog;
+
+  // Initialise fields when modal opens
+  useEffect(() => {
+    if (!visible || !asset) return;
+    if (editingLog) {
+      const iso = editingLog.recorded_at;
+      setDateStr(isoToDateStr(iso));
+      setTimeStr(isoToTimeStr(iso));
+      if (asset.type === 'shoe') {
+        setSteps(String(editingLog.usage_delta));
+      } else {
+        setDistance(String(editingLog.usage_delta));
+        const currentKm = asset.current_usage - editingLog.usage_delta + editingLog.usage_delta;
+        setOdometer(String(currentKm));
+      }
+      const mt = editingLog.moving_time_delta;
+      if (mt != null) {
+        const totalMins = Math.round(mt);
+        const h = Math.floor(totalMins / 60);
+        const m = totalMins % 60;
+        setMovingTime(`${String(h).padStart(2, '0')}${String(m).padStart(2, '0')}`);
+      } else {
+        setMovingTime('');
+      }
+      setElevation(editingLog.elevation_delta != null ? String(editingLog.elevation_delta) : '');
+      setNotes(editingLog.notes ?? '');
+    } else {
+      const now = new Date();
+      setDateStr(isoToDateStr(now.toISOString()));
+      setTimeStr(isoToTimeStr(now.toISOString()));
+      setInputMode('distance');
+      setDistance(''); setOdometer(''); setMovingTime(''); setElevation(''); setSteps(''); setNotes('');
+    }
+  }, [visible, editingLog, asset]);
 
   if (!asset) return null;
 
@@ -57,7 +115,6 @@ export default function UsageLogModal({ visible, asset, onClose, onSubmit }: Pro
 
   const odomNum = parseNum(odometer);
   const rawDistNum = parseNum(distance);
-  // In odometer mode, delta = new reading minus current total
   const distNum = isVehicle && inputMode === 'odometer'
     ? Math.max(0, odomNum - asset.current_usage)
     : rawDistNum;
@@ -70,28 +127,20 @@ export default function UsageLogModal({ visible, asset, onClose, onSubmit }: Pro
     ? stepsNum > 0
     : distNum > 0;
 
-  const reset = () => {
-    setInputMode('distance');
-    setDistance(''); setOdometer(''); setMovingTime(''); setElevation(''); setSteps(''); setNotes('');
-  };
-
   const handleOdometerChange = (val: string) => {
     setOdometer(val);
-    // Sync distance field
     const delta = Math.max(0, parseNum(val) - asset.current_usage);
     setDistance(delta > 0 ? String(delta) : '');
   };
 
   const handleDistanceChange = (val: string) => {
     setDistance(val);
-    // Sync odometer field
     const total = asset.current_usage + parseNum(val);
     setOdometer(total > 0 ? String(total) : '');
   };
 
   const handleMovingTimeChange = (text: string) => {
     const newDigits = text.replace(/\D/g, '').slice(0, 4);
-    // User deleted the ':' separator — remove last digit instead
     if (newDigits === movingTime && text.length < formatTimeDigits(movingTime).length) {
       setMovingTime(movingTime.slice(0, -1));
     } else {
@@ -103,7 +152,8 @@ export default function UsageLogModal({ visible, asset, onClose, onSubmit }: Pro
     if (!isValid) return;
     setSubmitting(true);
     try {
-      const entry: UsageEntry = { notes: notes.trim() || undefined };
+      const recordedAt = buildIso(dateStr, timeStr);
+      const entry: UsageEntry = { notes: notes.trim() || undefined, recordedAt };
       if (type === 'shoe') {
         entry.steps = stepsNum;
       } else {
@@ -112,7 +162,6 @@ export default function UsageLogModal({ visible, asset, onClose, onSubmit }: Pro
         if (type === 'bike' && elevation.trim()) entry.elevation = elevNum;
       }
       await onSubmit(entry);
-      reset();
       onClose();
     } finally {
       setSubmitting(false);
@@ -123,7 +172,18 @@ export default function UsageLogModal({ visible, asset, onClose, onSubmit }: Pro
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <View style={styles.overlay}>
         <View style={styles.sheet}>
-          <Text style={styles.title}>Log Usage — {asset.name}</Text>
+          <Text style={styles.title}>
+            {isEditMode ? 'Edit Log' : 'Log Usage'} — {asset.name}
+          </Text>
+
+          {/* Date / time */}
+          <Text style={styles.label}>Date &amp; time</Text>
+          <DateTimeFields
+            dateStr={dateStr}
+            timeStr={timeStr}
+            onDateChange={setDateStr}
+            onTimeChange={setTimeStr}
+          />
 
           {type === 'shoe' ? (
             <>
@@ -139,7 +199,7 @@ export default function UsageLogModal({ visible, asset, onClose, onSubmit }: Pro
               />
               {stepsNum > 0 && (
                 <Text style={styles.preview}>
-                  {stepsNum.toLocaleString()} steps — total: {(asset.total_steps + stepsNum).toLocaleString()}
+                  {stepsNum.toLocaleString()} steps
                 </Text>
               )}
             </>
@@ -269,7 +329,7 @@ export default function UsageLogModal({ visible, asset, onClose, onSubmit }: Pro
               onPress={() => { logUI(uiPath('fingo', 'usage_log_modal', 'submit_button'), 'press'); void handleSubmit(); }}
               disabled={!isValid || submitting}
             >
-              <Text style={styles.submitText}>{submitting ? 'Saving…' : 'Save'}</Text>
+              <Text style={styles.submitText}>{submitting ? 'Saving…' : isEditMode ? 'Update' : 'Save'}</Text>
             </TouchableOpacity>
           </View>
         </View>

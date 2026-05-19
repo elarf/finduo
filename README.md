@@ -6,13 +6,15 @@ Financial tracking app for couples and shared households. Track income, expenses
 
 ---
 
-## Latest Release — v1.2.9
+## Latest Release — v1.3.0
 
-- **HealthConnect named exercise types** — workout cards show human-readable activity names (Running, Cycling, HIIT, Yoga, etc.) resolved from Health Connect integer exercise type codes
-- **Data origin badges** — each workout card shows the source app (Strava, Samsung Health, Google Fit, Garmin Connect, etc.)
-- **Workout deduplication** — auto-detects duplicate sessions from different sources and hides them; manual hide/unhide per card; hidden count pill in filter bar
-- **Avg speed, sub-minute duration, start time** — additional stats on workout cards
-- **DB migration baseline consolidation** — all incremental migrations folded into `0000_baseline.sql`; `20260513c_grant_all_tables.sql` added
+- **Active asset designation** — mark one bike, shoe, or vehicle as active per type; active badge shown in the accordion header; `setActiveAsset` auto-deactivates siblings
+- **HealthConnect auto-attach** — cycling sessions auto-logged to the active bike; daily steps auto-logged to the active shoe; dismissable banner shows count
+- **Edit usage logs** — tap any ride log row to open it in edit mode; fields pre-populated; `updateLog` patches the record and adjusts asset totals
+- **Custom timestamps** — date & time fields in the log modal allow backdating; HealthConnect entries use actual activity start time
+- **Service interval notifications** — local notifications fire when a component interval is due or overdue after logging usage (native only)
+- **Back button image** — `back.png` used across `DashboardHeader`, `ComponentDetailScreen`, and `ServiceIntervalDetailScreen`
+- **Android back handler** — `ComponentDetailScreen` and `ServiceIntervalDetailScreen` register modal-priority back handlers
 
 Full history: [PATCHNOTES.md](./PATCHNOTES.md)
 

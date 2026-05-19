@@ -56,12 +56,14 @@ export function useAssets(user: User | null) {
     try {
       logAPI('supabase://assets', { source: 'fingo.asset_list.add_button', action: 'createAsset' });
       const usageUnit = type === 'shoe' ? 'steps' : type === 'other' ? 'units' : 'km';
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('assets')
-        .insert({ name, type, usage_unit: usageUnit, current_usage: 0, created_by: user.id, icon: icon ?? null, notes: notes ?? null });
+        .insert({ name, type, usage_unit: usageUnit, current_usage: 0, created_by: user.id, icon: icon ?? null, notes: notes ?? null })
+        .select()
+        .single();
       if (error) throw error;
       await loadAssets();
-      return null;
+      return (data ?? null) as FinGoAsset | null;
     } catch (err) {
       webAlert('Error', err instanceof Error ? err.message : 'Failed to create asset');
       return null;
@@ -70,7 +72,7 @@ export function useAssets(user: User | null) {
 
   const updateAsset = useCallback(async (
     assetId: string,
-    patch: Partial<Pick<FinGoAsset, 'name' | 'type' | 'usage_unit' | 'icon' | 'notes' | 'current_usage'>>,
+    patch: Partial<Pick<FinGoAsset, 'name' | 'type' | 'usage_unit' | 'icon' | 'notes' | 'current_usage' | 'is_active'>>,
   ): Promise<boolean> => {
     try {
       logAPI('supabase://assets', { source: 'fingo.asset_accordion.edit', action: 'updateAsset' });
@@ -86,6 +88,30 @@ export function useAssets(user: User | null) {
       return false;
     }
   }, [loadAssets]);
+
+  const setActiveAsset = useCallback(async (assetId: string, assetType: AssetType): Promise<boolean> => {
+    if (!user) return false;
+    try {
+      logAPI('supabase://assets', { source: 'fingo.asset_modal.set_active', action: 'setActiveAsset' });
+      // Deactivate all other assets of the same type for this user
+      await supabase
+        .from('assets')
+        .update({ is_active: false })
+        .eq('created_by', user.id)
+        .eq('type', assetType)
+        .neq('id', assetId);
+      const { error } = await supabase
+        .from('assets')
+        .update({ is_active: true })
+        .eq('id', assetId);
+      if (error) throw error;
+      await loadAssets();
+      return true;
+    } catch (err) {
+      webAlert('Error', err instanceof Error ? err.message : 'Failed to set active asset');
+      return false;
+    }
+  }, [user, loadAssets]);
 
   const deleteAsset = useCallback(async (assetId: string): Promise<boolean> => {
     try {
@@ -144,6 +170,7 @@ export function useAssets(user: User | null) {
     loadAssetMembers,
     createAsset,
     updateAsset,
+    setActiveAsset,
     deleteAsset,
     addMember,
     removeMember,

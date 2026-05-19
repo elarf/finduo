@@ -24,6 +24,7 @@ export type FinGoAsset = {
   total_steps: number;
   icon?: string | null;
   notes?: string | null;
+  is_active?: boolean | null;
   created_at: string;
 };
 
@@ -79,6 +80,7 @@ export type UsageEntry = {
   elevation?: number;    // meters — bike (optional)
   steps?: number;        // count — shoe
   notes?: string;
+  recordedAt?: string;   // ISO timestamp override (HC data, manual backdating)
 };
 
 export type PartServiceLog = {

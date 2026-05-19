@@ -4,6 +4,79 @@
 
 ---
 
+## [1.3.0] — 2026-05-19
+
+### Features
+
+#### FinGo — Active Asset Designation
+
+- Assets can be marked as **active** per type (bike, shoe, vehicle); only one active asset per type at a time
+- Active badge shown on the asset header in the accordion
+- **Set as active** toggle in the asset create/edit modal — activating an asset automatically deactivates all other assets of the same type for the user
+- `setActiveAsset(assetId, assetType)` in `useAssets` deactivates same-type assets first, then activates the target
+
+#### FinGo — Edit Usage Logs
+
+- Tap any ride log row to open it in edit mode
+- `UsageLogModal` gains full edit mode: fields pre-populated from the existing log (date, time, distance/steps, moving time, elevation, notes)
+- Submit button label changes to **Update** in edit mode
+- `updateLog(log, asset, entry)` in `useUsageLogs` patches the log record and adjusts asset totals with delta diffs
+
+#### FinGo — Custom Timestamps on Usage Logs
+
+- Date & time fields in `UsageLogModal` allow backdating and timestamp correction
+- `recordedAt` ISO timestamp propagated through `UsageEntry` and stored in `recorded_at` on the usage log row
+- HealthConnect entries now pass `startTime` as `recordedAt` so logs reflect the actual activity time
+
+#### HealthConnect — Auto-Attach to Active Assets
+
+- On each screen load, unlogged cycling exercise sessions automatically attach to the active bike asset
+- Daily step records automatically aggregate per day and attach to the active shoe asset (one log per day, using `steps-<date>` synthetic external ID for deduplication)
+- Dismissable green banner shows count of items auto-logged in the current session
+
+#### FinGo — Service Interval Notifications (Native)
+
+- New `src/lib/fingo/notifications.ts` module
+- `setupFinGoChannels()` creates a `fingo_service_due` Android notification channel on startup
+- `notifyDueIntervals()` fires local notifications for any component interval that is due or overdue after a usage log is added
+
+### Improvements
+
+#### FinGo — Back Button Image Refresh
+
+- `DashboardHeader` back button now uses `back.png` instead of the arrow-left icon
+- `ComponentDetailScreen` and `ServiceIntervalDetailScreen` back buttons replaced with `back.png` in a circular button container
+
+#### FinGo — Android Back Handler in Detail Screens
+
+- `ComponentDetailScreen` and `ServiceIntervalDetailScreen` now register Capacitor back button handlers
+- Modal-priority chain: ComponentForm → Library → SwapModal → IntervalSheet → RecordSheet → ActionSheet
+
+#### FinGo — Component Changes Refresh Assets
+
+- `loadAssets()` called after all component mutations (install, uninstall, retire, replace, delete, interval create/delete, record service) so asset-level stats stay in sync
+
+#### DateTimeFields — Time Picker Cleanup Fix
+
+- Web time picker input element now removed from the DOM on cancel (via the `cancel` event) — previously it could linger when the user dismissed without selecting
+
+### Technical
+
+- `src/types/fingo.ts` — `is_active?: boolean | null` on `FinGoAsset`; `recordedAt?: string` on `UsageEntry`
+- `src/hooks/useAssets.ts` — `setActiveAsset(assetId, assetType)` added and exported; `createAsset` now returns the created `FinGoAsset | null`; `is_active` added to `updateAsset` patch type
+- `src/hooks/useUsageLogs.ts` — `updateLog(log, asset, entry)` added and exported; `notifyDueIntervals` called after `addUsageLog`; component `name` added to SELECT; `recorded_at` stored when `entry.recordedAt` is present
+- `src/lib/fingo/notifications.ts` — new file; `setupFinGoChannels`, `notifyDueIntervals`
+- `src/components/fingo/AssetAccordion.tsx` — active badge on asset header; ride log rows converted to `TouchableOpacity` with `onEditLog` prop and "tap to edit" hint; `onEditLog` prop added
+- `src/components/fingo/UsageLogModal.tsx` — `editingLog` prop; `useEffect` initialises fields from log; `isoToDateStr`, `isoToTimeStr`, `buildIso` helpers; `DateTimeFields` added to modal
+- `src/components/fingo/DateTimeFields.tsx` — `cancel` event listener added to clean up input on dismiss
+- `src/screens/FinGoScreen.tsx` — `assetIsActive` state in asset modal; `setActiveAsset`/`updateLog` wired; `loadAssets()` chained after all component mutations; `setupFinGoChannels` on mount
+- `src/screens/HealthConnectScreen.tsx` — auto-attach `useEffect` for active bike (cycling) and active shoe (daily steps); `autoAttachBanner`; `recordedAt` set in all `buildEntry` paths
+- `src/screens/ComponentDetailScreen.tsx` — `registerBackHandler` for modal priority; `back.png` button with circular container style
+- `src/screens/ServiceIntervalDetailScreen.tsx` — `registerBackHandler` for modal priority; `back.png` button with circular container style
+- `assets/fingo/back.png` — new back button image asset
+
+---
+
 ## [1.2.9] — 2026-05-13
 
 ### Improvements

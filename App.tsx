@@ -15,8 +15,16 @@ import { QueryClient } from '@tanstack/react-query';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { createAsyncStoragePersister } from '@tanstack/query-async-storage-persister';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { AppShortcuts } from '@capacitor-community/app-shortcuts';
 import { AuthProvider } from './src/context/AuthContext';
+
+let AppShortcuts: any;
+if (Platform.OS === 'android') {
+  try {
+    AppShortcuts = require('@capacitor-community/app-shortcuts').AppShortcuts;
+  } catch (e) {
+    console.warn('AppShortcuts not available');
+  }
+}
 import RootNavigator from './src/navigation';
 import { navigationRef } from './src/navigation/navigationRef';
 import { setupNotificationActionListener } from './src/lib/fingo/notifications';

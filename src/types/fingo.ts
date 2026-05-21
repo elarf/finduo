@@ -1,7 +1,7 @@
 // FinGo — Asset Lifecycle Manager types
 
 export type AssetType = 'vehicle' | 'motorbike' | 'bike' | 'shoe' | 'other';
-export type ServiceIntervalType = 'general' | 'replace' | 'cleaning' | 'charge';
+export type ServiceIntervalType = 'general' | 'replace' | 'cleaning' | 'charge' | 'pump';
 export type AssetMemberRole = 'owner' | 'member';
 export type UsageSource = 'odometer' | 'health_connect' | 'gps';
 export type FinGoSortOrder = 'deadline' | 'name' | 'priority';

@@ -286,12 +286,25 @@ export default function HealthConnectScreen() {
         });
         const dupeRideIds = detectDuplicates(rideWorkouts);
 
+        let runningBike = activeBike;
         for (const workout of rideWorkouts) {
           if (dupeRideIds.has(workout.sessionId)) continue;
           const enriched = { ...workout.rawRecord, distanceKm: workout.distanceKm ?? undefined };
-          const entry = buildEntry(enriched, activeBike);
-          const ok = await addUsageLog(activeBike, entry, null, 'health_connect', workout.rawRecord.id);
-          if (ok) { newIds.push(workout.rawRecord.id); count++; }
+          const entry = buildEntry(enriched, runningBike);
+          const ok = await addUsageLog(runningBike, entry, null, 'health_connect', workout.rawRecord.id);
+          if (ok) {
+            newIds.push(workout.rawRecord.id);
+            count++;
+            const dist = entry.distance ?? 0;
+            runningBike = {
+              ...runningBike,
+              current_usage: runningBike.current_usage + dist,
+              total_distance: runningBike.total_distance + dist,
+              total_rides: runningBike.total_rides + 1,
+              total_moving_time: runningBike.total_moving_time + (entry.movingTime ?? 0),
+              total_elevation: runningBike.total_elevation + (entry.elevation ?? 0),
+            };
+          }
         }
       }
 
@@ -313,12 +326,21 @@ export default function HealthConnectScreen() {
             stepsByDay.set(date, { total: r.steps ?? 0, firstId: syntheticId, lastEndTime: r.endTime });
           }
         }
+        let runningShoe = activeShoe;
         for (const [date, { total, lastEndTime }] of stepsByDay) {
           const syntheticId = `steps-${date}`;
           if (total <= 0) continue;
           const entry = { steps: total, recordedAt: lastEndTime };
-          const ok = await addUsageLog(activeShoe, entry, null, 'health_connect', syntheticId);
-          if (ok) { newIds.push(syntheticId); count++; }
+          const ok = await addUsageLog(runningShoe, entry, null, 'health_connect', syntheticId);
+          if (ok) {
+            newIds.push(syntheticId);
+            count++;
+            runningShoe = {
+              ...runningShoe,
+              current_usage: runningShoe.current_usage + total,
+              total_steps: (runningShoe.total_steps ?? 0) + total,
+            };
+          }
         }
       }
 

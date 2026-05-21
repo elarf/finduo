@@ -17,7 +17,12 @@ const SERVICE_TYPES: Array<{ value: ServiceIntervalType; label: string; icon: an
   { value: 'replace',  label: 'Replace', icon: FINGO_ASSETS.change },
   { value: 'cleaning', label: 'Clean',   icon: FINGO_ASSETS.wipe },
   { value: 'charge',   label: 'Charge',  icon: FINGO_ASSETS.charge },
+  { value: 'pump',     label: 'Pump',    icon: FINGO_ASSETS.pressure },
 ];
+
+const TIME_UNITS = ['h', 'd', 'y'] as const;
+type TimeUnit = typeof TIME_UNITS[number];
+const UNIT_MULTIPLIERS: Record<TimeUnit, number> = { h: 1, d: 24, y: 8760 };
 
 interface Props {
   visible: boolean;
@@ -33,19 +38,23 @@ export default function ServiceIntervalSheet({
   const [name, setName] = useState('');
   const [method, setMethod] = useState<TrackingMethod>('distance');
   const [valueStr, setValueStr] = useState('');
+  const [timeUnit, setTimeUnit] = useState<TimeUnit>('h');
   const [serviceType, setServiceType] = useState<ServiceIntervalType>('general');
   const [saving, setSaving] = useState(false);
+
+  const isTimeBased = method === 'moving_time' || method === 'elapsed_time';
 
   useEffect(() => {
     if (visible) {
       setName(editingInterval?.name ?? '');
       setMethod(editingInterval?.tracking_method ?? 'distance');
+      setTimeUnit('h');
       setValueStr(editingInterval ? String(editingInterval.interval_value) : '');
       setServiceType(editingInterval?.service_type ?? 'general');
     }
   }, [visible, editingInterval]);
 
-  const intervalValue = parseFloat(valueStr.replace(',', '.'));
+  const intervalValue = parseFloat(valueStr.replace(',', '.')) * (isTimeBased ? UNIT_MULTIPLIERS[timeUnit] : 1);
   const canSave = name.trim() && !isNaN(intervalValue) && intervalValue > 0;
 
   const handleSave = async () => {
@@ -118,6 +127,7 @@ export default function ServiceIntervalSheet({
                   onPress={() => {
                     logUI(uiPath('fingo', 'service_interval_sheet', 'method', m), 'press');
                     setMethod(m);
+                    setTimeUnit('h');
                   }}
                 >
                   <Text style={[styles.methodText, method === m && styles.methodTextActive]}>
@@ -138,9 +148,31 @@ export default function ServiceIntervalSheet({
                 placeholderTextColor="#475569"
                 keyboardType="decimal-pad"
               />
-              <View style={styles.unitPill}>
-                <Text style={styles.unitText}>{trackingMethodUnit(method)}</Text>
-              </View>
+              {isTimeBased ? (
+                <View style={styles.unitToggleRow}>
+                  {TIME_UNITS.map((u) => (
+                    <TouchableOpacity
+                      key={u}
+                      style={[styles.unitToggleBtn, timeUnit === u && styles.unitToggleBtnActive]}
+                      onPress={() => {
+                        const parsed = parseFloat(valueStr.replace(',', '.'));
+                        if (!isNaN(parsed) && parsed > 0) {
+                          const inHours = parsed * UNIT_MULTIPLIERS[timeUnit];
+                          const inNew = inHours / UNIT_MULTIPLIERS[u];
+                          setValueStr(String(Number(inNew.toFixed(2))));
+                        }
+                        setTimeUnit(u);
+                      }}
+                    >
+                      <Text style={[styles.unitToggleText, timeUnit === u && styles.unitToggleTextActive]}>{u}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              ) : (
+                <View style={styles.unitPill}>
+                  <Text style={styles.unitText}>{trackingMethodUnit(method)}</Text>
+                </View>
+              )}
             </View>
           </ScrollView>
 
@@ -218,10 +250,12 @@ const styles = StyleSheet.create({
   },
   typeRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 8,
   },
   typeBtn: {
-    flex: 1,
+    flexBasis: '30%',
+    flexGrow: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -230,7 +264,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     borderColor: '#1F3A59',
-    backgroundColor: '#0E1A2B',
+    backgroundColor: '#000000',
   },
   typeBtnActive: {
     backgroundColor: '#0D2137',
@@ -322,4 +356,30 @@ const styles = StyleSheet.create({
     borderColor: '#1F3A59',
   },
   saveText: { color: '#4ade80', fontWeight: '700' },
+  unitToggleRow: {
+    flexDirection: 'row',
+    gap: 4,
+  },
+  unitToggleBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#1F3A59',
+    backgroundColor: '#0E1A2B',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  unitToggleBtnActive: {
+    borderColor: '#3B6A9E',
+    backgroundColor: '#0D2137',
+  },
+  unitToggleText: {
+    color: '#475569',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  unitToggleTextActive: {
+    color: '#8FA8C9',
+  },
 });

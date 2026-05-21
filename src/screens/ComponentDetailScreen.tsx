@@ -29,8 +29,16 @@ import AppHeader from '../components/AppHeader';
 import ComponentIcon from '../components/fingo/ComponentIcon';
 import type {
   Component, ComponentServiceInterval, ComponentServiceRecord,
-  ComponentSwap, UsageLog, FinGoAsset, ComponentTemplate,
+  ComponentSwap, UsageLog, FinGoAsset, ComponentTemplate, ServiceIntervalType,
 } from '../types/fingo';
+
+const SERVICE_TYPE_ICONS: Record<ServiceIntervalType, any> = {
+  general:  FINGO_ASSETS.fix,
+  replace:  FINGO_ASSETS.change,
+  cleaning: FINGO_ASSETS.wipe,
+  charge:   FINGO_ASSETS.charge,
+  pump:     FINGO_ASSETS.pressure,
+};
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ComponentDetail'>;
 
@@ -49,8 +57,9 @@ function formatLogTime(minutes: number): string {
 }
 
 function toLocalDateString(iso: string): string {
-  return new Date(iso).toLocaleDateString(undefined, {
+  return new Date(iso).toLocaleString(undefined, {
     year: 'numeric', month: 'short', day: 'numeric',
+    hour: 'numeric', minute: '2-digit',
   });
 }
 
@@ -177,6 +186,25 @@ export default function ComponentDetailScreen({ route }: Props) {
     () => records.filter((r) => r.component_id === componentId),
     [records, componentId],
   );
+
+  // Elapsed stats between consecutive service records
+  const serviceStats = useMemo(() => componentRecords.map((rec, i) => {
+    const prevRecord = componentRecords[i + 1];
+    const prevDate = prevRecord
+      ? new Date(prevRecord.serviced_at)
+      : component?.installed_at ? new Date(component.installed_at) : null;
+    const recDate = new Date(rec.serviced_at);
+    const logsInPeriod = prevDate
+      ? componentLogs.filter((l) => {
+          const d = new Date(l.recorded_at);
+          return d > prevDate && d <= recDate;
+        })
+      : [];
+    const km = logsInPeriod.reduce((s, l) => s + (l.usage_delta ?? 0), 0);
+    const movingTimeMin = logsInPeriod.reduce((s, l) => s + (l.moving_time_delta ?? 0), 0);
+    const days = prevDate ? Math.round((recDate.getTime() - prevDate.getTime()) / (1000 * 60 * 60 * 24)) : null;
+    return { km, movingTimeMin, days };
+  }), [componentRecords, componentLogs, component]);
 
   // Component totals (from accumulated tracking fields — source of truth)
   const totalDistance = component?.track_distance ?? 0;
@@ -332,6 +360,7 @@ export default function ComponentDetailScreen({ route }: Props) {
           activeOpacity={0.8}
         >
           <View style={styles.statsSummaryItem}>
+            <Image source={FINGO_ASSETS.route} style={styles.statsSummaryIcon} resizeMode="contain" />
             <Text style={styles.statsSummaryValue}>
               {totalDistance > 0 ? `${totalDistance.toLocaleString(undefined, { maximumFractionDigits: 1 })} km` : '—'}
             </Text>
@@ -339,6 +368,7 @@ export default function ComponentDetailScreen({ route }: Props) {
           </View>
           <View style={styles.statsDivider} />
           <View style={styles.statsSummaryItem}>
+            <Image source={FINGO_ASSETS.time} style={styles.statsSummaryIcon} resizeMode="contain" />
             <Text style={styles.statsSummaryValue}>
               {totalMovingTimeH > 0 ? formatMovingTime(totalMovingTimeH) : '—'}
             </Text>
@@ -347,7 +377,7 @@ export default function ComponentDetailScreen({ route }: Props) {
           <View style={styles.statsDivider} />
           <View style={styles.statsSummaryItem}>
             <Text style={styles.statsSummaryValue}>
-              {totalElevation > 0 ? `${totalElevation.toLocaleString(undefined, { maximumFractionDigits: 0 })} m` : '—'}
+              {totalElevation > 0 ? `▲ ${totalElevation.toLocaleString(undefined, { maximumFractionDigits: 0 })} m` : '—'}
             </Text>
             <Text style={styles.statsSummaryLabel}>Elev. Gain</Text>
           </View>
@@ -459,12 +489,12 @@ export default function ComponentDetailScreen({ route }: Props) {
                 })}
                 activeOpacity={0.7}
               >
-                <View style={styles.intervalBarTrack}>
-                  <View style={[styles.intervalBarFill, {
-                    width: `${Math.max(0, Math.min(1, health.remaining / interval.interval_value)) * 100}%` as any,
-                    backgroundColor: color,
-                  }]} />
-                </View>
+                <Image
+                  source={SERVICE_TYPE_ICONS[interval.service_type ?? 'general']}
+                  style={styles.intervalTypeIcon}
+                  resizeMode="contain"
+                />
+                <View style={[styles.healthDot, { backgroundColor: color }]} />
                 <View style={styles.intervalInfo}>
                   <Text style={styles.intervalName}>{interval.name}</Text>
                   <Text style={[styles.intervalRemaining, { color }]}>{formatIntervalRemaining(health)}</Text>
@@ -557,19 +587,36 @@ export default function ComponentDetailScreen({ route }: Props) {
           <Text style={styles.emptyText}>No services logged yet.</Text>
         ) : (
           <>
-            {visibleServices.map((rec) => (
+            {visibleServices.map((rec, i) => {
+              const stats = serviceStats[i];
+              const hasStats = stats && (stats.km > 0.1 || (stats.days !== null && stats.days > 0) || stats.movingTimeMin > 0);
+              return (
               <View key={rec.id} {...uiProps(uiPath('fingo', 'component_detail', 'service_record_row', rec.id))} style={styles.serviceRow}>
                 <Image source={FINGO_ASSETS.fix} style={styles.serviceTypeIcon} resizeMode="contain" />
                 <View style={styles.serviceBody}>
                   <Text style={styles.serviceName}>{rec.name}</Text>
                   <Text style={styles.serviceMeta}>{toLocalDateString(rec.serviced_at)}</Text>
                   {rec.notes ? <Text style={styles.serviceNotes} numberOfLines={1}>{rec.notes}</Text> : null}
+                  {hasStats && (
+                    <View style={styles.serviceStatChips}>
+                      {stats.km > 0.1 && (
+                        <Text style={styles.serviceStatChip}>+{stats.km.toLocaleString(undefined, { maximumFractionDigits: 1 })}km</Text>
+                      )}
+                      {stats.days !== null && stats.days > 0 && (
+                        <Text style={styles.serviceStatChip}>+{stats.days}d</Text>
+                      )}
+                      {stats.movingTimeMin > 0 && (
+                        <Text style={styles.serviceStatChip}>+{formatLogTime(stats.movingTimeMin)}</Text>
+                      )}
+                    </View>
+                  )}
                 </View>
                 {rec.cost != null && (
                   <Text style={styles.serviceCost}>{rec.cost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</Text>
                 )}
               </View>
-            ))}
+              );
+            })}
             {componentRecords.length > 3 && (
               <TouchableOpacity
                 {...uiProps(uiPath('fingo', 'component_detail', 'show_all_services_button', componentId))}
@@ -596,7 +643,7 @@ export default function ComponentDetailScreen({ route }: Props) {
               <View key={log.id} {...uiProps(uiPath('fingo', 'component_detail', 'ride_row', log.id))} style={styles.rideRow}>
                 <View style={styles.rideLeft}>
                   <Text style={styles.rideDate}>
-                    {new Date(log.recorded_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                    {new Date(log.recorded_at).toLocaleString(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })}
                   </Text>
                   {log.notes ? <Text style={styles.rideNotes} numberOfLines={1}>{log.notes}</Text> : null}
                 </View>
@@ -873,6 +920,11 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
   },
+  statsSummaryIcon: {
+    width: 18,
+    height: 18,
+    marginBottom: 3,
+  },
   statsSummaryValue: {
     color: '#CBD5E1',
     fontSize: 13,
@@ -1039,31 +1091,34 @@ const styles = StyleSheet.create({
   // Interval rows
   intervalRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'stretch',
     backgroundColor: '#0E1A2B',
     borderRadius: 8,
     borderWidth: 1,
     borderColor: '#1F3A59',
-    padding: 10,
-    marginBottom: 5,
-    gap: 10,
-  },
-  intervalBarTrack: {
-    width: 4,
-    height: 36,
-    backgroundColor: '#1F3A59',
-    borderRadius: 2,
     overflow: 'hidden',
+    marginBottom: 5,
+    gap: 8,
+    minHeight: 44,
+    paddingRight: 10,
+  },
+  intervalTypeIcon: {
+    width: 44,
+    alignSelf: 'stretch',
     flexShrink: 0,
+    maxHeight: 65,
   },
-  intervalBarFill: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    borderRadius: 2,
+  healthDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    flexShrink: 0,
+    alignSelf: 'center',
   },
-  intervalInfo: { flex: 1 },
+  intervalInfo: {
+    flex: 1,
+    paddingVertical: 10,
+  },
   intervalName: {
     color: '#CBD5E1',
     fontSize: 14,
@@ -1136,13 +1191,11 @@ const styles = StyleSheet.create({
     alignItems: 'stretch',
     borderBottomWidth: 1,
     borderColor: '#0E1A2B',
-    maxHeight: 65,
   },
   serviceTypeIcon: {
     width: 44,
     alignSelf: 'stretch',
     flexShrink: 0,
-    maxHeight: 65,
   },
   serviceBody: {
     flex: 1,
@@ -1164,10 +1217,22 @@ const styles = StyleSheet.create({
     fontSize: 11,
     marginTop: 2,
   },
+  serviceStatChips: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 4,
+  },
+  serviceStatChip: {
+    color: '#4ade80',
+    fontSize: 11,
+    fontWeight: '700',
+  },
   serviceCost: {
     color: '#f87171',
     fontSize: 12,
     fontWeight: '700',
+    alignSelf: 'center',
+    paddingRight: 4,
   },
   // Rides
   rideRow: {

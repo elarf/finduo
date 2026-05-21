@@ -42,26 +42,36 @@ export default function AppHeader({ onBack, rightElement }: Props) {
 
   return (
     <View style={[s.headerRow, { paddingTop: topInset(14, top) }]} {...uiProps(uiPath('app_header', 'container', 'view'))}>
-      <TouchableOpacity
-        style={s.avatarBtn}
-        onPress={handleBack}
-        {...uiProps(uiPath('app_header', 'avatar_button', 'touchable'))}
-      >
-        {avatarUrl && !avatarImgError ? (
-          <Image
-            source={{ uri: avatarUrl }}
-            style={s.avatarImg}
-            onError={() => setAvatarImgError(true)}
-            {...uiProps(uiPath('app_header', 'avatar_button', 'image'))}
-          />
-        ) : (
-          <View style={s.avatarFallback} {...uiProps(uiPath('app_header', 'avatar_fallback', 'view'))}>
-            <Text style={s.avatarFallbackText} {...uiProps(uiPath('app_header', 'avatar_fallback', 'text'))}>
-              {(user?.email?.[0] ?? '?').toUpperCase()}
-            </Text>
-          </View>
-        )}
-      </TouchableOpacity>
+      {onBack ? (
+        <TouchableOpacity
+          style={s.backBtn}
+          onPress={handleBack}
+          {...uiProps(uiPath('app_header', 'back_button', 'touchable'))}
+        >
+          <Text style={s.backArrow}>‹</Text>
+        </TouchableOpacity>
+      ) : (
+        <TouchableOpacity
+          style={s.avatarBtn}
+          onPress={handleBack}
+          {...uiProps(uiPath('app_header', 'avatar_button', 'touchable'))}
+        >
+          {avatarUrl && !avatarImgError ? (
+            <Image
+              source={{ uri: avatarUrl }}
+              style={s.avatarImg}
+              onError={() => setAvatarImgError(true)}
+              {...uiProps(uiPath('app_header', 'avatar_button', 'image'))}
+            />
+          ) : (
+            <View style={s.avatarFallback} {...uiProps(uiPath('app_header', 'avatar_fallback', 'view'))}>
+              <Text style={s.avatarFallbackText} {...uiProps(uiPath('app_header', 'avatar_fallback', 'text'))}>
+                {(user?.email?.[0] ?? '?').toUpperCase()}
+              </Text>
+            </View>
+          )}
+        </TouchableOpacity>
+      )}
 
       {/* Logo: absolutely centred */}
       <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
@@ -121,7 +131,7 @@ const s = StyleSheet.create({
   headerLogoCenter: {
     flex: 1,
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'flex-end',
   },
   headerLogo: {
     width: 168,
@@ -131,5 +141,18 @@ const s = StyleSheet.create({
     width: 36,
     height: 36,
     zIndex: 2,
+  },
+  backBtn: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 2,
+  },
+  backArrow: {
+    color: '#8FA8C9',
+    fontSize: 32,
+    fontWeight: '300',
+    lineHeight: 36,
   },
 });

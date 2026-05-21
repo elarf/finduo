@@ -34,6 +34,7 @@ const SERVICE_TYPE_ICONS: Record<ServiceIntervalType, any> = {
   replace:  FINGO_ASSETS.change,
   cleaning: FINGO_ASSETS.wipe,
   charge:   FINGO_ASSETS.charge,
+  pump:     FINGO_ASSETS.pressure,
 };
 
 type Props = {
@@ -447,8 +448,9 @@ export default function AssetAccordion({
                 <View style={styles.logRowContent}>
                   <View style={styles.logLeft}>
                     <Text style={styles.logDate}>
-                      {new Date(log.recorded_at).toLocaleDateString(undefined, {
+                      {new Date(log.recorded_at).toLocaleString(undefined, {
                         month: 'short', day: 'numeric', year: 'numeric',
+                        hour: 'numeric', minute: '2-digit',
                       })}
                     </Text>
                     {log.notes ? (

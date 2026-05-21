@@ -31,7 +31,7 @@ export type RootStackParamList = {
   Login: undefined;
 
   // Main screens
-  Dashboard: { prefillEntry?: object } | undefined;
+  Dashboard: { prefillEntry?: { type: 'expense' | 'income' } } | undefined;
   FinBiome: undefined;
   FinGo: undefined;
 

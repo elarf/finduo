@@ -28,6 +28,7 @@ const SERVICE_TYPE_ICONS: Record<ServiceIntervalType, any> = {
   replace:  FINGO_ASSETS.change,
   cleaning: FINGO_ASSETS.wipe,
   charge:   FINGO_ASSETS.charge,
+  pump:     FINGO_ASSETS.pressure,
 };
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ServiceIntervalDetail'>;
@@ -190,11 +191,11 @@ export default function ServiceIntervalDetailScreen({ route }: Props) {
               ) : (
                 componentRecords.map((rec) => (
                   <View key={rec.id} style={styles.serviceRow}>
-                    <Image source={FINGO_ASSETS.fix} style={styles.serviceTypeIcon} resizeMode="contain" />
+                    <Image source={SERVICE_TYPE_ICONS[interval.service_type ?? 'general']} style={styles.serviceTypeIcon} resizeMode="contain" />
                     <View style={styles.serviceBody}>
                       <Text style={styles.serviceName}>{rec.name}</Text>
                       <Text style={styles.serviceMeta}>
-                        {new Date(rec.serviced_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
+                        {new Date(rec.serviced_at).toLocaleString(undefined, { year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
                       </Text>
                       {rec.notes ? <Text style={styles.serviceNotes} numberOfLines={2}>{rec.notes}</Text> : null}
                     </View>

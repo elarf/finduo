@@ -36,6 +36,7 @@ import { getTrackingValue } from '../lib/fingo/health';
 import { setupFinGoChannels } from '../lib/fingo/notifications';
 import { registerBackHandler } from '../lib/capacitorBack';
 import { bottomInset } from '../lib/safeArea';
+import { useHCAutoSync } from '../hooks/useHCAutoSync';
 
 const ASSET_TYPES: AssetType[] = ['vehicle', 'motorbike', 'bike', 'shoe', 'other'];
 
@@ -61,6 +62,8 @@ export default function FinGoScreen() {
   } = useComponents(user);
   const { intervals, loadIntervals, createInterval, updateInterval, markServiced, deleteInterval } = useServiceIntervals();
   const { createRecord } = useServiceRecords(user);
+
+  useHCAutoSync();
 
   // ─── UI state ─────────────────────────────────────────────────────────────────
   const [categories, setCategories] = useState<AppCategory[]>([]);

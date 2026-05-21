@@ -1,5 +1,6 @@
 import { Capacitor } from '@capacitor/core';
 import { supabase } from '../supabase';
+import { navigationRef } from '../../navigation/navigationRef';
 import { computeIntervalHealth, formatIntervalRemaining, trackingMethodUnit } from './health';
 import type { Component, ComponentServiceInterval } from '../../types/fingo';
 
@@ -35,9 +36,45 @@ export async function setupFinGoChannels(): Promise<void> {
   }
 }
 
+/** Cancel pending or delivered notifications for the given interval IDs */
+export async function cancelIntervalNotifications(intervalIds: string[]): Promise<void> {
+  if (!Capacitor.isNativePlatform() || intervalIds.length === 0) return;
+  try {
+    const { LocalNotifications } = await import('@capacitor/local-notifications');
+    await LocalNotifications.cancel({
+      notifications: intervalIds.map((id) => ({ id: intervalNotifId(id) })),
+    });
+  } catch {
+    // non-fatal
+  }
+}
+
+/**
+ * Set up the notification tap listener once at app startup.
+ * Navigates to ServiceIntervalDetail when a service-due notification is tapped.
+ */
+export function setupNotificationActionListener(): void {
+  if (!Capacitor.isNativePlatform()) return;
+  import('@capacitor/local-notifications').then(({ LocalNotifications }) => {
+    LocalNotifications.addListener('localNotificationActionPerformed', (event) => {
+      const extra = event.notification.extra as
+        | { intervalId?: string; componentId?: string; assetId?: string }
+        | undefined;
+      if (!extra?.intervalId || !extra?.componentId || !extra?.assetId) return;
+      if (!navigationRef.isReady()) return;
+      navigationRef.navigate('ServiceIntervalDetail', {
+        intervalId: extra.intervalId,
+        componentId: extra.componentId,
+        assetId: extra.assetId,
+      });
+    }).catch(() => {});
+  }).catch(() => {});
+}
+
 export async function notifyDueIntervals(
   componentIds: string[],
   components: TrackableComponent[],
+  assetId: string,
 ): Promise<void> {
   if (!Capacitor.isNativePlatform() || componentIds.length === 0) return;
 
@@ -55,27 +92,46 @@ export async function notifyDueIntervals(
 
   if (!intervals || intervals.length === 0) return;
 
-  const toSchedule: { id: number; title: string; body: string; channelId: string; schedule: { at: Date } }[] = [];
+  const toSchedule: {
+    id: number;
+    title: string;
+    body: string;
+    channelId: string;
+    schedule: { at: Date };
+    extra: { intervalId: string; componentId: string; assetId: string };
+  }[] = [];
+  const toCancel: { id: number }[] = [];
 
   for (const interval of intervals as ComponentServiceInterval[]) {
     const comp = components.find(c => c.id === interval.component_id);
     if (!comp) continue;
 
     const health = computeIntervalHealth(interval, comp as Component);
-    if (!health.isWarning && !health.isOverdue) continue;
+    const notifId = intervalNotifId(interval.id);
+
+    if (!health.isWarning && !health.isOverdue) {
+      // Interval is healthy — cancel any lingering notification
+      toCancel.push({ id: notifId });
+      continue;
+    }
 
     const unit = trackingMethodUnit(interval.tracking_method);
     const overdueBy = Math.round(Math.abs(health.remaining) * 10) / 10;
 
     toSchedule.push({
-      id: intervalNotifId(interval.id),
+      id: notifId,
       title: interval.name,
       body: health.isOverdue
         ? `${comp.name}: overdue by ${overdueBy} ${unit}`
         : `${comp.name}: ${formatIntervalRemaining(health)} remaining`,
       channelId: CHANNEL_ID,
       schedule: { at: new Date(Date.now() + 1000) },
+      extra: { intervalId: interval.id, componentId: interval.component_id, assetId },
     });
+  }
+
+  if (toCancel.length > 0) {
+    await LocalNotifications.cancel({ notifications: toCancel }).catch(() => {});
   }
 
   if (toSchedule.length > 0) {

@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { logAPI, webAlert } from '../lib/devtools';
+import { cancelIntervalNotifications } from '../lib/fingo/notifications';
 import { isMissingTableError } from '../types/dashboard';
 import type { ComponentServiceInterval, TrackingMethod, ServiceIntervalType } from '../types/fingo';
 
@@ -88,6 +89,7 @@ export function useServiceIntervals() {
         .update({ last_serviced_value: currentValue })
         .eq('id', intervalId);
       if (error) throw error;
+      cancelIntervalNotifications([intervalId]).catch(() => {});
       await loadIntervals(componentId);
       return true;
     } catch (err) {

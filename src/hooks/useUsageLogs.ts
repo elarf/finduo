@@ -137,7 +137,7 @@ export function useUsageLogs(user: User | null) {
           track_elapsed_time:   c.track_elapsed_time   + movingTimeHDelta,
           track_elevation_gain: c.track_elevation_gain + elevationDelta,
         }));
-        notifyDueIntervals(installedComps.map(c => c.id), updatedComps).catch(() => {});
+        notifyDueIntervals(installedComps.map(c => c.id), updatedComps, asset.id).catch(() => {});
       }
 
       await loadLogs(asset.id);

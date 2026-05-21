@@ -24,6 +24,7 @@ import * as Linking from 'expo-linking';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import { AuthContextValue } from '../types/auth';
+import { scheduleNativeHCSync, cancelNativeHCSync } from '../lib/fingo/hcSyncNative';
 
 // Required so the browser tab can redirect back to the app on iOS / Android.
 WebBrowser.maybeCompleteAuthSession();
@@ -48,6 +49,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     null;
 
   const handleDeepLink = useCallback(async (url: string) => {
+    if (url.includes('://shortcut/')) return;
+
     const { params, errorCode } = QueryParams.getQueryParams(url);
 
     if (errorCode) {
@@ -123,6 +126,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // users (pool members, friends) see up-to-date info without having
         // to trigger the friends flow first.
         if ((_event === 'SIGNED_IN' || _event === 'TOKEN_REFRESHED' || _event === 'INITIAL_SESSION') && newSession?.user) {
+          if (_event === 'SIGNED_IN') {
+            void scheduleNativeHCSync();
+          }
           const u = newSession.user;
 
           // Extract avatar URL — check user_metadata first, then raw identity_data
@@ -169,7 +175,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     let removeCapacitorListener: (() => void) | null = null;
     if (Capacitor.isNativePlatform()) {
       void CapacitorApp.addListener('appUrlOpen', async ({ url }) => {
-        await Browser.close();
+        if (!url.includes('://shortcut/')) {
+          await Browser.close();
+        }
         await handleDeepLink(url);
       }).then(handle => {
         removeCapacitorListener = () => void handle.remove();
@@ -252,6 +260,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [handleDeepLink]);
 
   const signOut = useCallback(async () => {
+    await cancelNativeHCSync();
     await supabase.auth.signOut();
   }, []);
 

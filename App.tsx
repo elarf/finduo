@@ -8,23 +8,15 @@
  *  - RootNavigator       : handles logged-in vs logged-out navigation
  */
 import React, { useEffect, useRef } from 'react';
-import { Platform } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { QueryClient } from '@tanstack/react-query';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { createAsyncStoragePersister } from '@tanstack/query-async-storage-persister';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Capacitor } from '@capacitor/core';
+import { App as CapacitorApp } from '@capacitor/app';
 import { AuthProvider } from './src/context/AuthContext';
-
-let AppShortcuts: any;
-if (Platform.OS === 'android') {
-  try {
-    AppShortcuts = require('@capacitor-community/app-shortcuts').AppShortcuts;
-  } catch (e) {
-    console.warn('AppShortcuts not available');
-  }
-}
 import RootNavigator from './src/navigation';
 import { navigationRef } from './src/navigation/navigationRef';
 import { setupNotificationActionListener } from './src/lib/fingo/notifications';
@@ -67,21 +59,25 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (Platform.OS !== 'android') return;
+    if (!Capacitor.isNativePlatform()) return;
 
-    AppShortcuts.setShortcuts({
-      shortcuts: [
-        { id: 'add_expense', title: 'Add Expense', shortTitle: 'Expense', icon: 'shortcut_add_expense' },
-        { id: 'fingo',       title: 'FinGo',       shortTitle: 'FinGo',   icon: 'shortcut_fingo'       },
-      ],
-    }).catch(() => {});
-
-    let removeListener: (() => void) | undefined;
-    AppShortcuts.addListener('shortcut', ({ shortcutId }: { shortcutId: string }) => {
-      if (!routeShortcut(shortcutId)) {
-        // Navigation not ready yet (cold start) — retry once it is
-        pendingShortcutRef.current = shortcutId;
+    const handleShortcutUrl = (url: string) => {
+      if (!url.includes('://shortcut/')) return;
+      const id = url.split('://shortcut/')[1];
+      if (!routeShortcut(id)) {
+        pendingShortcutRef.current = id;
       }
+    };
+
+    // Cold start: app launched from shortcut tap
+    void CapacitorApp.getLaunchUrl().then(result => {
+      if (result?.url) handleShortcutUrl(result.url);
+    });
+
+    // Warm start: app already running when shortcut tapped
+    let removeListener: (() => void) | undefined;
+    void CapacitorApp.addListener('appUrlOpen', ({ url }) => {
+      handleShortcutUrl(url);
     }).then(handle => { removeListener = () => handle.remove(); });
 
     return () => removeListener?.();

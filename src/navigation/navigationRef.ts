@@ -14,3 +14,15 @@ export function getPendingShortcut(): string | null {
   return pendingShortcutId;
 }
 
+// Track a notification tap that arrived before navigation was ready
+export type PendingNotification = { intervalId: string; componentId: string; assetId: string };
+let pendingNotification: PendingNotification | null = null;
+
+export function setPendingNotification(n: PendingNotification | null) {
+  pendingNotification = n;
+}
+
+export function getPendingNotification(): PendingNotification | null {
+  return pendingNotification;
+}
+

@@ -61,7 +61,7 @@ export default function FinGoScreen() {
     retireComponent, deleteComponent, moveComponent, replaceComponent,
   } = useComponents(user);
   const { intervals, loadIntervals, createInterval, updateInterval, markServiced, deleteInterval } = useServiceIntervals();
-  const { records: allServiceRecords, loadRecords, createRecord } = useServiceRecords(user);
+  const { records: allServiceRecords, loadRecords, createRecord, updateRecord } = useServiceRecords(user);
 
   useHCAutoSync();
 
@@ -71,6 +71,7 @@ export default function FinGoScreen() {
   const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
   const [focusedAssetId, setFocusedAssetId] = useState<string | null>(null);
   const [recordsByAsset, setRecordsByAsset] = useState<Record<string, ComponentServiceRecord[]>>({});
+  const [, setTick] = useState(0);
 
   const scrollViewRef = useRef<ScrollView>(null);
   const accordionOffsets = useRef<Record<string, number>>({});
@@ -83,6 +84,19 @@ export default function FinGoScreen() {
   const collapseAccordion = useCallback(() => {
     setFocusedAssetId(null);
     setTimeout(() => scrollViewRef.current?.scrollTo({ y: 0, animated: true }), 50);
+  }, []);
+
+  const reloadRecordsForAsset = useCallback(async (assetId: string) => {
+    try {
+      const { data } = await supabase
+        .from('component_service_records')
+        .select('*')
+        .eq('asset_id', assetId)
+        .order('serviced_at', { ascending: false });
+      setRecordsByAsset((prev) => ({ ...prev, [assetId]: (data ?? []) as ComponentServiceRecord[] }));
+    } catch {
+      // silently fail
+    }
   }, []);
 
   // Asset create/edit modal
@@ -132,6 +146,11 @@ export default function FinGoScreen() {
     void loadAssets();
     void loadCategories();
   }, [loadAssets]);
+
+  useEffect(() => {
+    const id = setInterval(() => setTick((n) => n + 1), 60_000);
+    return () => clearInterval(id);
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
@@ -489,6 +508,10 @@ export default function FinGoScreen() {
             onComponentPress={(component) => navigation.push('ComponentDetail', { componentId: component.id, assetId: focusedAsset.id })}
             onIntervalPress={(interval, component) => navigation.push('ServiceIntervalDetail', { intervalId: interval.id, componentId: component.id, assetId: focusedAsset.id })}
             onAddService={() => handleAddService(focusedAsset)}
+            onEditServiceRecord={async (record, name, servicedAt, notes, cost) => {
+              await updateRecord(record.id, record.asset_id, { name, serviced_at: servicedAt, notes, cost });
+              await reloadRecordsForAsset(record.asset_id);
+            }}
             expanded
             onToggle={collapseAccordion}
             headerOnly
@@ -548,6 +571,10 @@ export default function FinGoScreen() {
             onComponentPress={(component) => navigation.push('ComponentDetail', { componentId: component.id, assetId: focusedAsset.id })}
             onIntervalPress={(interval, component) => navigation.push('ServiceIntervalDetail', { intervalId: interval.id, componentId: component.id, assetId: focusedAsset.id })}
             onAddService={() => handleAddService(focusedAsset)}
+            onEditServiceRecord={async (record, name, servicedAt, notes, cost) => {
+              await updateRecord(record.id, record.asset_id, { name, serviced_at: servicedAt, notes, cost });
+              await reloadRecordsForAsset(record.asset_id);
+            }}
             expanded
             onToggle={collapseAccordion}
             bodyOnly
@@ -559,6 +586,7 @@ export default function FinGoScreen() {
               partsByAsset={parts}
               componentsByAsset={componentsByAsset}
               intervals={intervals}
+              usageLogsByAsset={logs}
               sortOrder={sortOrder}
               onSortChange={setSortOrder}
               onServicePart={handleServicePart}
@@ -620,6 +648,10 @@ export default function FinGoScreen() {
                     });
                   }}
                   onAddService={() => handleAddService(asset)}
+                  onEditServiceRecord={async (record, name, servicedAt, notes, cost) => {
+                    await updateRecord(record.id, record.asset_id, { name, serviced_at: servicedAt, notes, cost });
+                    await reloadRecordsForAsset(record.asset_id);
+                  }}
                   expanded={false}
                   onToggle={() => {
                     setFocusedAssetId(asset.id);

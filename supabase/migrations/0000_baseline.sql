@@ -823,7 +823,7 @@ $$;
 CREATE OR REPLACE FUNCTION public.is_asset_member(p_asset_id UUID)
 RETURNS BOOLEAN
 LANGUAGE sql
-STABLE
+VOLATILE
 SECURITY DEFINER
 SET search_path = public
 AS $$

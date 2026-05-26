@@ -11,6 +11,9 @@ const config: CapacitorConfig = {
     backgroundColor: '#060A14',
   },
   plugins: {
+    LocalNotifications: {
+      smallIcon: 'ic_stat_name',
+    },
     StatusBar: {
       // #53E3A6 matches the PWA theme-color; DARK = dark icons on the light teal bg
       backgroundColor: '#53E3A6',

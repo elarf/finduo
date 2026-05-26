@@ -7,7 +7,7 @@
  *  - AuthProvider        : manages Supabase session state globally
  *  - RootNavigator       : handles logged-in vs logged-out navigation
  */
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { QueryClient } from '@tanstack/react-query';
@@ -18,7 +18,7 @@ import { Capacitor } from '@capacitor/core';
 import { App as CapacitorApp } from '@capacitor/app';
 import { AuthProvider } from './src/context/AuthContext';
 import RootNavigator from './src/navigation';
-import { navigationRef, setPendingShortcut, getPendingShortcut } from './src/navigation/navigationRef';
+import { navigationRef, setPendingShortcut, getPendingShortcut, getPendingNotification, setPendingNotification } from './src/navigation/navigationRef';
 import { setupNotificationActionListener } from './src/lib/fingo/notifications';
 
 const queryClient = new QueryClient({
@@ -84,11 +84,27 @@ export default function App() {
     return () => removeListener?.();
   }, []);
 
-  // Route the shortcut once nav is ready
+  // Route any pending shortcut or notification once nav is ready
   useEffect(() => {
     const interval = setInterval(() => {
-      const pending = getPendingShortcut();
-      if (pending && routeShortcut(pending)) {
+      if (!navigationRef.isReady()) return;
+
+      const shortcut = getPendingShortcut();
+      if (shortcut) {
+        routeShortcut(shortcut);
+      }
+
+      const notif = getPendingNotification();
+      if (notif) {
+        navigationRef.navigate('ServiceIntervalDetail', {
+          intervalId: notif.intervalId,
+          componentId: notif.componentId,
+          assetId: notif.assetId,
+        });
+        setPendingNotification(null);
+      }
+
+      if (!getPendingShortcut() && !getPendingNotification()) {
         clearInterval(interval);
       }
     }, 50);

@@ -20,7 +20,7 @@ import { supabase } from '../lib/supabase';
 import { logAPI, uiPath, uiProps } from '../lib/devtools';
 import { findTemplate } from '../lib/fingo/componentTemplates';
 import { getComponentIcon } from '../lib/fingo/componentIcons';
-import { computeIntervalHealth, formatIntervalRemaining, healthColor, getTrackingValue } from '../lib/fingo/health';
+import { computeIntervalHealthFromLogs, formatIntervalRemaining, healthColor, getTrackingValue } from '../lib/fingo/health';
 import { FINGO_ASSETS } from '../lib/fingo/fingoAssets';
 import { bottomInset } from '../lib/safeArea';
 import { registerBackHandler } from '../lib/capacitorBack';
@@ -128,6 +128,7 @@ export default function ComponentDetailScreen({ route }: Props) {
   const [statsExpanded, setStatsExpanded] = useState(false);
   const [showAllServices, setShowAllServices] = useState(false);
   const [showAllRides, setShowAllRides] = useState(false);
+  const [, setTick] = useState(0);
 
   // Android back button: close internal modals before navigating away
   const modalRef = useRef({ showActionSheet, showIntervalSheet, showRecordSheet, showLibrary, showComponentForm, showSwapModal });
@@ -172,6 +173,10 @@ export default function ComponentDetailScreen({ route }: Props) {
   useEffect(() => {
     if (asset) void loadRecords(asset.id);
   }, [asset, loadRecords]);
+  useEffect(() => {
+    const id = setInterval(() => setTick((n) => n + 1), 60_000);
+    return () => clearInterval(id);
+  }, []);
 
   // ─── Derived data ────────────────────────────────────────────────────────────
   const componentIntervals = intervals[componentId] ?? [];
@@ -341,7 +346,7 @@ export default function ComponentDetailScreen({ route }: Props) {
           </View>
           <View {...uiProps(uiPath('fingo', 'component_detail', 'identity_text'))} style={styles.identityText}>
             {templateInfo && (
-              <View style={styles.typeBadge}>
+              <View {...uiProps(uiPath('fingo', 'component_detail', 'type_badge'))} style={styles.typeBadge}>
                 <Text style={styles.typeText}>{templateInfo.name}</Text>
               </View>
             )}
@@ -385,7 +390,7 @@ export default function ComponentDetailScreen({ route }: Props) {
         </TouchableOpacity>
 
         {statsExpanded && (
-          <View style={styles.statsExpanded}>
+          <View {...uiProps(uiPath('fingo', 'component_detail', 'stats_expanded'))} style={styles.statsExpanded}>
             <View style={styles.statsGrid}>
               {[
                 { label: 'Distance', value: totalDistance > 0 ? `${totalDistance.toLocaleString(undefined, { maximumFractionDigits: 1 })} km` : '—' },
@@ -475,7 +480,7 @@ export default function ComponentDetailScreen({ route }: Props) {
           <Text style={styles.emptyText}>No intervals yet.</Text>
         ) : (
           componentIntervals.map((interval) => {
-            const health = computeIntervalHealth(interval, component);
+            const health = computeIntervalHealthFromLogs(interval, component, componentLogs, interval.last_serviced_at ?? null);
             const color = healthColor(health.remaining / interval.interval_value);
             return (
               <TouchableOpacity
@@ -641,20 +646,23 @@ export default function ComponentDetailScreen({ route }: Props) {
           <>
             {visibleRides.map((log) => (
               <View key={log.id} {...uiProps(uiPath('fingo', 'component_detail', 'ride_row', log.id))} style={styles.rideRow}>
-                <View style={styles.rideLeft}>
-                  <Text style={styles.rideDate}>
-                    {new Date(log.recorded_at).toLocaleString(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })}
-                  </Text>
-                  {log.notes ? <Text style={styles.rideNotes} numberOfLines={1}>{log.notes}</Text> : null}
-                </View>
-                <View style={styles.rideRight}>
-                  <Text style={styles.rideDist}>{log.usage_delta.toLocaleString(undefined, { maximumFractionDigits: 1 })} km</Text>
-                  {log.moving_time_delta != null && (
-                    <Text style={styles.rideMeta}>{formatLogTime(log.moving_time_delta)}</Text>
-                  )}
-                  {log.elevation_delta != null && (
-                    <Text style={styles.rideMeta}>+{Math.round(log.elevation_delta)} m</Text>
-                  )}
+                <Image source={FINGO_ASSETS.ride} style={styles.rideIcon} resizeMode="contain" />
+                <View style={styles.rideContent}>
+                  <View style={styles.rideLeft}>
+                    <Text style={styles.rideDate}>
+                      {new Date(log.recorded_at).toLocaleString(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                    </Text>
+                    {log.notes ? <Text style={styles.rideNotes} numberOfLines={1}>{log.notes}</Text> : null}
+                  </View>
+                  <View style={styles.rideRight}>
+                    <Text style={styles.rideDist}>{log.usage_delta.toLocaleString(undefined, { maximumFractionDigits: 1 })} km</Text>
+                    {log.moving_time_delta != null && (
+                      <Text style={styles.rideMeta}>{formatLogTime(log.moving_time_delta)}</Text>
+                    )}
+                    {log.elevation_delta != null && (
+                      <Text style={styles.rideMeta}>+{Math.round(log.elevation_delta)} m</Text>
+                    )}
+                  </View>
                 </View>
               </View>
             ))}
@@ -712,7 +720,7 @@ export default function ComponentDetailScreen({ route }: Props) {
                 const interval = componentIntervals.find((i) => i.id === id);
                 if (!interval) return Promise.resolve(false);
                 const currentValue = getTrackingValue(component, interval.tracking_method);
-                return markServiced(id, componentId, currentValue);
+                return markServiced(id, componentId, currentValue, servicedAt);
               }),
             );
           }
@@ -793,7 +801,7 @@ export default function ComponentDetailScreen({ route }: Props) {
           activeOpacity={1}
           onPress={() => setShowSwapModal(false)}
         />
-        <View style={styles.swapModalSheet}>
+        <View {...uiProps(uiPath('fingo', 'component_detail', 'swap_modal_sheet'))} style={styles.swapModalSheet}>
           <View style={styles.sheetHandle} />
           <Text style={styles.swapModalTitle}>{editingSwap ? 'Edit Swap' : 'Add Swap'}</Text>
 
@@ -825,10 +833,11 @@ export default function ComponentDetailScreen({ route }: Props) {
           />
 
           <View style={styles.swapModalActions}>
-            <TouchableOpacity style={styles.cancelBtn} onPress={() => setShowSwapModal(false)}>
+            <TouchableOpacity {...uiProps(uiPath('fingo', 'component_detail', 'swap_modal_cancel_button'))} style={styles.cancelBtn} onPress={() => setShowSwapModal(false)}>
               <Text style={styles.cancelText}>Cancel</Text>
             </TouchableOpacity>
             <TouchableOpacity
+              {...uiProps(uiPath('fingo', 'component_detail', 'swap_modal_save_button'))}
               style={[styles.saveBtn, (!swapInstalledAt || swapSaving) && styles.saveBtnDisabled]}
               onPress={() => void handleSaveSwap()}
               disabled={!swapInstalledAt || swapSaving}
@@ -1188,13 +1197,13 @@ const styles = StyleSheet.create({
   // Services
   serviceRow: {
     flexDirection: 'row',
-    alignItems: 'stretch',
+    alignItems: 'center',
     borderBottomWidth: 1,
     borderColor: '#0E1A2B',
   },
   serviceTypeIcon: {
     width: 44,
-    alignSelf: 'stretch',
+    height: 44,
     flexShrink: 0,
   },
   serviceBody: {
@@ -1238,9 +1247,19 @@ const styles = StyleSheet.create({
   rideRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 8,
     borderBottomWidth: 1,
     borderColor: '#0E1A2B',
+  },
+  rideIcon: {
+    width: 44,
+    height: 44,
+  },
+  rideContent: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingLeft: 8,
     gap: 8,
   },
   rideLeft: { flex: 1 },

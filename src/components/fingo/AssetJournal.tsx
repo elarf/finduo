@@ -27,9 +27,10 @@ interface Props {
   serviceRecords: ComponentServiceRecord[];
   assetType: string;
   onRidePress?: (log: UsageLog) => void;
+  onServicePress?: (record: ComponentServiceRecord) => void;
 }
 
-export default function AssetJournal({ usageLogs, serviceRecords, assetType, onRidePress }: Props) {
+export default function AssetJournal({ usageLogs, serviceRecords, assetType, onRidePress, onServicePress }: Props) {
   const [displayedCount, setDisplayedCount] = useState(6);
   const [loadMoreClicks, setLoadMoreClicks] = useState(0);
 
@@ -132,6 +133,7 @@ export default function AssetJournal({ usageLogs, serviceRecords, assetType, onR
           <ServiceGroupRow
             key={`service-group-${entry.hourKey}`}
             entry={entry}
+            onServicePress={onServicePress}
           />
         );
       })}
@@ -156,7 +158,7 @@ export default function AssetJournal({ usageLogs, serviceRecords, assetType, onR
   );
 }
 
-function ServiceGroupRow({ entry }: { entry: Extract<JournalEntry, { type: 'service_group' }> }) {
+function ServiceGroupRow({ entry, onServicePress }: { entry: Extract<JournalEntry, { type: 'service_group' }>; onServicePress?: (record: ComponentServiceRecord) => void }) {
   const [expanded, setExpanded] = useState(false);
 
   return (
@@ -174,7 +176,13 @@ function ServiceGroupRow({ entry }: { entry: Extract<JournalEntry, { type: 'serv
       </TouchableOpacity>
 
       {expanded && entry.services.map((service) => (
-        <View key={service.id} style={styles.serviceRow}>
+        <TouchableOpacity
+          key={service.id}
+          style={styles.serviceRow}
+          {...uiProps(uiPath('fingo', 'asset_accordion', 'service_record_row', service.id))}
+          onPress={() => onServicePress?.(service)}
+          activeOpacity={0.7}
+        >
           <Image source={FINGO_ASSETS.fix} style={styles.serviceTypeIcon} resizeMode="contain" />
           <View style={styles.serviceBody}>
             <Text style={styles.serviceName}>{service.name}</Text>
@@ -183,12 +191,15 @@ function ServiceGroupRow({ entry }: { entry: Extract<JournalEntry, { type: 'serv
             </Text>
             {service.notes ? <Text style={styles.serviceNotes} numberOfLines={2}>{service.notes}</Text> : null}
           </View>
-          {service.cost != null && (
-            <Text style={styles.serviceCost}>
-              {service.cost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-            </Text>
-          )}
-        </View>
+          <View style={styles.serviceRight}>
+            {service.cost != null && (
+              <Text style={styles.serviceCost}>
+                {service.cost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </Text>
+            )}
+            <Text style={styles.editHint}>tap to edit</Text>
+          </View>
+        </TouchableOpacity>
       ))}
     </View>
   );
@@ -204,14 +215,14 @@ const styles = StyleSheet.create({
   // Ride rows
   rideRow: {
     flexDirection: 'row',
-    alignItems: 'stretch',
+    alignItems: 'center',
     backgroundColor: '#000000',
     borderBottomWidth: 1,
     borderColor: '#0E1A2B',
   },
   logRideImage: {
     width: 44,
-    alignSelf: 'stretch',
+    height: 44,
     backgroundColor: '#000000',
   },
   logRowContent: {
@@ -263,7 +274,7 @@ const styles = StyleSheet.create({
   // Service rows (expanded)
   serviceRow: {
     flexDirection: 'row',
-    alignItems: 'stretch',
+    alignItems: 'center',
     borderBottomWidth: 1,
     borderColor: '#0E1A2B',
     paddingRight: 8,
@@ -271,7 +282,7 @@ const styles = StyleSheet.create({
   },
   serviceTypeIcon: {
     width: 44,
-    alignSelf: 'stretch',
+    height: 44,
     flexShrink: 0,
   },
   serviceBody: {
@@ -300,6 +311,15 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     alignSelf: 'flex-end',
     paddingRight: 4,
+  },
+  serviceRight: {
+    alignItems: 'flex-end',
+    gap: 4,
+    paddingRight: 4,
+  },
+  editHint: {
+    color: '#334155',
+    fontSize: 9,
   },
   // Pagination
   loadMoreBtn: {

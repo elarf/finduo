@@ -1,12 +1,12 @@
 import React, { useMemo, useState } from 'react';
 import { View, Text, FlatList, TouchableOpacity, StyleSheet } from 'react-native';
 import {
-  computePartHealth, computeIntervalHealth,
+  computePartHealth, computeIntervalHealthFromLogs,
   formatRemaining, formatIntervalRemaining, healthColor,
 } from '../../lib/fingo/health';
 import type {
   FinGoAsset, AssetPart, Component, ComponentServiceInterval,
-  FinGoSortOrder, PartHealth,
+  FinGoSortOrder, UsageLog,
 } from '../../types/fingo';
 import { uiPath, uiProps, logUI } from '../../lib/devtools';
 
@@ -25,6 +25,7 @@ type Props = {
   partsByAsset: Record<string, AssetPart[]>;
   componentsByAsset?: Record<string, Component[]>;
   intervals?: Record<string, ComponentServiceInterval[]>;
+  usageLogsByAsset?: Record<string, UsageLog[]>;
   sortOrder: FinGoSortOrder;
   onSortChange: (order: FinGoSortOrder) => void;
   onServicePart: (part: AssetPart, asset: FinGoAsset) => void;
@@ -36,6 +37,7 @@ export default function ServiceDashboard({
   partsByAsset,
   componentsByAsset,
   intervals,
+  usageLogsByAsset,
   sortOrder,
   onSortChange,
   onServicePart,
@@ -70,7 +72,8 @@ export default function ServiceDashboard({
           if (comp.status !== 'installed') continue;
           const compIntervals = intervals[comp.id] ?? [];
           for (const interval of compIntervals) {
-            const health = computeIntervalHealth(interval, comp);
+            const assetLogs = usageLogsByAsset?.[asset.id] ?? [];
+            const health = computeIntervalHealthFromLogs(interval, comp, assetLogs, interval.last_serviced_at ?? null);
             all.push({
               id: `interval-${interval.id}`,
               assetName: asset.name,
@@ -96,7 +99,7 @@ export default function ServiceDashboard({
           return a.healthRatio - b.healthRatio;
         });
     }
-  }, [assets, partsByAsset, componentsByAsset, intervals, sortOrder, onServicePart, onLogServiceInterval]);
+  }, [assets, partsByAsset, componentsByAsset, intervals, usageLogsByAsset, sortOrder, onServicePart, onLogServiceInterval]);
 
   return (
     <View {...uiProps(uiPath('fingo', 'service_dashboard', 'container'))} style={styles.container}>

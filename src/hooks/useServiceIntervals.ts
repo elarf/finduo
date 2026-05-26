@@ -81,12 +81,15 @@ export function useServiceIntervals() {
     intervalId: string,
     componentId: string,
     currentValue: number,
+    servicedAt?: string | null,
   ): Promise<boolean> => {
     try {
       logAPI('supabase://component_service_intervals', { source: 'fingo.component_row', action: 'markServiced' });
+      const patch: Record<string, unknown> = { last_serviced_value: currentValue };
+      if (servicedAt) patch.last_serviced_at = servicedAt;
       const { error } = await supabase
         .from('component_service_intervals')
-        .update({ last_serviced_value: currentValue })
+        .update(patch)
         .eq('id', intervalId);
       if (error) throw error;
       cancelIntervalNotifications([intervalId]).catch(() => {});

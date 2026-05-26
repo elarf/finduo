@@ -56,13 +56,21 @@ export function useAssets(user: User | null) {
     try {
       logAPI('supabase://assets', { source: 'fingo.asset_list.add_button', action: 'createAsset' });
       const usageUnit = type === 'shoe' ? 'steps' : type === 'other' ? 'units' : 'km';
-      const { data, error } = await supabase
-        .from('assets')
-        .insert({ name, type, usage_unit: usageUnit, current_usage: 0, created_by: user.id, icon: icon ?? null, notes: notes ?? null })
-        .select()
-        .single();
-      if (error) throw error;
+      const { data: newId, error: rpcError } = await supabase.rpc('create_asset', {
+        p_name: name,
+        p_type: type,
+        p_usage_unit: usageUnit,
+        p_icon: icon ?? null,
+        p_notes: notes ?? null,
+      });
+      if (rpcError) throw rpcError;
       await loadAssets();
+      const { data, error: selectError } = await supabase
+        .from('assets')
+        .select()
+        .eq('id', newId)
+        .single();
+      if (selectError) throw selectError;
       return (data ?? null) as FinGoAsset | null;
     } catch (err) {
       webAlert('Error', err instanceof Error ? err.message : 'Failed to create asset');

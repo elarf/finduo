@@ -56,6 +56,26 @@ export function useServiceRecords(user: User | null) {
     }
   }, [user, loadRecords]);
 
+  const updateRecord = useCallback(async (
+    id: string,
+    assetId: string,
+    fields: { name: string; serviced_at: string; notes: string | null; cost: number | null },
+  ): Promise<boolean> => {
+    try {
+      logAPI('supabase://component_service_records', { source: 'fingo.service_record_sheet', action: 'update' });
+      const { error } = await supabase
+        .from('component_service_records')
+        .update({ name: fields.name, serviced_at: fields.serviced_at, notes: fields.notes, cost: fields.cost })
+        .eq('id', id);
+      if (error) throw error;
+      await loadRecords(assetId);
+      return true;
+    } catch (err) {
+      webAlert('Error', err instanceof Error ? err.message : 'Failed to update service record');
+      return false;
+    }
+  }, [loadRecords]);
+
   const deleteRecord = useCallback(async (id: string, assetId: string): Promise<boolean> => {
     try {
       logAPI('supabase://component_service_records', { source: 'fingo.asset_accordion.stats', action: 'deleteRecord' });
@@ -71,5 +91,5 @@ export function useServiceRecords(user: User | null) {
 
   const totalServiceCost = records.reduce((sum, r) => sum + (r.cost ?? 0), 0);
 
-  return { records, totalServiceCost, loadRecords, createRecord, deleteRecord };
+  return { records, totalServiceCost, loadRecords, createRecord, updateRecord, deleteRecord };
 }

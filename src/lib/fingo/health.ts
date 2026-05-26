@@ -10,6 +10,7 @@ import type {
   IntervalHealth,
   PartHealth,
   TrackingMethod,
+  UsageLog,
 } from '../../types/fingo';
 
 // ─── Legacy asset-part health ─────────────────────────────────────────────────
@@ -98,16 +99,70 @@ export function computeIntervalHealth(
 }
 
 /**
+ * Compute health by summing usage_logs recorded after lastServiceDate.
+ * Use this when date-accurate progress is needed (e.g. after editing ride/service dates).
+ * Falls back to computeIntervalHealth when lastServiceDate is null.
+ * elapsed_time intervals track wall-clock hours, not ride activity.
+ */
+export function computeIntervalHealthFromLogs(
+  interval: ComponentServiceInterval,
+  component: Component,
+  logs: UsageLog[],
+  lastServiceDate: string | null,
+): IntervalHealth {
+  if (!lastServiceDate) {
+    if (interval.tracking_method === 'elapsed_time' && component.installed_at) {
+      const totalSinceService = (Date.now() - new Date(component.installed_at).getTime()) / (1000 * 60 * 60);
+      const remaining = interval.interval_value - totalSinceService;
+      return { interval, totalSinceService, remaining, isWarning: totalSinceService >= interval.interval_value * 0.8, isOverdue: remaining <= 0 };
+    }
+    return computeIntervalHealth(interval, component);
+  }
+  const cutoff = new Date(lastServiceDate);
+  const relevantLogs = logs.filter((l) => new Date(l.recorded_at) > cutoff);
+
+  let totalSinceService = 0;
+  switch (interval.tracking_method) {
+    case 'distance':
+      totalSinceService = relevantLogs.reduce((s, l) => s + (l.usage_delta ?? 0), 0);
+      break;
+    case 'moving_time':
+      totalSinceService = relevantLogs.reduce((s, l) => s + (l.moving_time_delta ?? 0), 0) / 60;
+      break;
+    case 'elapsed_time':
+      // Wall-clock hours since last service date, not just ride activity time
+      totalSinceService = (Date.now() - cutoff.getTime()) / (1000 * 60 * 60);
+      break;
+    case 'rides':
+      totalSinceService = relevantLogs.length;
+      break;
+    case 'elevation_gain':
+      totalSinceService = relevantLogs.reduce((s, l) => s + (l.elevation_delta ?? 0), 0);
+      break;
+  }
+
+  const remaining = interval.interval_value - totalSinceService;
+  const isWarning = totalSinceService >= interval.interval_value * 0.8;
+  return { interval, totalSinceService, remaining, isWarning, isOverdue: remaining <= 0 };
+}
+
+/**
  * Return the most urgent interval health for a component (highest % consumed).
  * Returns null if there are no intervals.
+ * Pass logs to enable date-based calculation (uses last_serviced_at per interval).
  */
 export function worstIntervalHealth(
   intervals: ComponentServiceInterval[],
   component: Component,
+  logs?: UsageLog[],
 ): IntervalHealth | null {
   if (intervals.length === 0) return null;
   return intervals
-    .map((i) => computeIntervalHealth(i, component))
+    .map((i) =>
+      logs
+        ? computeIntervalHealthFromLogs(i, component, logs, i.last_serviced_at ?? null)
+        : computeIntervalHealth(i, component),
+    )
     .sort((a, b) => {
       const pctA = a.totalSinceService / a.interval.interval_value;
       const pctB = b.totalSinceService / b.interval.interval_value;
@@ -115,11 +170,41 @@ export function worstIntervalHealth(
     })[0] ?? null;
 }
 
+/**
+ * Format a duration given in hours using the most readable unit:
+ * < 1 h  → "Xm"
+ * < 24 h → "Xh" or "Xh Ym"
+ * < 1 y  → "Xd Yh"
+ * ≥ 1 y  → "Xy Zd"
+ */
+export function formatTimeHours(hours: number): string {
+  if (hours < 1) {
+    return `${Math.round(hours * 60)}m`;
+  }
+  if (hours < 24) {
+    const h = Math.floor(hours);
+    const m = Math.round((hours - h) * 60);
+    return m > 0 ? `${h}h ${m}m` : `${h}h`;
+  }
+  const days = Math.floor(hours / 24);
+  if (days < 365) {
+    const h = Math.round(hours % 24);
+    return h > 0 ? `${days}d ${h}h` : `${days}d`;
+  }
+  const years = Math.floor(days / 365);
+  const remDays = days % 365;
+  return remDays > 0 ? `${years}y ${remDays}d` : `${years}y`;
+}
+
 /** Format a service interval remaining value for display */
 export function formatIntervalRemaining(health: IntervalHealth): string {
   if (health.isOverdue) return 'Overdue';
-  const unit = trackingMethodUnit(health.interval.tracking_method);
-  const val = health.interval.tracking_method === 'rides'
+  const { tracking_method } = health.interval;
+  if (tracking_method === 'moving_time' || tracking_method === 'elapsed_time') {
+    return formatTimeHours(health.remaining);
+  }
+  const unit = trackingMethodUnit(tracking_method);
+  const val = tracking_method === 'rides'
     ? Math.round(health.remaining)
     : Math.round(health.remaining * 10) / 10;
   return `${val.toLocaleString()} ${unit}`;

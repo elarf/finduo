@@ -145,6 +145,7 @@ export type ComponentServiceInterval = {
   tracking_method: TrackingMethod;
   interval_value: number;
   last_serviced_value: number;
+  last_serviced_at?: string | null;
   created_at: string;
   service_type: ServiceIntervalType;
 };

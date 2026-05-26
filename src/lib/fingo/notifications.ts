@@ -1,8 +1,8 @@
 import { Capacitor } from '@capacitor/core';
 import { supabase } from '../supabase';
-import { navigationRef } from '../../navigation/navigationRef';
-import { computeIntervalHealth, formatIntervalRemaining, trackingMethodUnit } from './health';
-import type { Component, ComponentServiceInterval } from '../../types/fingo';
+import { navigationRef, setPendingNotification } from '../../navigation/navigationRef';
+import { computeIntervalHealthFromLogs, formatIntervalRemaining, trackingMethodUnit } from './health';
+import type { Component, ComponentServiceInterval, UsageLog } from '../../types/fingo';
 
 const CHANNEL_ID = 'fingo_service_due';
 
@@ -61,12 +61,19 @@ export function setupNotificationActionListener(): void {
         | { intervalId?: string; componentId?: string; assetId?: string }
         | undefined;
       if (!extra?.intervalId || !extra?.componentId || !extra?.assetId) return;
-      if (!navigationRef.isReady()) return;
-      navigationRef.navigate('ServiceIntervalDetail', {
-        intervalId: extra.intervalId,
-        componentId: extra.componentId,
-        assetId: extra.assetId,
-      });
+      if (navigationRef.isReady()) {
+        navigationRef.navigate('ServiceIntervalDetail', {
+          intervalId: extra.intervalId,
+          componentId: extra.componentId,
+          assetId: extra.assetId,
+        });
+      } else {
+        setPendingNotification({
+          intervalId: extra.intervalId,
+          componentId: extra.componentId,
+          assetId: extra.assetId,
+        });
+      }
     }).catch(() => {});
   }).catch(() => {});
 }
@@ -92,10 +99,18 @@ export async function notifyDueIntervals(
 
   if (!intervals || intervals.length === 0) return;
 
+  const { data: logsData } = await supabase
+    .from('usage_logs')
+    .select('*')
+    .eq('asset_id', assetId)
+    .order('recorded_at', { ascending: false });
+  const usageLogs = (logsData ?? []) as UsageLog[];
+
   const toSchedule: {
     id: number;
     title: string;
     body: string;
+    smallIcon: string;
     channelId: string;
     schedule: { at: Date };
     extra: { intervalId: string; componentId: string; assetId: string };
@@ -106,7 +121,7 @@ export async function notifyDueIntervals(
     const comp = components.find(c => c.id === interval.component_id);
     if (!comp) continue;
 
-    const health = computeIntervalHealth(interval, comp as Component);
+    const health = computeIntervalHealthFromLogs(interval, comp as Component, usageLogs, interval.last_serviced_at ?? null);
     const notifId = intervalNotifId(interval.id);
 
     if (!health.isWarning && !health.isOverdue) {
@@ -124,6 +139,7 @@ export async function notifyDueIntervals(
       body: health.isOverdue
         ? `${comp.name}: overdue by ${overdueBy} ${unit}`
         : `${comp.name}: ${formatIntervalRemaining(health)} remaining`,
+      smallIcon: 'ic_stat_name',
       channelId: CHANNEL_ID,
       schedule: { at: new Date(Date.now() + 1000) },
       extra: { intervalId: interval.id, componentId: interval.component_id, assetId },

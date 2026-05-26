@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert, Platform, Modal, Image,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import type { NativeStackNavigationProp, NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';
@@ -13,7 +13,7 @@ import ServiceIntervalSheet from '../components/fingo/ServiceIntervalSheet';
 import AppHeader from '../components/AppHeader';
 import { supabase } from '../lib/supabase';
 import {
-  computeIntervalHealth, formatIntervalRemaining, healthColor, getTrackingValue,
+  computeIntervalHealthFromLogs, formatIntervalRemaining, formatTimeHours, healthColor, getTrackingValue,
   trackingMethodLabel, trackingMethodUnit,
 } from '../lib/fingo/health';
 import { FINGO_ASSETS } from '../lib/fingo/fingoAssets';
@@ -21,7 +21,7 @@ import { bottomInset } from '../lib/safeArea';
 import { registerBackHandler } from '../lib/capacitorBack';
 import { uiPath, uiProps } from '../lib/devtools';
 import type { RootStackParamList } from '../navigation';
-import type { Component, ComponentServiceInterval, ServiceIntervalType } from '../types/fingo';
+import type { Component, ComponentServiceInterval, ServiceIntervalType, ComponentServiceRecord, UsageLog } from '../types/fingo';
 
 const SERVICE_TYPE_ICONS: Record<ServiceIntervalType, any> = {
   general:  FINGO_ASSETS.fix,
@@ -41,23 +41,27 @@ export default function ServiceIntervalDetailScreen({ route }: Props) {
   const { bottom } = useSafeAreaInsets();
 
   const { intervals, loadIntervals, deleteInterval, markServiced, updateInterval } = useServiceIntervals();
-  const { records, createRecord, loadRecords } = useServiceRecords(user);
+  const { records, createRecord, loadRecords, updateRecord } = useServiceRecords(user);
 
   const [component, setComponent] = useState<Component | null>(null);
   const [loading, setLoading] = useState(true);
+  const [assetLogs, setAssetLogs] = useState<UsageLog[]>([]);
   const [showRecordSheet, setShowRecordSheet] = useState(false);
+  const [editingRecord, setEditingRecord] = useState<ComponentServiceRecord | null>(null);
   const [showActionsModal, setShowActionsModal] = useState(false);
   const [showIntervalSheet, setShowIntervalSheet] = useState(false);
+  const [, setTick] = useState(0);
 
   // Android back button: close internal modals before navigating away
-  const modalRef = useRef({ showRecordSheet, showActionsModal, showIntervalSheet });
+  const modalRef = useRef({ showRecordSheet, showActionsModal, showIntervalSheet, editingRecord });
   useEffect(() => {
-    modalRef.current = { showRecordSheet, showActionsModal, showIntervalSheet };
+    modalRef.current = { showRecordSheet, showActionsModal, showIntervalSheet, editingRecord };
   });
   useEffect(() => registerBackHandler(() => {
     const m = modalRef.current;
     if (m.showIntervalSheet) { setShowIntervalSheet(false); return true; }
     if (m.showRecordSheet) { setShowRecordSheet(false); return true; }
+    if (m.editingRecord) { setEditingRecord(null); return true; }
     if (m.showActionsModal) { setShowActionsModal(false); return true; }
     navigation.goBack(); return true;
   }), []);
@@ -67,8 +71,12 @@ export default function ServiceIntervalDetailScreen({ route }: Props) {
   const loadAll = useCallback(async () => {
     setLoading(true);
     try {
-      const { data } = await supabase.from('components').select('*').eq('id', componentId).single();
-      if (data) setComponent(data as Component);
+      const [compRes, logsRes] = await Promise.all([
+        supabase.from('components').select('*').eq('id', componentId).single(),
+        supabase.from('usage_logs').select('*').eq('asset_id', assetId).order('recorded_at', { ascending: false }),
+      ]);
+      if (compRes.data) setComponent(compRes.data as Component);
+      setAssetLogs((logsRes.data ?? []) as UsageLog[]);
       await loadIntervals(componentId);
       await loadRecords(assetId);
     } finally {
@@ -77,6 +85,18 @@ export default function ServiceIntervalDetailScreen({ route }: Props) {
   }, [componentId, assetId, loadIntervals, loadRecords]);
 
   useEffect(() => { void loadAll(); }, [loadAll]);
+
+  useEffect(() => {
+    const id = setInterval(() => setTick((n) => n + 1), 60_000);
+    return () => clearInterval(id);
+  }, []);
+
+  // Reload logs on focus so edits made to rides elsewhere are reflected immediately
+  useFocusEffect(useCallback(() => {
+    supabase.from('usage_logs').select('*').eq('asset_id', assetId)
+      .order('recorded_at', { ascending: false })
+      .then(({ data }) => { if (data) setAssetLogs(data as UsageLog[]); });
+  }, [assetId]));
 
   const handleDelete = useCallback(() => {
     if (!interval) return;
@@ -103,16 +123,17 @@ export default function ServiceIntervalDetailScreen({ route }: Props) {
     );
   }
 
-  const health = computeIntervalHealth(interval, component);
+  const health = computeIntervalHealthFromLogs(interval, component, assetLogs, interval.last_serviced_at ?? null);
   const healthRatio = Math.max(0, Math.min(1, health.remaining / interval.interval_value));
   const color = healthColor(health.remaining / interval.interval_value);
   const barWidth = `${healthRatio * 100}%` as any;
 
   return (
-    <View style={styles.screen}>
+    <View {...uiProps(uiPath('fingo', 'service_interval_detail', 'screen', intervalId))} style={styles.screen}>
       <AppHeader onBack={() => navigation.goBack()} />
 
       <ScrollView
+        {...uiProps(uiPath('fingo', 'service_interval_detail', 'scroll'))}
         style={styles.scroll}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: bottomInset(24, bottom) }]}
         showsVerticalScrollIndicator={false}
@@ -131,17 +152,19 @@ export default function ServiceIntervalDetailScreen({ route }: Props) {
         </View>
 
         {/* ── Progress bar ──────────────────────────────────────────────────── */}
-        <View style={styles.progressCard}>
+        <View {...uiProps(uiPath('fingo', 'service_interval_detail', 'progress_card'))} style={styles.progressCard}>
           <View style={styles.progressBarTrack}>
             <View style={[styles.progressBarFill, { width: barWidth, backgroundColor: color }]} />
           </View>
 
-          <View style={styles.progressFooter}>
+          <View {...uiProps(uiPath('fingo', 'service_interval_detail', 'progress_footer'))} style={styles.progressFooter}>
             <Text style={[styles.progressRemaining, { color }]}>
               {formatIntervalRemaining(health)}
             </Text>
             <Text style={styles.progressInterval}>
-              / {interval.interval_value.toLocaleString()} {trackingMethodUnit(interval.tracking_method)}
+              / {(interval.tracking_method === 'moving_time' || interval.tracking_method === 'elapsed_time')
+                ? formatTimeHours(interval.interval_value)
+                : `${interval.interval_value.toLocaleString()} ${trackingMethodUnit(interval.tracking_method)}`}
             </Text>
             {health.isOverdue && (
               <View style={styles.overdueBadge}>
@@ -150,18 +173,20 @@ export default function ServiceIntervalDetailScreen({ route }: Props) {
             )}
           </View>
 
-          <View style={styles.progressMeta}>
+          <View {...uiProps(uiPath('fingo', 'service_interval_detail', 'progress_meta'))} style={styles.progressMeta}>
             <Text style={styles.progressMetaText}>
               Tracked by: {trackingMethodLabel(interval.tracking_method)}
             </Text>
             <Text style={styles.progressMetaText}>
-              Since service: {health.totalSinceService.toLocaleString(undefined, { maximumFractionDigits: 1 })} {trackingMethodUnit(interval.tracking_method)}
+              Since service: {(interval.tracking_method === 'moving_time' || interval.tracking_method === 'elapsed_time')
+                ? formatTimeHours(health.totalSinceService)
+                : `${health.totalSinceService.toLocaleString(undefined, { maximumFractionDigits: 1 })} ${trackingMethodUnit(interval.tracking_method)}`}
             </Text>
           </View>
         </View>
 
         {/* ── Action buttons ─────────────────────────────────────────────────── */}
-        <View style={styles.actionRow}>
+        <View {...uiProps(uiPath('fingo', 'service_interval_detail', 'action_row'))} style={styles.actionRow}>
           <TouchableOpacity
             {...uiProps(uiPath('fingo', 'service_interval_detail', 'add_service_button'))}
             style={styles.addServiceBtn}
@@ -171,6 +196,7 @@ export default function ServiceIntervalDetailScreen({ route }: Props) {
             <Text style={styles.addServiceText}>Add Service</Text>
           </TouchableOpacity>
           <TouchableOpacity
+            {...uiProps(uiPath('fingo', 'service_interval_detail', 'actions_button'))}
             style={styles.actionsBtn}
             onPress={() => setShowActionsModal(true)}
           >
@@ -183,14 +209,14 @@ export default function ServiceIntervalDetailScreen({ route }: Props) {
           const componentRecords = records.filter((r) => r.component_id === componentId);
           return (
             <>
-              <View style={styles.sectionHeader}>
+              <View {...uiProps(uiPath('fingo', 'service_interval_detail', 'section_services'))} style={styles.sectionHeader}>
                 <Text style={styles.sectionTitle}>Services</Text>
               </View>
               {componentRecords.length === 0 ? (
                 <Text style={styles.emptyText}>No services logged yet.</Text>
               ) : (
                 componentRecords.map((rec) => (
-                  <View key={rec.id} style={styles.serviceRow}>
+                  <TouchableOpacity key={rec.id} {...uiProps(uiPath('fingo', 'service_interval_detail', 'service_record_row', rec.id))} style={styles.serviceRow} onPress={() => setEditingRecord(rec)} activeOpacity={0.7}>
                     <Image source={SERVICE_TYPE_ICONS[interval.service_type ?? 'general']} style={styles.serviceTypeIcon} resizeMode="contain" />
                     <View style={styles.serviceBody}>
                       <Text style={styles.serviceName}>{rec.name}</Text>
@@ -199,12 +225,15 @@ export default function ServiceIntervalDetailScreen({ route }: Props) {
                       </Text>
                       {rec.notes ? <Text style={styles.serviceNotes} numberOfLines={2}>{rec.notes}</Text> : null}
                     </View>
-                    {rec.cost != null && (
-                      <Text style={styles.serviceCost}>
-                        {rec.cost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </Text>
-                    )}
-                  </View>
+                    <View style={styles.serviceRight}>
+                      {rec.cost != null && (
+                        <Text style={styles.serviceCost}>
+                          {rec.cost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </Text>
+                      )}
+                      <Text style={styles.editHint}>tap to edit</Text>
+                    </View>
+                  </TouchableOpacity>
                 ))
               )}
             </>
@@ -214,20 +243,42 @@ export default function ServiceIntervalDetailScreen({ route }: Props) {
 
       {/* ── Service record sheet ──────────────────────────────────────────────── */}
       <ServiceRecordSheet
-        visible={showRecordSheet}
+        visible={showRecordSheet || !!editingRecord}
+        editingRecord={editingRecord ?? undefined}
         componentName={component.name}
-        intervals={[interval]}
-        component={component}
+        intervals={editingRecord ? undefined : [interval]}
+        component={editingRecord ? undefined : component}
         onSave={async (name, servicedAt, notes, cost, selectedIntervalIds) => {
-          await createRecord(assetId, componentId, name, servicedAt, notes, cost);
-          if (selectedIntervalIds.includes(interval.id)) {
-            const currentValue = getTrackingValue(component, interval.tracking_method);
-            await markServiced(interval.id, componentId, currentValue);
+          if (editingRecord) {
+            await updateRecord(editingRecord.id, assetId, { name, serviced_at: servicedAt, notes: notes ?? null, cost: cost ?? null });
+            // Re-derive last_serviced_at from the most recent service record after the edit
+            const { data: freshRecords } = await supabase
+              .from('component_service_records')
+              .select('serviced_at')
+              .eq('component_id', componentId)
+              .order('serviced_at', { ascending: false })
+              .limit(1);
+            const newLatestDate = (freshRecords as { serviced_at: string }[] | null)?.[0]?.serviced_at ?? null;
+            await supabase
+              .from('component_service_intervals')
+              .update({ last_serviced_at: newLatestDate })
+              .eq('id', interval.id);
             await loadIntervals(componentId);
+          } else {
+            await createRecord(assetId, componentId, name, servicedAt, notes, cost);
+            if (selectedIntervalIds.includes(interval.id)) {
+              const currentValue = getTrackingValue(component, interval.tracking_method);
+              await markServiced(interval.id, componentId, currentValue, servicedAt);
+              await loadIntervals(componentId);
+            }
           }
-          await loadRecords(assetId);
+          const [logsRes] = await Promise.all([
+            supabase.from('usage_logs').select('*').eq('asset_id', assetId).order('recorded_at', { ascending: false }),
+            loadRecords(assetId),
+          ]);
+          setAssetLogs((logsRes.data ?? []) as UsageLog[]);
         }}
-        onClose={() => setShowRecordSheet(false)}
+        onClose={() => { setShowRecordSheet(false); setEditingRecord(null); }}
       />
 
       <ServiceIntervalSheet
@@ -255,16 +306,18 @@ export default function ServiceIntervalDetailScreen({ route }: Props) {
           activeOpacity={1}
           onPress={() => setShowActionsModal(false)}
         />
-        <View style={styles.actionsSheet}>
+        <View {...uiProps(uiPath('fingo', 'service_interval_detail', 'actions_sheet'))} style={styles.actionsSheet}>
           <View style={styles.sheetHandle} />
           <Text style={styles.actionsTitle} numberOfLines={1}>{interval.name}</Text>
           <TouchableOpacity
+            {...uiProps(uiPath('fingo', 'service_interval_detail', 'edit_interval_button'))}
             style={styles.actionSheetRow}
             onPress={() => { setShowActionsModal(false); setShowIntervalSheet(true); }}
           >
             <Text style={styles.actionSheetText}>✎  Edit interval</Text>
           </TouchableOpacity>
           <TouchableOpacity
+            {...uiProps(uiPath('fingo', 'service_interval_detail', 'delete_interval_button'))}
             style={styles.actionSheetRow}
             onPress={() => { setShowActionsModal(false); handleDelete(); }}
           >
@@ -463,13 +516,13 @@ const styles = StyleSheet.create({
   },
   serviceRow: {
     flexDirection: 'row',
-    alignItems: 'stretch',
+    alignItems: 'center',
     borderBottomWidth: 1,
     borderColor: '#0E1A2B',
   },
   serviceTypeIcon: {
     width: 44,
-    alignSelf: 'stretch',
+    height: 44,
     flexShrink: 0,
   },
   serviceBody: {
@@ -496,5 +549,14 @@ const styles = StyleSheet.create({
     color: '#f87171',
     fontSize: 12,
     fontWeight: '700',
+  },
+  serviceRight: {
+    alignItems: 'flex-end',
+    gap: 4,
+    paddingRight: 4,
+  },
+  editHint: {
+    color: '#334155',
+    fontSize: 9,
   },
 });

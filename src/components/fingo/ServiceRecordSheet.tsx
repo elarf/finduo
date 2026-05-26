@@ -4,7 +4,7 @@ import {
   KeyboardAvoidingView, Platform, ScrollView,
 } from 'react-native';
 import { uiPath, uiProps, logUI } from '../../lib/devtools';
-import type { ComponentServiceInterval, Component } from '../../types/fingo';
+import type { ComponentServiceInterval, Component, ComponentServiceRecord } from '../../types/fingo';
 import {
   computeIntervalHealth, formatIntervalRemaining, healthColor,
 } from '../../lib/fingo/health';
@@ -22,6 +22,8 @@ interface Props {
   component?: Component | null;
   /** When provided, shows intervals from multiple components (asset-level service). */
   allIntervals?: IntervalWithComponent[];
+  /** When provided, the sheet opens in edit mode pre-populated with this record. */
+  editingRecord?: ComponentServiceRecord;
   onSave: (
     name: string,
     servicedAt: string,
@@ -43,7 +45,7 @@ function toTimeStr(d: Date): string {
 }
 
 export default function ServiceRecordSheet({
-  visible, componentName, intervals, component, allIntervals, onSave, onClose,
+  visible, componentName, intervals, component, allIntervals, editingRecord, onSave, onClose,
 }: Props) {
   const [name, setName] = useState('');
   const [nameIsManual, setNameIsManual] = useState(false);
@@ -56,14 +58,25 @@ export default function ServiceRecordSheet({
 
   useEffect(() => {
     if (visible) {
-      setName('');
-      setNameIsManual(false);
-      const now = new Date();
-      setServiceDate(toDateStr(now));
-      setServiceTime(toTimeStr(now));
-      setNotes('');
-      setCostStr('');
-      setSelectedIds(new Set());
+      if (editingRecord) {
+        setName(editingRecord.name);
+        setNameIsManual(true);
+        const d = new Date(editingRecord.serviced_at);
+        setServiceDate(toDateStr(d));
+        setServiceTime(toTimeStr(d));
+        setNotes(editingRecord.notes ?? '');
+        setCostStr(editingRecord.cost != null ? String(editingRecord.cost) : '');
+        setSelectedIds(new Set());
+      } else {
+        setName('');
+        setNameIsManual(false);
+        const now = new Date();
+        setServiceDate(toDateStr(now));
+        setServiceTime(toTimeStr(now));
+        setNotes('');
+        setCostStr('');
+        setSelectedIds(new Set());
+      }
     }
   }, [visible]);
 
@@ -133,11 +146,11 @@ export default function ServiceRecordSheet({
         <TouchableOpacity style={styles.backdrop} activeOpacity={1} onPress={onClose} />
         <View style={styles.sheet}>
           <View style={styles.handle} />
-          <Text style={styles.title}>Log Service</Text>
+          <Text style={styles.title}>{editingRecord ? 'Edit Service' : 'Log Service'}</Text>
           {componentName && <Text style={styles.subtitle}>{componentName}</Text>}
 
           <ScrollView bounces={false} keyboardShouldPersistTaps="handled">
-            {hasIntervals && (
+            {hasIntervals && !editingRecord && (
               <>
                 <Text style={styles.label}>
                   Service intervals <Text style={styles.optional}>(select what was done)</Text>

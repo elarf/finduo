@@ -5,6 +5,7 @@ import {
 } from 'react-native';
 import ComponentIcon from './ComponentIcon';
 import AssetJournal from './AssetJournal';
+import ServiceRecordSheet from './ServiceRecordSheet';
 import type { User } from '@supabase/supabase-js';
 import type {
   FinGoAsset, AssetPart, AssetType, ComponentNode,
@@ -16,7 +17,7 @@ import AssetCategoryPicker from './AssetCategoryPicker';
 import ComponentActionSheet from './ComponentActionSheet';
 import type { ComponentActionType } from './ComponentActionSheet';
 import {
-  computeIntervalHealth, healthColor, formatIntervalRemaining, worstIntervalHealth,
+  computeIntervalHealthFromLogs, healthColor, formatIntervalRemaining, worstIntervalHealth,
 } from '../../lib/fingo/health';
 import { getComponentIcon } from '../../lib/fingo/componentIcons';
 import { FINGO_ASSETS } from '../../lib/fingo/fingoAssets';
@@ -62,6 +63,7 @@ type Props = {
   onComponentPress: (component: Component) => void;
   onIntervalPress: (interval: ComponentServiceInterval, component: Component) => void;
   onAddService: () => void;
+  onEditServiceRecord?: (record: ComponentServiceRecord, name: string, servicedAt: string, notes: string | null, cost: number | null) => Promise<void>;
   expanded: boolean;
   onToggle: () => void;
   headerOnly?: boolean;
@@ -111,6 +113,7 @@ export default function AssetAccordion({
   onComponentPress,
   onIntervalPress,
   onAddService,
+  onEditServiceRecord,
   expanded,
   onToggle,
   headerOnly = false,
@@ -118,6 +121,7 @@ export default function AssetAccordion({
 }: Props) {
   const [showUsageModal, setShowUsageModal] = useState(false);
   const [editingLog, setEditingLog] = useState<UsageLog | null>(null);
+  const [editingServiceRecord, setEditingServiceRecord] = useState<ComponentServiceRecord | null>(null);
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
   const [showAssetActions, setShowAssetActions] = useState(false);
   const [actionSheetComp, setActionSheetComp] = useState<Component | null>(null);
@@ -271,7 +275,7 @@ export default function AssetAccordion({
             componentTree.map((node) => {
               const comp = node.component;
               const compIntervals = intervals[comp.id] ?? [];
-              const worst = worstIntervalHealth(compIntervals, comp);
+              const worst = worstIntervalHealth(compIntervals, comp, usageLogs);
               const dotColor = worst ? healthColor(worst.remaining / worst.interval.interval_value) : '#4ade80';
               const childCount = node.children.length;
               return (
@@ -338,7 +342,7 @@ export default function AssetAccordion({
             <Text style={styles.emptyText}>No intervals yet. Add them per component.</Text>
           ) : (
             allIntervals.map(({ interval, component }) => {
-              const health = computeIntervalHealth(interval, component);
+              const health = computeIntervalHealthFromLogs(interval, component, usageLogs, interval.last_serviced_at ?? null);
               const color = healthColor(health.remaining / interval.interval_value);
               return (
                 <TouchableOpacity
@@ -441,6 +445,7 @@ export default function AssetAccordion({
             serviceRecords={serviceRecords}
             assetType={asset.type}
             onRidePress={(log) => setEditingLog(log)}
+            onServicePress={(rec) => setEditingServiceRecord(rec)}
           />
         </View>
       )}
@@ -458,6 +463,18 @@ export default function AssetAccordion({
             await onLogUsage(entry);
           }
         }}
+      />
+
+      <ServiceRecordSheet
+        visible={!!editingServiceRecord}
+        editingRecord={editingServiceRecord ?? undefined}
+        onSave={async (name, servicedAt, notes, cost) => {
+          if (editingServiceRecord && onEditServiceRecord) {
+            await onEditServiceRecord(editingServiceRecord, name, servicedAt, notes ?? null, cost ?? null);
+          }
+          setEditingServiceRecord(null);
+        }}
+        onClose={() => setEditingServiceRecord(null)}
       />
 
       <AssetCategoryPicker

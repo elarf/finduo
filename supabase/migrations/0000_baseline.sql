@@ -341,7 +341,7 @@ CREATE TABLE IF NOT EXISTS public.component_service_intervals (
   interval_value      NUMERIC     NOT NULL,
   last_serviced_value NUMERIC     NOT NULL DEFAULT 0,
   service_type        TEXT        NOT NULL DEFAULT 'general'
-                                  CHECK (service_type IN ('general', 'replace', 'cleaning', 'charge')),
+                                  CHECK (service_type IN ('general', 'replace', 'cleaning', 'charge', 'pump')),
   created_at          TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 

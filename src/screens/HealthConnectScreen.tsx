@@ -353,8 +353,7 @@ export default function HealthConnectScreen() {
       if (activeBike) void pruneHCDuplicateLogs(activeBike);
       if (activeShoe) void pruneHCDuplicateLogs(activeShoe);
     })();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [records, assets]);
+  }, [records, assets, attachedIds, addUsageLog, loadAssets, pruneHCDuplicateLogs]);
 
   const openAttachSheet = useCallback((r: HCRecord) => {
     setAttachRecord(r);

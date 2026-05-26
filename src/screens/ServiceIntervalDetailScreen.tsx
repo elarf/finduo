@@ -466,13 +466,11 @@ const styles = StyleSheet.create({
     alignItems: 'stretch',
     borderBottomWidth: 1,
     borderColor: '#0E1A2B',
-    maxHeight: 65,
   },
   serviceTypeIcon: {
     width: 44,
     alignSelf: 'stretch',
     flexShrink: 0,
-    maxHeight: 65,
   },
   serviceBody: {
     flex: 1,

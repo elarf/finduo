@@ -6,15 +6,11 @@ Financial tracking app for couples and shared households. Track income, expenses
 
 ---
 
-## Latest Release — v1.3.0
+## Latest Release — v1.4.0
 
-- **Active asset designation** — mark one bike, shoe, or vehicle as active per type; active badge shown in the accordion header; `setActiveAsset` auto-deactivates siblings
-- **HealthConnect auto-attach** — cycling sessions auto-logged to the active bike; daily steps auto-logged to the active shoe; dismissable banner shows count
-- **Edit usage logs** — tap any ride log row to open it in edit mode; fields pre-populated; `updateLog` patches the record and adjusts asset totals
-- **Custom timestamps** — date & time fields in the log modal allow backdating; HealthConnect entries use actual activity start time
-- **Service interval notifications** — local notifications fire when a component interval is due or overdue after logging usage (native only)
-- **Back button image** — `back.png` used across `DashboardHeader`, `ComponentDetailScreen`, and `ServiceIntervalDetailScreen`
-- **Android back handler** — `ComponentDetailScreen` and `ServiceIntervalDetailScreen` register modal-priority back handlers
+- **Asset journal** — unified chronological view mixing rides and services; services grouped by the hour they occurred with expand/collapse; pagination with "Load More", "Show More", and "Show All" buttons
+- **Service row height normalization** — service rows in `ServiceIntervalDetailScreen` now display full height without truncation; notes and metadata fully visible
+- **Improved debugging** — journal makes it easy to spot duplicated Health Connect data by showing exact sequence of rides and services
 
 Full history: [PATCHNOTES.md](./PATCHNOTES.md)
 

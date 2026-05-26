@@ -3,7 +3,7 @@ import {
   View, Text, ScrollView, TouchableOpacity,
   StyleSheet, Modal, TextInput, Platform, Alert,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -26,7 +26,7 @@ import ServiceRecordSheet from '../components/fingo/ServiceRecordSheet';
 import type { ComponentActionType } from '../components/fingo/ComponentActionSheet';
 import type {
   FinGoAsset, AssetPart, AssetType, FinGoSortOrder,
-  Component, ComponentServiceInterval, ComponentTemplate,
+  Component, ComponentServiceInterval, ComponentTemplate, ComponentServiceRecord,
 } from '../types/fingo';
 
 type IntervalWithComponent = { interval: ComponentServiceInterval; component: Component };import type { AppCategory } from '../types/dashboard';
@@ -61,7 +61,7 @@ export default function FinGoScreen() {
     retireComponent, deleteComponent, moveComponent, replaceComponent,
   } = useComponents(user);
   const { intervals, loadIntervals, createInterval, updateInterval, markServiced, deleteInterval } = useServiceIntervals();
-  const { createRecord } = useServiceRecords(user);
+  const { records: allServiceRecords, loadRecords, createRecord } = useServiceRecords(user);
 
   useHCAutoSync();
 
@@ -70,6 +70,7 @@ export default function FinGoScreen() {
   const [sortOrder, setSortOrder] = useState<FinGoSortOrder>('deadline');
   const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
   const [focusedAssetId, setFocusedAssetId] = useState<string | null>(null);
+  const [recordsByAsset, setRecordsByAsset] = useState<Record<string, ComponentServiceRecord[]>>({});
 
   const scrollViewRef = useRef<ScrollView>(null);
   const accordionOffsets = useRef<Record<string, number>>({});
@@ -132,12 +133,31 @@ export default function FinGoScreen() {
     void loadCategories();
   }, [loadAssets]);
 
+  useFocusEffect(
+    useCallback(() => {
+      void loadAssets();
+      void loadCategories();
+    }, [loadAssets]),
+  );
+
   useEffect(() => {
     for (const asset of assets) {
       void loadParts(asset.id);
       void loadAssetStats(asset.id);
       void loadComponents(asset.id);
       void loadLogs(asset.id);
+      void (async () => {
+        try {
+          const { data } = await supabase
+            .from('component_service_records')
+            .select('*')
+            .eq('asset_id', asset.id)
+            .order('serviced_at', { ascending: false });
+          setRecordsByAsset((prev) => ({ ...prev, [asset.id]: (data ?? []) as ComponentServiceRecord[] }));
+        } catch (err) {
+          // silently fail, service records are optional
+        }
+      })();
     }
   }, [assets, loadParts, loadAssetStats, loadComponents, loadLogs]);
 
@@ -151,6 +171,14 @@ export default function FinGoScreen() {
       void loadIntervals(id);
     }
   }, [componentIdStr, loadIntervals]);
+
+  useFocusEffect(
+    useCallback(() => {
+      for (const id of componentIdStr.split(',').filter(Boolean)) {
+        void loadIntervals(id);
+      }
+    }, [componentIdStr, loadIntervals]),
+  );
 
   const loadCategories = async () => {
     const { data } = await supabase.from('categories').select('*');
@@ -440,6 +468,7 @@ export default function FinGoScreen() {
             linkedCategoryIds={categoryLinks[focusedAsset.id] ?? []}
             transactions={transactions[focusedAsset.id] ?? []}
             usageLogs={logs[focusedAsset.id] ?? []}
+            serviceRecords={recordsByAsset[focusedAsset.id] ?? []}
             categories={categories}
             onLogUsage={async (entry) => {
               await addUsageLog(focusedAsset, entry);
@@ -498,6 +527,7 @@ export default function FinGoScreen() {
             linkedCategoryIds={categoryLinks[focusedAsset.id] ?? []}
             transactions={transactions[focusedAsset.id] ?? []}
             usageLogs={logs[focusedAsset.id] ?? []}
+            serviceRecords={recordsByAsset[focusedAsset.id] ?? []}
             categories={categories}
             onLogUsage={async (entry) => {
               await addUsageLog(focusedAsset, entry);
@@ -554,6 +584,7 @@ export default function FinGoScreen() {
                   linkedCategoryIds={categoryLinks[asset.id] ?? []}
                   transactions={transactions[asset.id] ?? []}
                   usageLogs={logs[asset.id] ?? []}
+                  serviceRecords={recordsByAsset[asset.id] ?? []}
                   categories={categories}
                   onLogUsage={async (entry) => {
                     await addUsageLog(asset, entry);

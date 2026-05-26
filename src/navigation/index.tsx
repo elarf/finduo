@@ -1,8 +1,8 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Image, View } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { navigationRef } from './navigationRef';
+import { navigationRef, getPendingShortcut } from './navigationRef';
 import { initCapacitorBackButton } from '../lib/capacitorBack';
 import { useAuth } from '../context/AuthContext';
 import { DashboardProvider } from '../context/DashboardContext';
@@ -61,12 +61,17 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
 
 export default function RootNavigator() {
   const { session, loading } = useAuth();
+  const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
     initCapacitorBackButton();
   }, []);
 
-  if (loading) {
+  // Keep showing the loading screen while there's a pending shortcut
+  const hasPendingShortcut = getPendingShortcut() !== null;
+  const showLoadingScreen = loading || (hasPendingShortcut && !isReady);
+
+  if (showLoadingScreen) {
     return (
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#000000' }}>
         <Image
@@ -79,7 +84,7 @@ export default function RootNavigator() {
   }
 
   return (
-    <NavigationContainer ref={navigationRef}>
+    <NavigationContainer ref={navigationRef} onReady={() => setIsReady(true)}>
       {session ? (
         <DashboardProvider>
           <Stack.Navigator screenOptions={{ headerShown: false }}>

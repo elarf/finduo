@@ -18,7 +18,7 @@ import { Capacitor } from '@capacitor/core';
 import { App as CapacitorApp } from '@capacitor/app';
 import { AuthProvider } from './src/context/AuthContext';
 import RootNavigator from './src/navigation';
-import { navigationRef } from './src/navigation/navigationRef';
+import { navigationRef, setPendingShortcut, getPendingShortcut } from './src/navigation/navigationRef';
 import { setupNotificationActionListener } from './src/lib/fingo/notifications';
 
 const queryClient = new QueryClient({
@@ -43,17 +43,20 @@ function routeShortcut(shortcutId: string) {
   switch (shortcutId) {
     case 'add_expense':
       navigationRef.navigate('Dashboard', { prefillEntry: { type: 'expense' } });
+      setPendingShortcut(null);
       break;
     case 'fingo':
       navigationRef.navigate('FinGo');
+      setPendingShortcut(null);
       break;
+    default:
+      setPendingShortcut(null);
+      return false;
   }
   return true;
 }
 
 export default function App() {
-  const pendingShortcutRef = useRef<string | null>(null);
-
   useEffect(() => {
     setupNotificationActionListener();
   }, []);
@@ -64,9 +67,7 @@ export default function App() {
     const handleShortcutUrl = (url: string) => {
       if (!url.includes('://shortcut/')) return;
       const id = url.split('://shortcut/')[1];
-      if (!routeShortcut(id)) {
-        pendingShortcutRef.current = id;
-      }
+      setPendingShortcut(id);
     };
 
     // Cold start: app launched from shortcut tap
@@ -83,18 +84,16 @@ export default function App() {
     return () => removeListener?.();
   }, []);
 
-  // Drain pending shortcut once the NavigationContainer is ready
+  // Route the shortcut once nav is ready
   useEffect(() => {
-    if (!pendingShortcutRef.current) return;
     const interval = setInterval(() => {
-      const pending = pendingShortcutRef.current;
+      const pending = getPendingShortcut();
       if (pending && routeShortcut(pending)) {
-        pendingShortcutRef.current = null;
         clearInterval(interval);
       }
-    }, 100);
+    }, 50);
     return () => clearInterval(interval);
-  });
+  }, []);
 
   return (
     <PersistQueryClientProvider

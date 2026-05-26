@@ -907,7 +907,7 @@ const styles = StyleSheet.create({
   statsSummaryBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#0B1728',
+    backgroundColor: '#000000',
     borderRadius: 10,
     borderWidth: 1,
     borderColor: '#1F3A59',
@@ -1092,7 +1092,7 @@ const styles = StyleSheet.create({
   intervalRow: {
     flexDirection: 'row',
     alignItems: 'stretch',
-    backgroundColor: '#0E1A2B',
+    backgroundColor: '#000000',
     borderRadius: 8,
     borderWidth: 1,
     borderColor: '#1F3A59',

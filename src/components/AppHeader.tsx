@@ -48,7 +48,7 @@ export default function AppHeader({ onBack, rightElement }: Props) {
           onPress={handleBack}
           {...uiProps(uiPath('app_header', 'back_button', 'touchable'))}
         >
-          <Text style={s.backArrow}>‹</Text>
+          <Image source={require('../assets/fingo/back.png')} style={{ width: 22, height: 22 }} resizeMode="contain" />
         </TouchableOpacity>
       ) : (
         <TouchableOpacity

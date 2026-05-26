@@ -4,10 +4,11 @@ import {
   ScrollView, Alert, Platform, Image, ImageSourcePropType, Modal,
 } from 'react-native';
 import ComponentIcon from './ComponentIcon';
+import AssetJournal from './AssetJournal';
 import type { User } from '@supabase/supabase-js';
 import type {
   FinGoAsset, AssetPart, AssetType, ComponentNode,
-  ComponentServiceInterval, ServiceIntervalType, Component, UsageLog, UsageEntry,
+  ComponentServiceInterval, ServiceIntervalType, Component, UsageLog, UsageEntry, ComponentServiceRecord,
 } from '../../types/fingo';import type { AppCategory, AppTransaction } from '../../types/dashboard';
 import { useDashboard } from '../../context/DashboardContext';
 import UsageLogModal from './UsageLogModal';
@@ -46,6 +47,7 @@ type Props = {
   linkedCategoryIds: string[];
   transactions: AppTransaction[];
   usageLogs: UsageLog[];
+  serviceRecords?: ComponentServiceRecord[];
   categories: AppCategory[];
   onLogUsage: (entry: UsageEntry) => Promise<void>;
   onEditLog: (log: UsageLog, entry: UsageEntry) => Promise<void>;
@@ -94,6 +96,7 @@ export default function AssetAccordion({
   linkedCategoryIds,
   transactions,
   usageLogs,
+  serviceRecords = [],
   categories,
   onLogUsage,
   onEditLog,
@@ -421,9 +424,9 @@ export default function AssetAccordion({
             </View>
           )}
 
-          {/* ── Rides ─────────────────────────────────────────────────────────── */}
+          {/* ── Journal (Rides & Services) ───────────────────────────────── */}
           <View style={[styles.sectionHeader, styles.sectionHeaderMt]}>
-            <Text style={styles.sectionTitle}>Rides</Text>
+            <Text style={styles.sectionTitle}>Journal</Text>
             <TouchableOpacity
               {...uiProps(uiPath('fingo', 'asset_accordion', 'add_ride_button', asset.id))}
               style={styles.sectionAddBtn}
@@ -433,50 +436,12 @@ export default function AssetAccordion({
             </TouchableOpacity>
           </View>
 
-          {usageLogs.length === 0 ? (
-            <Text style={styles.emptyText}>No rides logged yet.</Text>
-          ) : (
-            usageLogs.map((log) => (
-              <TouchableOpacity
-                key={log.id}
-                {...uiProps(uiPath('fingo', 'asset_accordion', 'ride_log_row', log.id))}
-                style={styles.logRow}
-                onPress={() => setEditingLog(log)}
-                activeOpacity={0.7}
-              >
-                <Image source={FINGO_ASSETS.ride} style={styles.logRideImage} resizeMode="contain" />
-                <View style={styles.logRowContent}>
-                  <View style={styles.logLeft}>
-                    <Text style={styles.logDate}>
-                      {new Date(log.recorded_at).toLocaleString(undefined, {
-                        month: 'short', day: 'numeric', year: 'numeric',
-                        hour: 'numeric', minute: '2-digit',
-                      })}
-                    </Text>
-                    {log.notes ? (
-                      <Text style={styles.logNotes} numberOfLines={1}>{log.notes}</Text>
-                    ) : null}
-                  </View>
-                  <View style={styles.logRight}>
-                    {asset.type === 'shoe' ? (
-                      <Text style={styles.logDelta}>+{log.usage_delta.toLocaleString()} steps</Text>
-                    ) : (
-                      <>
-                        <Text style={styles.logDelta}>+{log.usage_delta.toLocaleString()} km</Text>
-                        {log.moving_time_delta != null && (
-                          <Text style={styles.logMeta}>{formatMovingTime(log.moving_time_delta)}</Text>
-                        )}
-                        {asset.type === 'bike' && log.elevation_delta != null && (
-                          <Text style={styles.logMeta}>+{log.elevation_delta.toLocaleString()} m</Text>
-                        )}
-                      </>
-                    )}
-                    <Text style={styles.logEditHint}>tap to edit</Text>
-                  </View>
-                </View>
-              </TouchableOpacity>
-            ))
-          )}
+          <AssetJournal
+            usageLogs={usageLogs}
+            serviceRecords={serviceRecords}
+            assetType={asset.type}
+            onRidePress={(log) => setEditingLog(log)}
+          />
         </View>
       )}
 

@@ -4,6 +4,33 @@
 
 ---
 
+## [1.4.0] — 2026-05-26
+
+### Features
+
+#### FinGo — Asset Journal with Service Grouping
+
+- Replaced "Rides" section with a unified **Journal** showing all asset interactions (rides and services) in chronological order
+- **Rides**: Display existing format with distance, time, elevation data; tap any ride row to edit
+- **Services**: Group services by the hour they occurred; collapsed view shows service count + time; tap to expand and see individual service details
+- **Pagination**: Show 6 entries initially with "Load More" button (adds 6 per click); after 2 clicks, replace "Load More" with "Show More" and "Show All" buttons side-by-side
+- Journal mixes rides and services chronologically (newest first), making it easy to identify data duplication issues from Health Connect sync
+
+#### FinGo — Service Row Height Normalization
+
+- `ServiceIntervalDetailScreen` now displays full-height service rows (removed `maxHeight: 65` constraint)
+- Service rows grow naturally based on content (notes/metadata), matching the flexible height behavior in `ComponentDetailScreen`
+- Long service notes now fully visible without truncation across all service-display screens
+
+### Technical
+
+- `src/components/fingo/AssetJournal.tsx` — new component for mixed rides & services with grouping and pagination
+- `src/components/fingo/AssetAccordion.tsx` — replaced "Rides" section with `<AssetJournal />` component; added `serviceRecords` prop
+- `src/screens/FinGoScreen.tsx` — loads service records per asset from Supabase; passes `recordsByAsset` to all `AssetAccordion` instances
+- `src/screens/ServiceIntervalDetailScreen.tsx` — removed `maxHeight: 65` from `serviceRow` and `serviceTypeIcon` styles
+
+---
+
 ## [1.3.0] — 2026-05-19
 
 ### Features

@@ -14,6 +14,18 @@ export function getPendingShortcut(): string | null {
   return pendingShortcutId;
 }
 
+// Set to true once getLaunchUrl() has been checked (or immediately on web).
+// RootNavigator polls this before deciding if a shortcut is pending.
+let launchReady = false;
+
+export function setLaunchReady() {
+  launchReady = true;
+}
+
+export function isLaunchReady(): boolean {
+  return launchReady;
+}
+
 // Track a notification tap that arrived before navigation was ready
 export type PendingNotification = { intervalId: string; componentId: string; assetId: string };
 let pendingNotification: PendingNotification | null = null;

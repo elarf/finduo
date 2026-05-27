@@ -1,36 +1,44 @@
 import { useCallback, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 import { logAPI, webAlert } from '../lib/devtools';
 import { isMissingTableError } from '../types/dashboard';
 import type { User } from '@supabase/supabase-js';
 import type { FinGoAsset, AssetMember, AssetType } from '../types/fingo';
 
-export function useAssets(user: User | null) {
-  const [assets, setAssets] = useState<FinGoAsset[]>([]);
-  const [members, setMembers] = useState<Record<string, AssetMember[]>>({});
-  const [loading, setLoading] = useState(false);
+export const fingoAssetsQueryKey = (userId: string | undefined) =>
+  ['fingo_assets', userId] as const;
 
+export async function fetchAssets(userId: string): Promise<FinGoAsset[]> {
+  logAPI('supabase://assets', { source: 'fingo.asset_list.scroll_view', action: 'loadAssets' });
+  const { data, error } = await supabase
+    .from('assets')
+    .select('*')
+    .order('created_at', { ascending: false });
+  if (error) {
+    if (isMissingTableError(error)) return [];
+    throw error;
+  }
+  return (data ?? []) as FinGoAsset[];
+}
+
+export function useAssets(user: User | null) {
+  const queryClient = useQueryClient();
+  const userId = user?.id;
+
+  const { data: assets = [], isLoading: loading } = useQuery({
+    queryKey: fingoAssetsQueryKey(userId),
+    queryFn: () => fetchAssets(userId!),
+    enabled: !!userId,
+  });
+
+  const [members, setMembers] = useState<Record<string, AssetMember[]>>({});
+
+  // Kept as a callable for compatibility — invalidates the cache, triggering
+  // a background refetch while immediately serving whatever is cached.
   const loadAssets = useCallback(async () => {
-    if (!user) return;
-    setLoading(true);
-    try {
-      logAPI('supabase://assets', { source: 'fingo.asset_list.scroll_view', action: 'loadAssets' });
-      // RLS ensures we only see assets we're a member of
-      const { data, error } = await supabase
-        .from('assets')
-        .select('*')
-        .order('created_at', { ascending: false });
-      if (error) throw error;
-      setAssets((data ?? []) as FinGoAsset[]);
-    } catch (err) {
-      if (!isMissingTableError(err)) {
-        webAlert('Error', err instanceof Error ? err.message : 'Failed to load assets');
-      }
-      // missing table → just stay empty until migration is run
-    } finally {
-      setLoading(false);
-    }
-  }, [user]);
+    await queryClient.invalidateQueries({ queryKey: fingoAssetsQueryKey(userId) });
+  }, [queryClient, userId]);
 
   const loadAssetMembers = useCallback(async (assetId: string) => {
     try {
@@ -101,7 +109,6 @@ export function useAssets(user: User | null) {
     if (!user) return false;
     try {
       logAPI('supabase://assets', { source: 'fingo.asset_modal.set_active', action: 'setActiveAsset' });
-      // Deactivate all other assets of the same type for this user
       await supabase
         .from('assets')
         .update({ is_active: false })

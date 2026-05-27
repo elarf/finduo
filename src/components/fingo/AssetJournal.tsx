@@ -2,9 +2,17 @@ import React, { useMemo, useState } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, Image,
 } from 'react-native';
-import type { UsageLog, ComponentServiceRecord } from '../../types/fingo';
+import type { UsageLog, ComponentServiceRecord, ServiceIntervalType } from '../../types/fingo';
 import { FINGO_ASSETS } from '../../lib/fingo/fingoAssets';
 import { uiPath, uiProps } from '../../lib/devtools';
+
+const SERVICE_TYPE_ICONS: Record<ServiceIntervalType, any> = {
+  general:  FINGO_ASSETS.fix,
+  replace:  FINGO_ASSETS.change,
+  cleaning: FINGO_ASSETS.wipe,
+  charge:   FINGO_ASSETS.charge,
+  pump:     FINGO_ASSETS.pressure,
+};
 
 type JournalEntry =
   | { type: 'ride'; log: UsageLog }
@@ -183,7 +191,7 @@ function ServiceGroupRow({ entry, onServicePress }: { entry: Extract<JournalEntr
           onPress={() => onServicePress?.(service)}
           activeOpacity={0.7}
         >
-          <Image source={FINGO_ASSETS.fix} style={styles.serviceTypeIcon} resizeMode="contain" />
+          <Image source={SERVICE_TYPE_ICONS[service.service_type ?? 'general']} style={styles.serviceTypeIcon} resizeMode="contain" />
           <View style={styles.serviceBody}>
             <Text style={styles.serviceName}>{service.name}</Text>
             <Text style={styles.serviceMeta}>

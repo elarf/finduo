@@ -18,6 +18,7 @@ import { useServiceRecords } from '../hooks/useServiceRecords';
 import ServiceDashboard from '../components/fingo/ServiceDashboard';
 import AssetAccordion from '../components/fingo/AssetAccordion';
 import GoButton from '../components/fingo/GoButton';
+import TrackingPanel from '../components/fingo/TrackingPanel';
 import DashboardHeader from '../components/dashboard/layout/DashboardHeader';
 import ComponentLibrarySheet from '../components/fingo/ComponentLibrarySheet';
 import ComponentFormSheet from '../components/fingo/ComponentFormSheet';
@@ -37,6 +38,8 @@ import { setupFinGoChannels } from '../lib/fingo/notifications';
 import { registerBackHandler } from '../lib/capacitorBack';
 import { bottomInset } from '../lib/safeArea';
 import { useHCAutoSync } from '../hooks/useHCAutoSync';
+import { useFinGoSnapshot } from '../hooks/useFinGoSnapshot';
+import { useGpsTracking } from '../hooks/useGpsTracking';
 
 const ASSET_TYPES: AssetType[] = ['vehicle', 'motorbike', 'bike', 'shoe', 'other'];
 
@@ -52,6 +55,16 @@ export default function FinGoScreen() {
   const { logs, loadLogs, addUsageLog, updateLog } = useUsageLogs(user);
   const { categoryLinks, transactions, loadAssetStats, linkCategory, unlinkCategory } = useAssetTransactions();
 
+  // ─── GPS Tracking ────────────────────────────────────────────────────────────
+  const {
+    activeSession: trackingSession,
+    liveDistance,
+    liveElapsed,
+    startTracking,
+    stopTracking,
+  } = useGpsTracking(user?.id ?? null);
+  const isTracking = !!trackingSession;
+
   // ─── New component hooks ──────────────────────────────────────────────────────
   const {
     componentsByAsset, storageComponents, getTree, getAllComponents,
@@ -64,6 +77,7 @@ export default function FinGoScreen() {
   const { records: allServiceRecords, loadRecords, createRecord, updateRecord } = useServiceRecords(user);
 
   useHCAutoSync();
+  const { refreshSnapshot } = useFinGoSnapshot(assets, componentsByAsset, intervals);
 
   // ─── UI state ─────────────────────────────────────────────────────────────────
   const [categories, setCategories] = useState<AppCategory[]>([]);
@@ -75,6 +89,14 @@ export default function FinGoScreen() {
 
   const scrollViewRef = useRef<ScrollView>(null);
   const accordionOffsets = useRef<Record<string, number>>({});
+
+  const handleGoPress = useCallback(async () => {
+    if (isTracking) {
+      await stopTracking();
+    } else {
+      await startTracking(selectedAssetId);
+    }
+  }, [isTracking, stopTracking, startTracking, selectedAssetId]);
 
   const focusedAsset = useMemo(
     () => (focusedAssetId ? (assets.find((a) => a.id === focusedAssetId) ?? null) : null),
@@ -508,8 +530,8 @@ export default function FinGoScreen() {
             onComponentPress={(component) => navigation.push('ComponentDetail', { componentId: component.id, assetId: focusedAsset.id })}
             onIntervalPress={(interval, component) => navigation.push('ServiceIntervalDetail', { intervalId: interval.id, componentId: component.id, assetId: focusedAsset.id })}
             onAddService={() => handleAddService(focusedAsset)}
-            onEditServiceRecord={async (record, name, servicedAt, notes, cost) => {
-              await updateRecord(record.id, record.asset_id, { name, serviced_at: servicedAt, notes, cost });
+            onEditServiceRecord={async (record, name, servicedAt, notes, cost, serviceType) => {
+              await updateRecord(record.id, record.asset_id, { name, serviced_at: servicedAt, notes, cost, service_type: serviceType ?? record.service_type ?? 'general' });
               await reloadRecordsForAsset(record.asset_id);
             }}
             expanded
@@ -571,8 +593,8 @@ export default function FinGoScreen() {
             onComponentPress={(component) => navigation.push('ComponentDetail', { componentId: component.id, assetId: focusedAsset.id })}
             onIntervalPress={(interval, component) => navigation.push('ServiceIntervalDetail', { intervalId: interval.id, componentId: component.id, assetId: focusedAsset.id })}
             onAddService={() => handleAddService(focusedAsset)}
-            onEditServiceRecord={async (record, name, servicedAt, notes, cost) => {
-              await updateRecord(record.id, record.asset_id, { name, serviced_at: servicedAt, notes, cost });
+            onEditServiceRecord={async (record, name, servicedAt, notes, cost, serviceType) => {
+              await updateRecord(record.id, record.asset_id, { name, serviced_at: servicedAt, notes, cost, service_type: serviceType ?? record.service_type ?? 'general' });
               await reloadRecordsForAsset(record.asset_id);
             }}
             expanded
@@ -648,8 +670,8 @@ export default function FinGoScreen() {
                     });
                   }}
                   onAddService={() => handleAddService(asset)}
-                  onEditServiceRecord={async (record, name, servicedAt, notes, cost) => {
-                    await updateRecord(record.id, record.asset_id, { name, serviced_at: servicedAt, notes, cost });
+                  onEditServiceRecord={async (record, name, servicedAt, notes, cost, serviceType) => {
+                    await updateRecord(record.id, record.asset_id, { name, serviced_at: servicedAt, notes, cost, service_type: serviceType });
                     await reloadRecordsForAsset(record.asset_id);
                   }}
                   expanded={false}
@@ -666,6 +688,12 @@ export default function FinGoScreen() {
         )}
       </ScrollView>
 
+      <TrackingPanel
+        isActive={isTracking}
+        liveElapsed={liveElapsed}
+        liveDistance={liveDistance}
+      />
+
       {/* Bottom bar */}
       <View {...uiProps(uiPath('fingo', 'bottom_bar', 'container'))} style={[styles.bottomBar, { paddingBottom: bottomInset(12, bottom) }]}>
         <TouchableOpacity
@@ -679,14 +707,22 @@ export default function FinGoScreen() {
           <Text style={styles.bottomBarIcon}>💚</Text>
           <Text style={styles.bottomBarLabel}>Data</Text>
         </TouchableOpacity>
-        <GoButton assetId={selectedAssetId} />
+        <GoButton
+          assetId={selectedAssetId}
+          isTracking={isTracking}
+          gpsReady={true}
+          onPress={() => { void handleGoPress(); }}
+        />
         <TouchableOpacity
-          {...uiProps(uiPath('fingo', 'bottom_bar', 'stats_button'))}
+          {...uiProps(uiPath('fingo', 'bottom_bar', 'journey_button'))}
           style={styles.bottomBarButton}
-          onPress={() => logUI(uiPath('fingo', 'bottom_bar', 'stats_button'), 'press')}
+          onPress={() => {
+            logUI(uiPath('fingo', 'bottom_bar', 'journey_button'), 'press');
+            navigation.push('Journey');
+          }}
         >
-          <Text style={styles.bottomBarIcon}>📊</Text>
-          <Text style={styles.bottomBarLabel}>Stats</Text>
+          <Text style={styles.bottomBarIcon}>🗺️</Text>
+          <Text style={styles.bottomBarLabel}>Journey</Text>
         </TouchableOpacity>
       </View>
 
@@ -791,7 +827,7 @@ export default function FinGoScreen() {
         intervals={activeComponent ? (intervals[activeComponent.id] ?? []) : []}
         component={activeComponent}
         allIntervals={pendingAllIntervals.length > 0 ? pendingAllIntervals : undefined}
-        onSave={async (name, servicedAt, notes, cost, selectedIntervalIds) => {
+        onSave={async (name, servicedAt, notes, cost, selectedIntervalIds, serviceType) => {
           if (!pendingAsset) return;
           if (pendingAllIntervals.length > 0) {
             // Asset-level service: save one record per selected component
@@ -804,7 +840,10 @@ export default function FinGoScreen() {
             }
             await Promise.all(
               Array.from(byComponent.values()).map(async ({ component: comp, intervalIds }) => {
-                await createRecord(pendingAsset.id, comp.id, name, servicedAt, notes, cost);
+                const compIntervals = pendingAllIntervals.filter((x) => intervalIds.includes(x.interval.id));
+                const compName = compIntervals.map((x) => x.interval.name).join(', ');
+                const compType = compIntervals[0]?.interval.service_type ?? 'general';
+                await createRecord(pendingAsset.id, comp.id, compName, servicedAt, notes, cost, compType);
                 await Promise.all(
                   intervalIds.map((id) => {
                     const iv = pendingAllIntervals.find((x) => x.interval.id === id)?.interval;
@@ -816,7 +855,10 @@ export default function FinGoScreen() {
               }),
             );
           } else {
-            await createRecord(pendingAsset.id, activeComponent?.id ?? null, name, servicedAt, notes, cost);
+            const singleType = serviceType
+              ?? (intervals[activeComponent?.id ?? ''] ?? []).find((i) => selectedIntervalIds.includes(i.id))?.service_type
+              ?? 'general';
+            await createRecord(pendingAsset.id, activeComponent?.id ?? null, name, servicedAt, notes, cost, singleType);
             if (activeComponent && selectedIntervalIds.length > 0) {
               const componentIntervals = intervals[activeComponent.id] ?? [];
               await Promise.all(
@@ -829,6 +871,8 @@ export default function FinGoScreen() {
               );
             }
           }
+          await reloadRecordsForAsset(pendingAsset.id);
+          refreshSnapshot();
           void loadAssets();
         }}
         onClose={() => { setShowRecordSheet(false); setPendingAllIntervals([]); }}

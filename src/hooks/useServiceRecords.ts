@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase';
 import { logAPI, webAlert } from '../lib/devtools';
 import { isMissingTableError } from '../types/dashboard';
 import type { User } from '@supabase/supabase-js';
-import type { ComponentServiceRecord } from '../types/fingo';
+import type { ComponentServiceRecord, ServiceIntervalType } from '../types/fingo';
 
 export function useServiceRecords(user: User | null) {
   const [records, setRecords] = useState<ComponentServiceRecord[]>([]);
@@ -32,6 +32,7 @@ export function useServiceRecords(user: User | null) {
     servicedAt: string,
     notes?: string | null,
     cost?: number | null,
+    serviceType?: ServiceIntervalType | null,
   ): Promise<boolean> => {
     if (!user) return false;
     try {
@@ -42,6 +43,7 @@ export function useServiceRecords(user: User | null) {
           asset_id: assetId,
           component_id: componentId,
           name,
+          service_type: serviceType ?? null,
           serviced_at: servicedAt,
           notes: notes ?? null,
           cost: cost ?? null,
@@ -59,13 +61,13 @@ export function useServiceRecords(user: User | null) {
   const updateRecord = useCallback(async (
     id: string,
     assetId: string,
-    fields: { name: string; serviced_at: string; notes: string | null; cost: number | null },
+    fields: { name: string; serviced_at: string; notes: string | null; cost: number | null; service_type?: ServiceIntervalType | null },
   ): Promise<boolean> => {
     try {
       logAPI('supabase://component_service_records', { source: 'fingo.service_record_sheet', action: 'update' });
       const { error } = await supabase
         .from('component_service_records')
-        .update({ name: fields.name, serviced_at: fields.serviced_at, notes: fields.notes, cost: fields.cost })
+        .update({ name: fields.name, serviced_at: fields.serviced_at, notes: fields.notes, cost: fields.cost, service_type: fields.service_type ?? null })
         .eq('id', id);
       if (error) throw error;
       await loadRecords(assetId);

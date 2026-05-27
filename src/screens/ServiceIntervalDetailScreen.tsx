@@ -248,9 +248,9 @@ export default function ServiceIntervalDetailScreen({ route }: Props) {
         componentName={component.name}
         intervals={editingRecord ? undefined : [interval]}
         component={editingRecord ? undefined : component}
-        onSave={async (name, servicedAt, notes, cost, selectedIntervalIds) => {
+        onSave={async (name, servicedAt, notes, cost, selectedIntervalIds, serviceType) => {
           if (editingRecord) {
-            await updateRecord(editingRecord.id, assetId, { name, serviced_at: servicedAt, notes: notes ?? null, cost: cost ?? null });
+            await updateRecord(editingRecord.id, assetId, { name, serviced_at: servicedAt, notes: notes ?? null, cost: cost ?? null, service_type: serviceType ?? editingRecord.service_type ?? 'general' });
             // Re-derive last_serviced_at from the most recent service record after the edit
             const { data: freshRecords } = await supabase
               .from('component_service_records')
@@ -265,7 +265,7 @@ export default function ServiceIntervalDetailScreen({ route }: Props) {
               .eq('id', interval.id);
             await loadIntervals(componentId);
           } else {
-            await createRecord(assetId, componentId, name, servicedAt, notes, cost);
+            await createRecord(assetId, componentId, name, servicedAt, notes, cost, interval.service_type);
             if (selectedIntervalIds.includes(interval.id)) {
               const currentValue = getTrackingValue(component, interval.tracking_method);
               await markServiced(interval.id, componentId, currentValue, servicedAt);

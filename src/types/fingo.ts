@@ -155,6 +155,7 @@ export type ComponentServiceRecord = {
   component_id?: string | null;
   asset_id: string;
   name: string;
+  service_type?: ServiceIntervalType | null;
   serviced_at: string;
   notes?: string | null;
   cost?: number | null;
@@ -196,4 +197,52 @@ export type IntervalHealth = {
   remaining: number;
   isWarning: boolean;
   isOverdue: boolean;
+};
+
+// ─── Background sync snapshot ─────────────────────────────────────────────────
+
+export type FinGoSyncSnapshotInterval = {
+  id: string;
+  name: string;
+  tracking_method: TrackingMethod;
+  interval_value: number;
+  last_serviced_value: number;
+};
+
+export type FinGoSyncSnapshotComponent = {
+  id: string;
+  name: string;
+  track_distance: number;
+  track_moving_time: number;
+  track_rides: number;
+  track_elevation_gain: number;
+  intervals: FinGoSyncSnapshotInterval[];
+};
+
+export type FinGoSyncSnapshotAsset = {
+  id: string;
+  name: string;
+  type: AssetType;
+  components: FinGoSyncSnapshotComponent[];
+};
+
+export type FinGoSyncSnapshot = {
+  snapshotAt: number;
+  assets: FinGoSyncSnapshotAsset[];
+};
+
+// ─── GPS Tracking ─────────────────────────────────────────────────────────────
+
+export type RoutePoint = { lat: number; lng: number; ts: number };
+
+export type TrackingSession = {
+  id: string;
+  created_by: string;
+  asset_id: string | null;
+  started_at: string;
+  ended_at: string | null;
+  distance_km: number | null;
+  elapsed_seconds: number | null;
+  route: RoutePoint[];
+  created_at: string;
 };

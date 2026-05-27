@@ -63,7 +63,7 @@ type Props = {
   onComponentPress: (component: Component) => void;
   onIntervalPress: (interval: ComponentServiceInterval, component: Component) => void;
   onAddService: () => void;
-  onEditServiceRecord?: (record: ComponentServiceRecord, name: string, servicedAt: string, notes: string | null, cost: number | null) => Promise<void>;
+  onEditServiceRecord?: (record: ComponentServiceRecord, name: string, servicedAt: string, notes: string | null, cost: number | null, serviceType: ServiceIntervalType | null) => Promise<void>;
   expanded: boolean;
   onToggle: () => void;
   headerOnly?: boolean;
@@ -468,9 +468,9 @@ export default function AssetAccordion({
       <ServiceRecordSheet
         visible={!!editingServiceRecord}
         editingRecord={editingServiceRecord ?? undefined}
-        onSave={async (name, servicedAt, notes, cost) => {
+        onSave={async (name, servicedAt, notes, cost, _selectedIds, serviceType) => {
           if (editingServiceRecord && onEditServiceRecord) {
-            await onEditServiceRecord(editingServiceRecord, name, servicedAt, notes ?? null, cost ?? null);
+            await onEditServiceRecord(editingServiceRecord, name, servicedAt, notes ?? null, cost ?? null, serviceType);
           }
           setEditingServiceRecord(null);
         }}

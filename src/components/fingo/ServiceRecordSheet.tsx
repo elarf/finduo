@@ -1,14 +1,23 @@
 import React, { useEffect, useState } from 'react';
 import {
   Modal, View, Text, TextInput, TouchableOpacity, StyleSheet,
-  KeyboardAvoidingView, Platform, ScrollView,
+  KeyboardAvoidingView, Platform, ScrollView, Image,
 } from 'react-native';
 import { uiPath, uiProps, logUI } from '../../lib/devtools';
-import type { ComponentServiceInterval, Component, ComponentServiceRecord } from '../../types/fingo';
+import type { ComponentServiceInterval, Component, ComponentServiceRecord, ServiceIntervalType } from '../../types/fingo';
 import {
   computeIntervalHealth, formatIntervalRemaining, healthColor,
 } from '../../lib/fingo/health';
+import { FINGO_ASSETS } from '../../lib/fingo/fingoAssets';
 import DateTimeFields from './DateTimeFields';
+
+const SERVICE_TYPES: Array<{ value: ServiceIntervalType; label: string; icon: any }> = [
+  { value: 'general',  label: 'Fix',     icon: FINGO_ASSETS.fix },
+  { value: 'replace',  label: 'Replace', icon: FINGO_ASSETS.change },
+  { value: 'cleaning', label: 'Clean',   icon: FINGO_ASSETS.wipe },
+  { value: 'charge',   label: 'Charge',  icon: FINGO_ASSETS.charge },
+  { value: 'pump',     label: 'Pump',    icon: FINGO_ASSETS.pressure },
+];
 
 interface IntervalWithComponent {
   interval: ComponentServiceInterval;
@@ -30,6 +39,7 @@ interface Props {
     notes: string | null,
     cost: number | null,
     selectedIntervalIds: string[],
+    serviceType: ServiceIntervalType | null,
   ) => Promise<void>;
   onClose: () => void;
 }
@@ -54,6 +64,7 @@ export default function ServiceRecordSheet({
   const [notes, setNotes] = useState('');
   const [costStr, setCostStr] = useState('');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [serviceType, setServiceType] = useState<ServiceIntervalType>('general');
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -67,6 +78,7 @@ export default function ServiceRecordSheet({
         setNotes(editingRecord.notes ?? '');
         setCostStr(editingRecord.cost != null ? String(editingRecord.cost) : '');
         setSelectedIds(new Set());
+        setServiceType(editingRecord.service_type ?? 'general');
       } else {
         setName('');
         setNameIsManual(false);
@@ -76,6 +88,7 @@ export default function ServiceRecordSheet({
         setNotes('');
         setCostStr('');
         setSelectedIds(new Set());
+        setServiceType('general');
       }
     }
   }, [visible]);
@@ -122,12 +135,15 @@ export default function ServiceRecordSheet({
     try {
       logUI(uiPath('fingo', 'service_record_sheet', 'save'), 'press');
       const isoDate = new Date(`${serviceDate}T${serviceTime}`).toISOString();
+      // When intervals are selected, type is inherited from the interval — pass null so callers derive it
+      const typeToPass = (selectedIds.size > 0 && !editingRecord) ? null : serviceType;
       await onSave(
         name.trim(),
         isoDate,
         notes.trim() || null,
         cost !== null && !isNaN(cost) ? cost : null,
         Array.from(selectedIds),
+        typeToPass,
       );
       onClose();
     } finally {
@@ -136,6 +152,7 @@ export default function ServiceRecordSheet({
   };
 
   const hasIntervals = effectiveIntervals.length > 0;
+  const hasSelectedIntervals = selectedIds.size > 0 && !editingRecord;
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
@@ -184,6 +201,30 @@ export default function ServiceRecordSheet({
                     </TouchableOpacity>
                   );
                 })}
+              </>
+            )}
+
+            {!hasSelectedIntervals && (
+              <>
+                <Text style={styles.label}>Type</Text>
+                <View style={styles.typeRow}>
+                  {SERVICE_TYPES.map(({ value, label, icon }) => (
+                    <TouchableOpacity
+                      {...uiProps(uiPath('fingo', 'service_record_sheet', 'type', value))}
+                      key={value}
+                      style={[styles.typeBtn, serviceType === value && styles.typeBtnActive]}
+                      onPress={() => {
+                        logUI(uiPath('fingo', 'service_record_sheet', 'type', value), 'press');
+                        setServiceType(value);
+                      }}
+                    >
+                      <Image source={icon} style={styles.typeIcon} resizeMode="contain" />
+                      <Text style={[styles.typeText, serviceType === value && styles.typeTextActive]}>
+                        {label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
               </>
             )}
 
@@ -357,6 +398,42 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
   },
   actions: { flexDirection: 'row', gap: 10, marginTop: 20 },
+  typeRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  typeBtn: {
+    flexBasis: '30%',
+    flexGrow: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    height: 36,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#1F3A59',
+    backgroundColor: '#000000',
+    overflow: 'hidden',
+  },
+  typeBtnActive: {
+    backgroundColor: '#000000',
+    borderColor: 'rgb(63, 227, 242)',
+  },
+  typeIcon: {
+    width: 30,
+    height: 30,
+  },
+  typeText: {
+    color: '#475569',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  typeTextActive: {
+    color: 'rgb(63, 227, 242)',
+  },
   cancelBtn: {
     flex: 1,
     paddingVertical: 12,

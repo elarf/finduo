@@ -597,7 +597,7 @@ export default function ComponentDetailScreen({ route }: Props) {
               const hasStats = stats && (stats.km > 0.1 || (stats.days !== null && stats.days > 0) || stats.movingTimeMin > 0);
               return (
               <View key={rec.id} {...uiProps(uiPath('fingo', 'component_detail', 'service_record_row', rec.id))} style={styles.serviceRow}>
-                <Image source={FINGO_ASSETS.fix} style={styles.serviceTypeIcon} resizeMode="contain" />
+                <Image source={SERVICE_TYPE_ICONS[rec.service_type ?? 'general']} style={styles.serviceTypeIcon} resizeMode="contain" />
                 <View style={styles.serviceBody}>
                   <Text style={styles.serviceName}>{rec.name}</Text>
                   <Text style={styles.serviceMeta}>{toLocalDateString(rec.serviced_at)}</Text>
@@ -711,9 +711,12 @@ export default function ComponentDetailScreen({ route }: Props) {
         componentName={component.name}
         intervals={componentIntervals}
         component={component}
-        onSave={async (name, servicedAt, notes, cost, selectedIntervalIds) => {
+        onSave={async (name, servicedAt, notes, cost, selectedIntervalIds, serviceType) => {
           if (!asset) return;
-          await createRecord(asset.id, componentId, name, servicedAt, notes, cost);
+          const type = serviceType
+            ?? componentIntervals.find((i) => selectedIntervalIds.includes(i.id))?.service_type
+            ?? 'general';
+          await createRecord(asset.id, componentId, name, servicedAt, notes, cost, type);
           if (selectedIntervalIds.length > 0) {
             await Promise.all(
               selectedIntervalIds.map((id) => {

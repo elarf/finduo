@@ -18,7 +18,7 @@ import { Capacitor } from '@capacitor/core';
 import { App as CapacitorApp } from '@capacitor/app';
 import { AuthProvider } from './src/context/AuthContext';
 import RootNavigator from './src/navigation';
-import { navigationRef, setPendingShortcut, getPendingShortcut, getPendingNotification, setPendingNotification } from './src/navigation/navigationRef';
+import { navigationRef, setPendingShortcut, getPendingShortcut, getPendingNotification, setPendingNotification, setLaunchReady } from './src/navigation/navigationRef';
 import { setupNotificationActionListener } from './src/lib/fingo/notifications';
 
 const queryClient = new QueryClient({
@@ -49,6 +49,10 @@ function routeShortcut(shortcutId: string) {
       navigationRef.navigate('FinGo');
       setPendingShortcut(null);
       break;
+    case 'tracking':
+      navigationRef.navigate('TrackingShortcut');
+      setPendingShortcut(null);
+      break;
     default:
       setPendingShortcut(null);
       return false;
@@ -62,7 +66,10 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (!Capacitor.isNativePlatform()) return;
+    if (!Capacitor.isNativePlatform()) {
+      setLaunchReady(); // no launch URL to wait for on web
+      return;
+    }
 
     const handleShortcutUrl = (url: string) => {
       if (!url.includes('://shortcut/')) return;
@@ -73,6 +80,8 @@ export default function App() {
     // Cold start: app launched from shortcut tap
     void CapacitorApp.getLaunchUrl().then(result => {
       if (result?.url) handleShortcutUrl(result.url);
+    }).finally(() => {
+      setLaunchReady();
     });
 
     // Warm start: app already running when shortcut tapped

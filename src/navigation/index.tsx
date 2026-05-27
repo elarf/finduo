@@ -1,11 +1,13 @@
-import React, { useEffect } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Image, View } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { navigationRef } from './navigationRef';
+import { useQueryClient } from '@tanstack/react-query';
+import { navigationRef, isLaunchReady, getPendingShortcut, setPendingShortcut } from './navigationRef';
 import { initCapacitorBackButton } from '../lib/capacitorBack';
 import { useAuth } from '../context/AuthContext';
 import { DashboardProvider } from '../context/DashboardContext';
+import { fetchAssets, fingoAssetsQueryKey } from '../hooks/useAssets';
 import LoginScreen from '../screens/LoginScreen';
 import DashboardScreen from '../screens/DashboardScreen';
 import FinBiomeScreen from '../screens/FinBiomeScreen';
@@ -25,6 +27,9 @@ import ContactsScreen from '../screens/ContactsScreen';
 import ComponentDetailScreen from '../screens/ComponentDetailScreen';
 import ServiceIntervalDetailScreen from '../screens/ServiceIntervalDetailScreen';
 import HealthConnectScreen from '../screens/HealthConnectScreen';
+import TrackingShortcutScreen from '../screens/TrackingShortcutScreen';
+import JourneyScreen from '../screens/JourneyScreen';
+import JourneyDetailScreen from '../screens/JourneyDetailScreen';
 
 export type RootStackParamList = {
   // Auth
@@ -55,23 +60,91 @@ export type RootStackParamList = {
   ComponentDetail: { componentId: string; assetId: string };
   ServiceIntervalDetail: { intervalId: string; componentId: string; assetId: string };
   HealthConnect: undefined;
+
+  // GPS tracking
+  TrackingShortcut: undefined;
+  Journey: undefined;
+  JourneyDetail: { sessionId: string };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 export default function RootNavigator() {
   const { session, loading } = useAuth();
+  const queryClient = useQueryClient();
+  const [appReady, setAppReady] = useState(false);
+  const checkTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     initCapacitorBackButton();
   }, []);
 
-  if (loading) {
+  useEffect(() => {
+    if (loading) return;
+
+    let cancelled = false;
+
+    const check = () => {
+      if (cancelled) return;
+
+      if (!isLaunchReady()) {
+        checkTimerRef.current = setTimeout(check, 20);
+        return;
+      }
+
+      const shortcut = getPendingShortcut();
+      const userId = session?.user?.id;
+
+      if (shortcut === 'fingo' && userId) {
+        const cached = queryClient.getQueryData(fingoAssetsQueryKey(userId));
+        if (cached) {
+          setAppReady(true);
+        } else {
+          void queryClient.prefetchQuery({
+            queryKey: fingoAssetsQueryKey(userId),
+            queryFn: () => fetchAssets(userId),
+          }).finally(() => {
+            if (!cancelled) setAppReady(true);
+          });
+        }
+      } else {
+        setAppReady(true);
+      }
+    };
+
+    check();
+
+    return () => {
+      cancelled = true;
+      if (checkTimerRef.current) clearTimeout(checkTimerRef.current);
+    };
+  }, [loading, session, queryClient]);
+
+  // Route any pending shortcut the moment navigation becomes ready, eliminating
+  // the brief Dashboard flash that occurred when the routing interval fired late.
+  const handleNavigationReady = useCallback(() => {
+    const shortcut = getPendingShortcut();
+    if (!shortcut) return;
+    switch (shortcut) {
+      case 'add_expense':
+        navigationRef.navigate('Dashboard', { prefillEntry: { type: 'expense' } });
+        break;
+      case 'fingo':
+        navigationRef.navigate('FinGo');
+        break;
+      case 'tracking':
+        navigationRef.navigate('TrackingShortcut');
+        break;
+    }
+    setPendingShortcut(null);
+  }, []);
+
+  if (loading || !appReady) {
     return (
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#000000' }}>
         <Image
           source={require('../../assets/fdstar.gif')}
-          style={{ width: 80, height: 80 }}
+          style={{ width: '100%' }}
           resizeMode="contain"
         />
       </View>
@@ -79,7 +152,7 @@ export default function RootNavigator() {
   }
 
   return (
-    <NavigationContainer ref={navigationRef}>
+    <NavigationContainer ref={navigationRef} onReady={handleNavigationReady}>
       {session ? (
         <DashboardProvider>
           <Stack.Navigator screenOptions={{ headerShown: false }}>
@@ -113,6 +186,11 @@ export default function RootNavigator() {
             <Stack.Screen name="ComponentDetail" component={ComponentDetailScreen} />
             <Stack.Screen name="ServiceIntervalDetail" component={ServiceIntervalDetailScreen} />
             <Stack.Screen name="HealthConnect" component={HealthConnectScreen} />
+
+            {/* GPS tracking */}
+            <Stack.Screen name="TrackingShortcut" component={TrackingShortcutScreen} />
+            <Stack.Screen name="Journey" component={JourneyScreen} />
+            <Stack.Screen name="JourneyDetail" component={JourneyDetailScreen} />
           </Stack.Navigator>
         </DashboardProvider>
       ) : (

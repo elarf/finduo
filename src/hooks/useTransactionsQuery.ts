@@ -14,7 +14,7 @@ async function fetchTransactions(accountIds: string[]): Promise<AppTransaction[]
 
   const { data, error } = await supabase
     .from('transactions')
-    .select('id,account_id,category_id,amount,note,type,date,created_at,transaction_tags(tag_id)')
+    .select('id,account_id,category_id,amount,note,type,date,created_at,has_splits,transaction_tags(tag_id)')
     .in('account_id', accountIds)
     .order('date', { ascending: false })
     .limit(1000);
@@ -30,6 +30,7 @@ async function fetchTransactions(accountIds: string[]): Promise<AppTransaction[]
     type: tx.type,
     date: tx.date,
     created_at: tx.created_at,
+    has_splits: tx.has_splits ?? false,
     tag_ids: (tx.transaction_tags ?? []).map((t: { tag_id: string }) => t.tag_id),
   }));
 }

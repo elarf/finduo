@@ -4,6 +4,57 @@
 
 ---
 
+## [1.6.0] — 2026-06-03
+
+### Features
+
+#### Transaction Splits
+
+- Transactions can be split across multiple categories (e.g. a grocery run attributed to Food, Health, and Household)
+- **Split Editor Sheet** — tap a "split" button on any transaction to open the editor; add, edit, or remove split rows with per-split category and amount fields
+- Split chips displayed inline on the transaction row when `has_splits` is true; chips show category color and formatted amount
+- Category totals in the spending chart and category row now account for split attributions
+- `has_splits` flag on `transactions` kept in sync automatically by a DB trigger (`trg_sync_has_splits_insert`, `trg_sync_has_splits_delete`)
+- Sum-of-splits ≤ parent amount enforced at the application layer in `useSplits.saveSplits()`
+
+#### FinMed — Reminder System
+
+- Unified **reminder** engine: create reminders for medications, health measurements, symptom checks, and appointments
+- Frequency types: interval, multiple times daily, specific day of week, cyclic (intake days + pause days), on-demand
+- **Appointment Modal** — fires for appointment-type reminders; shows appointment context, note input, and Complete/Snooze/Ignore actions
+- **Measurement Log Sheet** — scroll-wheel UI for recording health measurements; supported kinds: weight, temperature, blood pressure, heart rate, blood oxygen, custom numeric
+- **Symptom Check Sheet** — 5-point mood selector + searchable symptom checklist with 60+ built-in symptoms; custom symptoms can be added and persist as personal reminders; snooze and ignore actions available
+- **Snooze Sheet** — standard snooze options: 30 min, 1 h, 2 h, 4 h, 8 h; calculates `snoozed_until` ISO timestamp automatically
+- **Reminder Setup Modal** — create and edit reminders with frequency, start/end date, and type-specific config
+- **ScrollWheelInput** — native-feeling drum-scroll picker component used by Measurement Log Sheet
+- Cyclic schedules: `finmed_schedules` gains `cycle_intake_days` and `cycle_pause_days` columns
+- Persistent symptoms: user-selected symptoms saved to `finmed_persistent_symptoms` and pre-checked on next symptom check
+- All reminder interactions (complete, snooze, ignore) logged to `finmed_reminder_logs` with value payload and note
+
+### Technical
+
+- `src/components/dashboard/SplitEditorSheet.tsx` — split editor with per-row category picker, amount input, and save/delete
+- `src/hooks/useSplits.ts` — `useSplitsForTransaction`, `useSplitsBatch`, `useSplits` (CRUD: `saveSplits`, `deleteSplit`)
+- `src/types/dashboard.ts` — `TransactionSplit` type added; `isMissingTableError` guard
+- `src/components/dashboard/boxes/TransactionSection.tsx` — `SplitChips` component; split chip row rendered on transactions with `has_splits=true`
+- `src/context/DashboardContext.tsx` — split-aware category totals using `useSplitsBatch`
+- `src/hooks/useTransactionsQuery.ts` — `has_splits` field fetched
+- `src/screens/EntryScreen.tsx` — split editor sheet wired to transaction row
+- `src/components/finmed/AppointmentModal.tsx` — appointment reminder interaction UI
+- `src/components/finmed/MeasurementLogSheet.tsx` — scroll-wheel measurement recorder
+- `src/components/finmed/SymptomCheckSheet.tsx` — mood + symptom checklist with 60+ built-in symptoms
+- `src/components/finmed/SnoozeSheet.tsx` — snooze option sheet (30 min → 8 h)
+- `src/components/finmed/ReminderSetupModal.tsx` — reminder create/edit modal
+- `src/components/finmed/ScrollWheelInput.tsx` — scroll-wheel drum picker input
+- `src/hooks/useFinmed.ts` — reminder CRUD: `loadReminders`, `saveReminder`, `deleteReminder`, `logReminderAction`
+- `src/types/finmed.ts` — `FinmedReminder`, `AppointmentConfig`, `MeasurementConfig`, `MeasurementValue`, `SymptomEntry`, `SymptomCheckValue`, `PersistentSymptom` types added
+- `src/screens/FinMedScreen.tsx` — reminder list integrated; modal routing for all reminder types
+- `src/hooks/useAssetTransactions.ts` — updated
+- `supabase/migrations/20260603_transaction_splits.sql` — `transaction_splits` table, `has_splits` on `transactions`, RLS, trigger
+- `supabase/migrations/20260528b_finmed_cyclic_and_types.sql` — `finmed_reminders`, `finmed_reminder_logs`, `finmed_persistent_symptoms`, `finmed_custom_symptoms` tables; cyclic schedule columns on `finmed_schedules`
+
+---
+
 ## [1.5.0] — 2026-05-28
 
 ### Features

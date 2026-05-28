@@ -15,6 +15,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import Icon from '../components/Icon';
 import { ModalShell } from '../components/ModalShell';
+import SplitEditorSheet from '../components/dashboard/SplitEditorSheet';
 import { styles } from './DashboardScreen.styles';
 import { useDashboard } from '../context/DashboardContext';
 import { uiPath, uiProps, logUI } from '../lib/devtools';
@@ -60,9 +61,12 @@ export default function EntryScreen() {
     noteInputRef,
     saving,
     deleteTransaction,
+    user,
+    categoriesById,
   } = useDashboard();
 
   const [tagSearchQuery, setTagSearchQuery] = React.useState('');
+  const [splitEditorOpen, setSplitEditorOpen] = React.useState(false);
 
   useEffect(() => {
     logUI(uiPath('entry_screen', 'card', 'container'), 'mount');
@@ -382,6 +386,19 @@ export default function EntryScreen() {
               <Icon name="Trash2" size={20} color="#f87171" />
             </TouchableOpacity>
           )}
+          {transactionId && (
+            <TouchableOpacity
+              {...uiProps(uiPath('entry_screen', 'actions', 'split_button'))}
+              style={bottomBarStyles.splitBtn}
+              onPress={() => {
+                logUI(uiPath('entry_screen', 'actions', 'split_button'), 'press');
+                setSplitEditorOpen(true);
+              }}
+              disabled={saving}
+            >
+              <Icon name="GitBranch" size={18} color="#60A5FA" />
+            </TouchableOpacity>
+          )}
           {selectedCategory ? (
             <TouchableOpacity
               {...uiProps(uiPath('entry_screen', 'actions', 'cancel_button'))}
@@ -523,6 +540,18 @@ export default function EntryScreen() {
           </ScrollView>
         </Animated.View>
       </View>
+      {transactionId && user && (
+        <SplitEditorSheet
+          visible={splitEditorOpen}
+          onClose={() => setSplitEditorOpen(false)}
+          transactionId={transactionId}
+          totalAmount={parseFloat(entryAmount) || 0}
+          userId={user.id}
+          categoriesById={categoriesById}
+          entryCategories={entryCategories}
+          formatCurrency={formatCurrency}
+        />
+      )}
     </ModalShell>
   );
 }
@@ -628,6 +657,16 @@ const bottomBarStyles = StyleSheet.create({
     backgroundColor: '#200a0a',
     borderWidth: 1,
     borderColor: '#7f1d1d',
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+  },
+  splitBtn: {
+    width: 52,
+    backgroundColor: '#0a1f3a',
+    borderWidth: 1,
+    borderColor: '#1e4a8a',
     borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',

@@ -6,13 +6,14 @@ Financial tracking app for couples and shared households. Track income, expenses
 
 ---
 
-## Latest Release — v1.5.0
+## Latest Release — v1.6.0
 
-- **FinMed** — new medication tracker module: manage medications, set intake schedules, track stock, link costs to Dashboard transactions; accessible from Quick Navigation (pink Pill icon)
-- **FinVen** — new vending & inventory tracker module: manage locations and products, shopping list with badge count, link inventory costs to Dashboard transactions; accessible from Quick Navigation (blue Package icon)
-- **GPS tracking pause/resume** — FinGo tracking sessions can be paused and resumed; elapsed timer freezes while paused; background tracking notification with Pause/Resume/Stop actions
-- **Usage log deletion** — delete a usage log and automatically reverse its contribution to asset totals
-- **Live asset stats** — asset header chips computed directly from loaded logs; self-heals stale DB-denormalized totals
+- **Transaction Splits** — split a single transaction across multiple categories; split chips shown inline on transaction rows; category totals in the spending chart account for splits
+- **FinMed Reminder System** — unified reminders for medications, health measurements, symptom checks, and appointments; frequency types include interval, multiple-times-daily, specific day of week, cyclic, and on-demand
+- **Measurement Log Sheet** — scroll-wheel UI for recording weight, temperature, blood pressure, heart rate, blood oxygen, and custom numeric measurements
+- **Symptom Check Sheet** — 5-point mood selector + 60+ built-in symptoms + custom symptoms with persistent selection across checks
+- **Appointment Modal** — complete/snooze/ignore flow for appointment-type reminders with note input
+- **Snooze Sheet** — standard snooze durations (30 min → 8 h) for all reminder types
 
 Full history: [PATCHNOTES.md](./PATCHNOTES.md)
 

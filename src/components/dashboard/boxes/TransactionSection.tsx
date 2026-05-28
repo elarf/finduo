@@ -5,7 +5,7 @@ import { useDashboard } from '../../../context/DashboardContext';
 import Icon from '../../Icon';
 import { styles } from '../../../screens/DashboardScreen.styles';
 import { todayIso } from '../../../types/dashboard';
-import type { AppTransaction } from '../../../types/dashboard';
+import type { AppTransaction, AppCategory, TransactionSplit } from '../../../types/dashboard';
 
 // ── Daily summary helpers ────────────────────────────────────────────────────
 
@@ -99,6 +99,113 @@ function DailySummaryRow({
   );
 }
 
+function SplitChips({
+  tx,
+  splits,
+  categoriesById,
+  formatCurrency,
+}: {
+  tx: AppTransaction;
+  splits: TransactionSplit[];
+  categoriesById: Record<string, AppCategory>;
+  formatCurrency: (n: number) => string;
+}) {
+  const splitTotal = splits.reduce((s, r) => s + r.amount, 0);
+  const remainder = (Number(tx.amount) || 0) - splitTotal;
+  const parentCat = tx.category_id ? categoriesById[tx.category_id] : null;
+
+  return (
+    <View style={splitChipStyles.row}>
+      {splits.map((s) => {
+        const cat = categoriesById[s.category_id];
+        return (
+          <View key={s.id} style={[splitChipStyles.chip, cat?.color ? { borderColor: cat.color } : undefined]}>
+            {cat?.icon && <Icon name={cat.icon} size={10} color={cat?.color ?? '#8FA8C9'} />}
+            <Text style={[splitChipStyles.chipText, cat?.color ? { color: cat.color } : undefined]}>
+              {cat?.name ?? '—'} {formatCurrency(s.amount)}
+            </Text>
+          </View>
+        );
+      })}
+      {remainder > 0.005 && (
+        <View style={[splitChipStyles.chip, parentCat?.color ? { borderColor: parentCat.color } : undefined]}>
+          {parentCat?.icon && <Icon name={parentCat.icon} size={10} color={parentCat?.color ?? '#8FA8C9'} />}
+          <Text style={[splitChipStyles.chipText, parentCat?.color ? { color: parentCat.color } : undefined]}>
+            {parentCat?.name ?? '—'} {formatCurrency(remainder)}
+          </Text>
+        </View>
+      )}
+    </View>
+  );
+}
+
+function TransactionRow({
+  tx,
+  isTransfer,
+  acctName,
+  txCat,
+  splits,
+  titleColor,
+  formatCurrency,
+  categoriesById,
+  txDisplayLabel,
+  openEditTransaction,
+}: {
+  tx: AppTransaction;
+  isTransfer: boolean;
+  acctName: string | null;
+  txCat: AppCategory | null;
+  splits: TransactionSplit[];
+  titleColor: string | undefined;
+  formatCurrency: (n: number) => string;
+  categoriesById: Record<string, AppCategory>;
+  txDisplayLabel: (tx: AppTransaction, fallback: string) => React.ReactNode;
+  openEditTransaction: (tx: AppTransaction) => void;
+}) {
+  return (
+    <TouchableOpacity
+      style={styles.transactionRow}
+      onPress={() => {
+        logUI(uiPath('dashboard', 'tx_section', 'row', tx.id), 'press');
+        openEditTransaction(tx);
+      }}
+      {...uiProps(uiPath('dashboard', 'tx_section', 'row', tx.id))}
+    >
+      <View style={{ flex: 1 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          {txCat?.icon && <Icon name={txCat.icon} size={14} color={titleColor ?? '#F0F6FF'} />}
+          <Text
+            style={titleColor ? [styles.transactionTitle, { color: titleColor }] : styles.transactionTitle}
+            {...uiProps(uiPath('dashboard', 'tx_section', 'row_title', tx.id))}
+          >
+            {txDisplayLabel(tx, isTransfer ? 'Transfer' : 'Untitled transaction')}
+          </Text>
+        </View>
+        {splits.length > 0 && (
+          <SplitChips tx={tx} splits={splits} categoriesById={categoriesById} formatCurrency={formatCurrency} />
+        )}
+        <Text style={styles.transactionMeta} {...uiProps(uiPath('dashboard', 'tx_section', 'row_meta', tx.id))}>
+          {tx.date}{acctName ? ` · ${acctName}` : ''}
+        </Text>
+      </View>
+      <View style={{ alignItems: 'flex-end', gap: 2 }}>
+        <Text
+          style={[
+            styles.transactionAmount,
+            isTransfer ? styles.transferAmount : (tx.type === 'income' ? styles.positive : styles.negative),
+          ]}
+          {...uiProps(uiPath('dashboard', 'tx_section', 'row_amount', tx.id))}
+        >
+          {isTransfer ? '↔' : (tx.type === 'income' ? '+' : '-')}{formatCurrency(Number(tx.amount) || 0)}
+        </Text>
+        {splits.length > 0 && (
+          <Icon name="GitBranch" size={11} color="#8FA8C9" />
+        )}
+      </View>
+    </TouchableOpacity>
+  );
+}
+
 export default function TransactionSection() {
   const {
     selectedCategoryFilter, setSelectedCategoryFilter,
@@ -123,6 +230,7 @@ export default function TransactionSection() {
     inviteToken,
     shareInvite,
     selectedSummary,
+    splitsByParentTx,
   } = useDashboard();
 
   const [searchMode, setSearchMode] = useState(false);
@@ -328,40 +436,21 @@ export default function TransactionSection() {
             const acct = showAccountOverviewPicker ? accountsById[tx.account_id] : null;
             const txCat = tx.category_id ? categoriesById[tx.category_id] : null;
             const titleColor = isTransfer ? '#a855f7' : (txCat?.color ?? undefined);
+            const splits = tx.has_splits ? (splitsByParentTx[tx.id] ?? []) : [];
             return (
-              <TouchableOpacity
+              <TransactionRow
                 key={tx.id}
-                style={styles.transactionRow}
-                onPress={() => {
-                  logUI(uiPath('dashboard', 'tx_section', 'row', tx.id), 'press');
-                  openEditTransaction(tx);
-                }}
-                {...uiProps(uiPath('dashboard', 'tx_section', 'row', tx.id))}
-              >
-                <View style={{ flex: 1 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    {txCat?.icon && <Icon name={txCat.icon} size={14} color={titleColor ?? '#F0F6FF'} />}
-                    <Text
-                      style={titleColor ? [styles.transactionTitle, { color: titleColor }] : styles.transactionTitle}
-                      {...uiProps(uiPath('dashboard', 'tx_section', 'row_title', tx.id))}
-                    >
-                      {txDisplayLabel(tx, isTransfer ? 'Transfer' : 'Untitled transaction')}
-                    </Text>
-                  </View>
-                  <Text style={styles.transactionMeta} {...uiProps(uiPath('dashboard', 'tx_section', 'row_meta', tx.id))}>
-                    {tx.date}{acct ? ` · ${acct.name}` : ''}
-                  </Text>
-                </View>
-                <Text
-                  style={[
-                    styles.transactionAmount,
-                    isTransfer ? styles.transferAmount : (tx.type === 'income' ? styles.positive : styles.negative),
-                  ]}
-                  {...uiProps(uiPath('dashboard', 'tx_section', 'row_amount', tx.id))}
-                >
-                  {isTransfer ? '↔' : (tx.type === 'income' ? '+' : '-')}{formatCurrency(Number(tx.amount) || 0)}
-                </Text>
-              </TouchableOpacity>
+                tx={tx}
+                isTransfer={isTransfer}
+                acctName={acct?.name ?? null}
+                txCat={txCat}
+                splits={splits}
+                titleColor={titleColor}
+                formatCurrency={formatCurrency}
+                categoriesById={categoriesById}
+                txDisplayLabel={txDisplayLabel}
+                openEditTransaction={openEditTransaction}
+              />
             );
           });
         })()}
@@ -424,6 +513,32 @@ export default function TransactionSection() {
     </>
   );
 }
+
+const splitChipStyles = StyleSheet.create({
+  row: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 4,
+    marginTop: 3,
+    marginBottom: 1,
+  },
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderWidth: 1,
+    borderColor: '#2D486E',
+    borderRadius: 999,
+    backgroundColor: '#0D1F31',
+  },
+  chipText: {
+    color: '#8FA8C9',
+    fontSize: 10,
+    fontWeight: '600',
+  },
+});
 
 const dailyRowStyles = StyleSheet.create({
   row: {

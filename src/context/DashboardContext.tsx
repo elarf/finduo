@@ -56,6 +56,8 @@ import type { CategoriesQueryData } from '../hooks/useCategoriesQuery';
 import { useTagsQuery, tagsQueryKey } from '../hooks/useTagsQuery';
 import { useAccountSettingsQuery, accountSettingsQueryKey } from '../hooks/useAccountSettingsQuery';
 import { useBalanceSnapshotsQuery, balanceSnapshotsQueryKey, type BalanceSnapshot } from '../hooks/useBalanceSnapshotsQuery';
+import { useSplitsBatch } from '../hooks/useSplits';
+import type { TransactionSplit } from '../types/dashboard';
 import type { ResolvedFriend, ResolvedRequest } from '../types/friends';
 import type { AppDebt } from '../types/pools';
 
@@ -358,6 +360,7 @@ export type DashboardContextValue = {
   overviewSummary: AccountSummary;
   categorySpendData: CategorySpendRow[];
   allIncludedCategorySpendData: CategorySpendRow[];
+  splitsByParentTx: Record<string, import('../types/dashboard').TransactionSplit[]>;
   themeColor: string;
   filteredIconNames: string[];
   categoryFilteredTxs: AppTransaction[] | null;
@@ -506,6 +509,21 @@ export function DashboardProvider({
 
   const transactionsQ = useTransactionsQuery(accountIds);
   const transactions: AppTransaction[] = transactionsQ.data ?? [];
+
+  // Batch-fetch splits for all split transactions in the current account set
+  const splitTxIds = useMemo(
+    () => transactions.filter((t) => t.has_splits).map((t) => t.id),
+    [transactions],
+  );
+  const { data: batchSplits = [] } = useSplitsBatch(splitTxIds);
+  const splitsByParentTx = useMemo(() => {
+    const map: Record<string, TransactionSplit[]> = {};
+    for (const s of batchSplits) {
+      if (!map[s.parent_transaction_id]) map[s.parent_transaction_id] = [];
+      map[s.parent_transaction_id].push(s);
+    }
+    return map;
+  }, [batchSplits]);
 
   const tagsQ = useTagsQuery(user?.id ?? '');
   const tags: AppTag[] = tagsQ.data ?? [];
@@ -1274,8 +1292,23 @@ export function DashboardProvider({
     for (const tx of sourceTxs) {
       if (tx.type !== 'expense') continue;
       if (tx.category_id && transferCategoryIds.includes(tx.category_id)) continue;
-      const key = tx.category_id ?? 'uncategorized';
-      map[key] = (map[key] ?? 0) + (Number(tx.amount) || 0);
+      const splits = tx.has_splits ? (splitsByParentTx[tx.id] ?? []) : [];
+      if (splits.length > 0) {
+        let splitTotal = 0;
+        for (const s of splits) {
+          const key = s.category_id ?? 'uncategorized';
+          map[key] = (map[key] ?? 0) + s.amount;
+          splitTotal += s.amount;
+        }
+        const remainder = (Number(tx.amount) || 0) - splitTotal;
+        if (remainder > 0) {
+          const key = tx.category_id ?? 'uncategorized';
+          map[key] = (map[key] ?? 0) + remainder;
+        }
+      } else {
+        const key = tx.category_id ?? 'uncategorized';
+        map[key] = (map[key] ?? 0) + (Number(tx.amount) || 0);
+      }
     }
 
     const lookupCats = showAccountOverviewPicker ? categories : selectedCategories;
@@ -1293,15 +1326,30 @@ export function DashboardProvider({
       ...r,
       widthPercent: max > 0 ? Math.max(8, Math.round((r.total / max) * 100)) : 0,
     }));
-  }, [showAccountOverviewPicker, filteredIncludedTxs, filteredSelectedTxs, categories, selectedCategories, transferCategoryIds]);
+  }, [showAccountOverviewPicker, filteredIncludedTxs, filteredSelectedTxs, categories, selectedCategories, transferCategoryIds, splitsByParentTx]);
 
   const allIncludedCategorySpendData = useMemo((): CategorySpendRow[] => {
     const map: Record<string, number> = {};
     for (const tx of filteredIncludedTxs) {
       if (tx.type !== 'expense') continue;
       if (tx.category_id && transferCategoryIds.includes(tx.category_id)) continue;
-      const key = tx.category_id ?? 'uncategorized';
-      map[key] = (map[key] ?? 0) + (Number(tx.amount) || 0);
+      const splits = tx.has_splits ? (splitsByParentTx[tx.id] ?? []) : [];
+      if (splits.length > 0) {
+        let splitTotal = 0;
+        for (const s of splits) {
+          const key = s.category_id ?? 'uncategorized';
+          map[key] = (map[key] ?? 0) + s.amount;
+          splitTotal += s.amount;
+        }
+        const remainder = (Number(tx.amount) || 0) - splitTotal;
+        if (remainder > 0) {
+          const key = tx.category_id ?? 'uncategorized';
+          map[key] = (map[key] ?? 0) + remainder;
+        }
+      } else {
+        const key = tx.category_id ?? 'uncategorized';
+        map[key] = (map[key] ?? 0) + (Number(tx.amount) || 0);
+      }
     }
     const rows = Object.entries(map)
       .map(([id, total]) => {
@@ -1319,7 +1367,7 @@ export function DashboardProvider({
       ...r,
       widthPercent: max > 0 ? Math.max(8, Math.round((r.total / max) * 100)) : 0,
     }));
-  }, [filteredIncludedTxs, categories, transferCategoryIds]);
+  }, [filteredIncludedTxs, categories, transferCategoryIds, splitsByParentTx]);
 
   // ── Computed: theme/filter/sort ──
   const themeColor = useMemo(() => {
@@ -2642,6 +2690,7 @@ export function DashboardProvider({
     overviewSummary,
     categorySpendData,
     allIncludedCategorySpendData,
+    splitsByParentTx,
     themeColor,
     filteredIconNames,
     categoryFilteredTxs,

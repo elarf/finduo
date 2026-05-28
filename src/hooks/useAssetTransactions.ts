@@ -36,13 +36,56 @@ export function useAssetTransactions() {
     }
     try {
       logAPI('supabase://transactions', { source: 'fingo.asset_accordion.stats', action: 'loadAssetTransactions' });
-      const { data, error } = await supabase
+
+      // Direct category matches
+      const { data: directData, error: directError } = await supabase
         .from('transactions')
         .select('*')
         .in('category_id', categoryIds)
         .order('date', { ascending: false });
-      if (error) throw error;
-      setTransactions((prev) => ({ ...prev, [assetId]: (data ?? []) as AppTransaction[] }));
+      if (directError) throw directError;
+      const directTxs = (directData ?? []).map((t: any) => ({ ...t, tag_ids: t.tag_ids ?? [] })) as AppTransaction[];
+      const directIds = new Set(directTxs.map((t) => t.id));
+
+      // Split-sourced: transactions where a split references a linked category
+      logAPI('supabase://transaction_splits', { source: 'fingo.asset_accordion.stats', action: 'loadSplitMatches' });
+      const { data: splitsData, error: splitsError } = await supabase
+        .from('transaction_splits')
+        .select('parent_transaction_id, category_id, amount')
+        .in('category_id', categoryIds);
+      if (splitsError) {
+        if (isMissingTableError(splitsError)) {
+          setTransactions((prev) => ({ ...prev, [assetId]: directTxs }));
+          return;
+        }
+        throw splitsError;
+      }
+
+      // Sum split amounts per parent (in case multiple splits from same tx match)
+      const splitAmounts: Record<string, number> = {};
+      for (const s of splitsData ?? []) {
+        splitAmounts[s.parent_transaction_id] = (splitAmounts[s.parent_transaction_id] ?? 0) + s.amount;
+      }
+
+      const parentIds = Object.keys(splitAmounts).filter((id) => !directIds.has(id));
+      let splitParentTxs: AppTransaction[] = [];
+      if (parentIds.length > 0) {
+        const { data: parentData, error: parentError } = await supabase
+          .from('transactions')
+          .select('*')
+          .in('id', parentIds);
+        if (parentError) throw parentError;
+        splitParentTxs = (parentData ?? []).map((t: any) => ({
+          ...t,
+          tag_ids: t.tag_ids ?? [],
+          amount: splitAmounts[t.id] ?? t.amount,
+        })) as AppTransaction[];
+      }
+
+      const all = [...directTxs, ...splitParentTxs].sort((a, b) =>
+        a.date < b.date ? 1 : a.date > b.date ? -1 : 0,
+      );
+      setTransactions((prev) => ({ ...prev, [assetId]: all }));
     } catch {
       // non-fatal
     }

@@ -45,7 +45,23 @@ export type AppTransaction = {
   date: string;
   created_at?: string;
   tag_ids: string[];
+  has_splits?: boolean;
 };
+
+export interface TransactionSplit {
+  id: string;
+  parent_transaction_id: string;
+  category_id: string;
+  amount: number;
+  note?: string | null;
+  created_at: string;
+  user_id: string;
+  category?: AppCategory;
+}
+
+export interface AppTransactionWithSplits extends AppTransaction {
+  splits?: TransactionSplit[];
+}
 
 export type AccountInvite = {
   id: string;

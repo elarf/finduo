@@ -16,6 +16,7 @@ import { styles } from './DashboardScreen.styles';
 import type { IntervalKey } from '../types/dashboard';
 import { useDashboard } from '../context/DashboardContext';
 import { uiPath, uiProps, logUI } from '../lib/devtools';
+import { supabase } from '../lib/supabase';
 import { topInset } from '../lib/safeArea';
 import { APP_VERSION, fetchLatestVersion, isNewerVersion } from '../lib/version';
 import ChangelogModal from '../components/dashboard/ChangelogModal';
@@ -76,11 +77,22 @@ export default function QuickNavScreen() {
   const [showIntervalVisibility, setShowIntervalVisibility] = useState(false);
   const [showChangelog, setShowChangelog] = useState(false);
   const [latestVersion, setLatestVersion] = useState<string | null>(null);
+  const [finvenBadge, setFinvenBadge] = useState(0);
   const updateAvailable = latestVersion !== null && isNewerVersion(APP_VERSION, latestVersion);
 
   useEffect(() => {
     void fetchLatestVersion().then(setLatestVersion);
   }, []);
+
+  useEffect(() => {
+    if (!user) return;
+    void supabase
+      .from('finven_shopping_list')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', user.id)
+      .eq('checked', false)
+      .then(({ count }) => setFinvenBadge(count ?? 0));
+  }, [user]);
 
   useEffect(() => {
     logUI(uiPath('quick_nav_screen', 'panel', 'container'), 'mount');
@@ -785,6 +797,50 @@ export default function QuickNavScreen() {
                 </View>
                 <Text style={[styles.menuItemText, { flex: 1, textAlign: 'center', color: '#00F5D4' }]}>FinBiome</Text>
                 <View style={{ minWidth: 20 }} />
+              </View>
+            </TouchableOpacity>
+
+            {/* FinMed */}
+            <TouchableOpacity
+              {...uiProps(uiPath('quick_nav_screen', 'nav', 'finmed_item'))}
+              style={styles.menuItem}
+              onPress={() => {
+                logUI(uiPath('quick_nav_screen', 'nav', 'finmed_item'), 'press');
+                handleClose();
+                (navigation as any).navigate('FinMed');
+              }}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', width: '100%' }}>
+                <View style={{ width: 20 }}>
+                  <Icon name="Pill" size={14} color="#F472B6" />
+                </View>
+                <Text style={[styles.menuItemText, { flex: 1, textAlign: 'center', color: '#F472B6' }]}>FinMed</Text>
+                <View style={{ minWidth: 20 }} />
+              </View>
+            </TouchableOpacity>
+
+            {/* FinVen */}
+            <TouchableOpacity
+              {...uiProps(uiPath('quick_nav_screen', 'nav', 'finven_item'))}
+              style={styles.menuItem}
+              onPress={() => {
+                logUI(uiPath('quick_nav_screen', 'nav', 'finven_item'), 'press');
+                handleClose();
+                (navigation as any).navigate('FinVen');
+              }}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', width: '100%' }}>
+                <View style={{ width: 20 }}>
+                  <Icon name="Package" size={14} color="#60A5FA" />
+                </View>
+                <Text style={[styles.menuItemText, { flex: 1, textAlign: 'center', color: '#60A5FA' }]}>FinVen</Text>
+                <View style={{ minWidth: 20, alignItems: 'flex-end' }}>
+                  {finvenBadge > 0 && (
+                    <View style={{ backgroundColor: '#60A5FA', borderRadius: 10, minWidth: 20, height: 20, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 5 }}>
+                      <Text style={{ color: '#060D18', fontSize: 11, fontWeight: '700' }}>{finvenBadge}</Text>
+                    </View>
+                  )}
+                </View>
               </View>
             </TouchableOpacity>
 

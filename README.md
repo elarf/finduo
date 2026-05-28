@@ -6,11 +6,13 @@ Financial tracking app for couples and shared households. Track income, expenses
 
 ---
 
-## Latest Release — v1.4.0
+## Latest Release — v1.5.0
 
-- **Asset journal** — unified chronological view mixing rides and services; services grouped by the hour they occurred with expand/collapse; pagination with "Load More", "Show More", and "Show All" buttons
-- **Service row height normalization** — service rows in `ServiceIntervalDetailScreen` now display full height without truncation; notes and metadata fully visible
-- **Improved debugging** — journal makes it easy to spot duplicated Health Connect data by showing exact sequence of rides and services
+- **FinMed** — new medication tracker module: manage medications, set intake schedules, track stock, link costs to Dashboard transactions; accessible from Quick Navigation (pink Pill icon)
+- **FinVen** — new vending & inventory tracker module: manage locations and products, shopping list with badge count, link inventory costs to Dashboard transactions; accessible from Quick Navigation (blue Package icon)
+- **GPS tracking pause/resume** — FinGo tracking sessions can be paused and resumed; elapsed timer freezes while paused; background tracking notification with Pause/Resume/Stop actions
+- **Usage log deletion** — delete a usage log and automatically reverse its contribution to asset totals
+- **Live asset stats** — asset header chips computed directly from loaded logs; self-heals stale DB-denormalized totals
 
 Full history: [PATCHNOTES.md](./PATCHNOTES.md)
 
@@ -172,6 +174,25 @@ Accessible from the FinOps section in Quick Navigation.
 - **Debug overlay**: Real-time display of account count, category count, transaction count, and forest layout positions
 - **Platform support**: Web-only (mobile and desktop); native shows "FinBiome is available on web" fallback
 - **Built with Three.js 0.140** using manual scene management for React 19 compatibility (no React wrappers)
+
+### FinMed
+
+Accessible from Quick Navigation (pink Pill icon).
+
+- Medication list with name, notes, and stock details; tap to open a detail sheet
+- Schedule modal for setting intake times and reminders
+- Link medication purchase costs to Dashboard transactions via the transaction picker
+- Intake and low-stock Android notification channels: `finmed_intake`, `finmed_low_stock`
+
+### FinVen
+
+Accessible from Quick Navigation (blue Package icon).
+
+- Location-based product inventory: add and manage locations, products per location
+- Product form for creating and editing product records (name, price, stock, expiry)
+- Transaction breakdown sheet to link inventory costs to financial transactions
+- Shopping list with unchecked-item badge on the Quick Navigation button
+- Expiry and low-stock Android notification channels: `finven_expiry`, `finven_low_stock`
 
 ### Date Filtering
 
@@ -389,6 +410,9 @@ finduo/
     screens/
       DashboardScreen.tsx          Composition shell: <DashboardProvider><DashboardLayout />
       DashboardScreen.styles.ts    Shared StyleSheet for dashboard components
+      FinGoScreen.tsx              Asset lifecycle manager (GPS tracking, usage logs, components)
+      FinMedScreen.tsx             Medication tracker (schedules, stock, intake)
+      FinVenScreen.tsx             Vending & inventory tracker (locations, products, shopping list)
       LendingScreen.tsx            Debts list: confirm, net balance, convert to transaction
       LoginScreen.tsx              Google sign-in UI
       PoolScreen.tsx               Orchestration shell: pool list + detail, owns modal state
@@ -396,6 +420,8 @@ finduo/
     types/
       auth.ts                      AuthContextValue interface
       dashboard.ts                 App data types (AppAccount, AppCategory, AppTag, etc.)
+      finmed.ts                    FinMed types (FinmedMedication, etc.)
+      finven.ts                    FinVen types (FinvenLocation, FinvenProduct, etc.)
       friends.ts                   Friend types (ResolvedFriend, ResolvedRequest, etc.)
       pools.ts                     Pool and debt types (Pool, PoolParticipant, PoolTransaction, AppDebt, PreTransaction, SettleResult)
   supabase/
@@ -404,6 +430,7 @@ finduo/
     migrations/
       0000_baseline.sql            Full schema baseline (all tables, indexes, RLS, functions — all migrations consolidated)
       20260513c_grant_all_tables.sql
+      20260528_finmed_finven.sql   FinMed and FinVen schema (medications, inventory tables)
       archive/                     All incremental migrations (archived; consolidated into baseline)
 ```
 
@@ -445,6 +472,7 @@ npx supabase db push
 Then apply incremental migrations in order:
 
 1. `20260513c_grant_all_tables.sql`
+2. `20260528_finmed_finven.sql`
 
 ### 5. Start development
 

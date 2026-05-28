@@ -25,27 +25,25 @@ export class GpsTrackingProvider implements ITrackingProvider {
   async startSession(): Promise<void> {
     await AsyncStorage.removeItem(ROUTE_BUFFER_KEY);
     this.points = [];
+    await this.attachWatcher();
+  }
 
-    this.watchId = await BackgroundGeolocation.addWatcher(
-      {
-        backgroundMessage: 'Recording your route…',
-        backgroundTitle: 'FinDuo Tracking',
-        requestPermissions: true,
-        stale: false,
-        distanceFilter: 10,
-      },
-      (location, error) => {
-        if (error || !location) return;
-        this.points.push({
-          lat: location.latitude,
-          lng: location.longitude,
-          ts: location.time ?? Date.now(),
-        });
-        if (this.points.length % BUFFER_FLUSH_EVERY === 0) {
-          void AsyncStorage.setItem(ROUTE_BUFFER_KEY, JSON.stringify(this.points));
-        }
-      },
-    );
+  async pauseSession(): Promise<void> {
+    if (this.watchId !== null) {
+      await BackgroundGeolocation.removeWatcher({ id: this.watchId });
+      this.watchId = null;
+    }
+    if (this.points.length > 0) {
+      await AsyncStorage.setItem(ROUTE_BUFFER_KEY, JSON.stringify(this.points));
+    }
+  }
+
+  async resumeSession(): Promise<void> {
+    if (this.points.length === 0) {
+      const buffered = await AsyncStorage.getItem(ROUTE_BUFFER_KEY);
+      if (buffered) this.points = JSON.parse(buffered) as RoutePoint[];
+    }
+    await this.attachWatcher();
   }
 
   async stopSession(): Promise<{ distanceKm: number; route: RoutePoint[] }> {
@@ -68,6 +66,29 @@ export class GpsTrackingProvider implements ITrackingProvider {
     this.points = [];
 
     return { distanceKm, route };
+  }
+
+  private async attachWatcher(): Promise<void> {
+    this.watchId = await BackgroundGeolocation.addWatcher(
+      {
+        backgroundMessage: 'Recording your route…',
+        backgroundTitle: 'FinDuo Tracking',
+        requestPermissions: true,
+        stale: false,
+        distanceFilter: 10,
+      },
+      (location, error) => {
+        if (error || !location) return;
+        this.points.push({
+          lat: location.latitude,
+          lng: location.longitude,
+          ts: location.time ?? Date.now(),
+        });
+        if (this.points.length % BUFFER_FLUSH_EVERY === 0) {
+          void AsyncStorage.setItem(ROUTE_BUFFER_KEY, JSON.stringify(this.points));
+        }
+      },
+    );
   }
 
   isSessionActive(): boolean {

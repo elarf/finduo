@@ -35,6 +35,8 @@ import { supabase } from '../lib/supabase';
 import { uiPath, uiProps, logUI } from '../lib/devtools';
 import { getTrackingValue } from '../lib/fingo/health';
 import { setupFinGoChannels } from '../lib/fingo/notifications';
+import { setupTrackingChannel, registerTrackingCallbacks, unregisterTrackingCallbacks } from '../lib/fingo/trackingNotification';
+import TrackingAnimationOverlay from '../components/fingo/TrackingAnimationOverlay';
 import { registerBackHandler } from '../lib/capacitorBack';
 import { bottomInset } from '../lib/safeArea';
 import { useHCAutoSync } from '../hooks/useHCAutoSync';
@@ -52,18 +54,54 @@ export default function FinGoScreen() {
   // ─── Existing hooks ──────────────────────────────────────────────────────────
   const { assets, loading, loadAssets, createAsset, updateAsset, setActiveAsset, deleteAsset } = useAssets(user);
   const { parts, loadParts, servicePart } = useAssetParts();
-  const { logs, loadLogs, addUsageLog, updateLog } = useUsageLogs(user);
+  const { logs, loadLogs, addUsageLog, updateLog, deleteLogAndReverseAsset } = useUsageLogs(user);
   const { categoryLinks, transactions, loadAssetStats, linkCategory, unlinkCategory } = useAssetTransactions();
 
   // ─── GPS Tracking ────────────────────────────────────────────────────────────
   const {
     activeSession: trackingSession,
+    isPaused: trackingPaused,
     liveDistance,
     liveElapsed,
     startTracking,
+    pauseTracking,
+    resumeTracking,
     stopTracking,
   } = useGpsTracking(user?.id ?? null);
   const isTracking = !!trackingSession;
+
+  // Tracking overlay animation state
+  const overlayAnimDone = useRef(false);
+  const overlayOpDone = useRef(false);
+  const overlayOnFinish = useRef<(() => void) | null>(null);
+  const [overlayPhase, setOverlayPhase] = useState<'starting' | 'stopping' | null>(null);
+
+  const tryFinishOverlay = useCallback(() => {
+    if (!overlayAnimDone.current || !overlayOpDone.current) return;
+    setOverlayPhase(null);
+    overlayAnimDone.current = false;
+    overlayOpDone.current = false;
+    overlayOnFinish.current?.();
+    overlayOnFinish.current = null;
+  }, []);
+
+  // Register notification action callbacks while this screen is mounted
+  useEffect(() => {
+    registerTrackingCallbacks({
+      onPause: () => { void pauseTracking(); },
+      onResume: () => { void resumeTracking(); },
+      onStop: () => {
+        overlayAnimDone.current = false;
+        overlayOpDone.current = false;
+        overlayOnFinish.current = () => navigation.push('Journey');
+        setOverlayPhase('stopping');
+        void stopTracking()
+          .catch(e => console.warn('stop error:', e))
+          .finally(() => { overlayOpDone.current = true; tryFinishOverlay(); });
+      },
+    });
+    return () => unregisterTrackingCallbacks();
+  }, [pauseTracking, resumeTracking, stopTracking, tryFinishOverlay, navigation]);
 
   // ─── New component hooks ──────────────────────────────────────────────────────
   const {
@@ -90,13 +128,23 @@ export default function FinGoScreen() {
   const scrollViewRef = useRef<ScrollView>(null);
   const accordionOffsets = useRef<Record<string, number>>({});
 
-  const handleGoPress = useCallback(async () => {
+  const handleGoPress = useCallback(() => {
+    overlayAnimDone.current = false;
+    overlayOpDone.current = false;
     if (isTracking) {
-      await stopTracking();
+      overlayOnFinish.current = () => navigation.push('Journey');
+      setOverlayPhase('stopping');
+      void stopTracking()
+        .catch(e => console.warn('stop error:', e))
+        .finally(() => { overlayOpDone.current = true; tryFinishOverlay(); });
     } else {
-      await startTracking(selectedAssetId);
+      overlayOnFinish.current = null;
+      setOverlayPhase('starting');
+      void startTracking(selectedAssetId)
+        .catch(e => console.warn('start error:', e))
+        .finally(() => { overlayOpDone.current = true; tryFinishOverlay(); });
     }
-  }, [isTracking, stopTracking, startTracking, selectedAssetId]);
+  }, [isTracking, stopTracking, startTracking, selectedAssetId, navigation, tryFinishOverlay]);
 
   const focusedAsset = useMemo(
     () => (focusedAssetId ? (assets.find((a) => a.id === focusedAssetId) ?? null) : null),
@@ -135,7 +183,10 @@ export default function FinGoScreen() {
   const [showIntervalSheet, setShowIntervalSheet] = useState(false);
   const [showRecordSheet, setShowRecordSheet] = useState(false);
 
-  useEffect(() => { setupFinGoChannels(); }, []);
+  useEffect(() => {
+    setupFinGoChannels();
+    void setupTrackingChannel();
+  }, []);
 
   // Android back button: close internal modals before navigating away
   const fingoModalRef = useRef({ showAssetModal: false, showLibrary: false, showComponentForm: false, showIntervalSheet: false, showRecordSheet: false });
@@ -519,6 +570,10 @@ export default function FinGoScreen() {
               await updateLog(log, focusedAsset, entry);
               await Promise.all([loadAssets(), loadComponents(focusedAsset.id)]);
             }}
+            onDeleteLog={async (log) => {
+              await deleteLogAndReverseAsset(log, focusedAsset);
+              await Promise.all([loadAssets(), loadComponents(focusedAsset.id)]);
+            }}
             onServicePart={(part) => void handleServicePart(part, focusedAsset)}
             onLinkCategory={(catId) => void linkCategory(focusedAsset.id, catId)}
             onUnlinkCategory={(catId) => void unlinkCategory(focusedAsset.id, catId)}
@@ -580,6 +635,10 @@ export default function FinGoScreen() {
             }}
             onEditLog={async (log, entry) => {
               await updateLog(log, focusedAsset, entry);
+              await Promise.all([loadAssets(), loadComponents(focusedAsset.id)]);
+            }}
+            onDeleteLog={async (log) => {
+              await deleteLogAndReverseAsset(log, focusedAsset);
               await Promise.all([loadAssets(), loadComponents(focusedAsset.id)]);
             }}
             onServicePart={(part) => void handleServicePart(part, focusedAsset)}
@@ -644,6 +703,10 @@ export default function FinGoScreen() {
                     await updateLog(log, asset, entry);
                     await Promise.all([loadAssets(), loadComponents(asset.id)]);
                   }}
+                  onDeleteLog={async (log) => {
+                    await deleteLogAndReverseAsset(log, asset);
+                    await Promise.all([loadAssets(), loadComponents(asset.id)]);
+                  }}
                   onServicePart={(part) => void handleServicePart(part, asset)}
                   onLinkCategory={(catId) => void linkCategory(asset.id, catId)}
                   onUnlinkCategory={(catId) => void unlinkCategory(asset.id, catId)}
@@ -690,8 +753,11 @@ export default function FinGoScreen() {
 
       <TrackingPanel
         isActive={isTracking}
+        isPaused={trackingPaused}
         liveElapsed={liveElapsed}
         liveDistance={liveDistance}
+        onPause={() => { void pauseTracking(); }}
+        onResume={() => { void resumeTracking(); }}
       />
 
       {/* Bottom bar */}
@@ -725,6 +791,20 @@ export default function FinGoScreen() {
           <Text style={styles.bottomBarLabel}>Journey</Text>
         </TouchableOpacity>
       </View>
+
+      {/* ─── Tracking animation overlays ───────────────────────────────────────── */}
+      {overlayPhase === 'starting' && (
+        <TrackingAnimationOverlay
+          source={require('../../assets/burnout.gif')}
+          onComplete={() => { overlayAnimDone.current = true; tryFinishOverlay(); }}
+        />
+      )}
+      {overlayPhase === 'stopping' && (
+        <TrackingAnimationOverlay
+          source={require('../../assets/driftstop.png')}
+          onComplete={() => { overlayAnimDone.current = true; tryFinishOverlay(); }}
+        />
+      )}
 
       {/* ─── Asset Create/Edit Modal ────────────────────────────────────────────── */}
       <Modal visible={showAssetModal} transparent animationType="slide" onRequestClose={() => setShowAssetModal(false)}>

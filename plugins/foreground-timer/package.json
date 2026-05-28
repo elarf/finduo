@@ -1,0 +1,13 @@
+{
+  "name": "foreground-timer",
+  "version": "1.0.0",
+  "description": "Capacitor foreground timer service for FinGo tracking",
+  "keywords": ["capacitor-plugin"],
+  "capacitor": {
+    "android": {
+      "src": "android"
+    }
+  },
+  "files": ["android/"],
+  "private": true
+}

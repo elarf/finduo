@@ -16,10 +16,12 @@ import { createAsyncStoragePersister } from '@tanstack/query-async-storage-persi
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Capacitor } from '@capacitor/core';
 import { App as CapacitorApp } from '@capacitor/app';
+import { StackActions } from '@react-navigation/native';
 import { AuthProvider } from './src/context/AuthContext';
 import RootNavigator from './src/navigation';
 import { navigationRef, setPendingShortcut, getPendingShortcut, getPendingNotification, setPendingNotification, setLaunchReady } from './src/navigation/navigationRef';
 import { setupNotificationActionListener } from './src/lib/fingo/notifications';
+import { setupTrackingActionListener } from './src/lib/fingo/trackingNotification';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -50,7 +52,7 @@ function routeShortcut(shortcutId: string) {
       setPendingShortcut(null);
       break;
     case 'tracking':
-      navigationRef.navigate('TrackingShortcut');
+      navigationRef.dispatch(StackActions.push('TrackingShortcut'));
       setPendingShortcut(null);
       break;
     default:
@@ -63,6 +65,7 @@ function routeShortcut(shortcutId: string) {
 export default function App() {
   useEffect(() => {
     setupNotificationActionListener();
+    setupTrackingActionListener();
   }, []);
 
   useEffect(() => {

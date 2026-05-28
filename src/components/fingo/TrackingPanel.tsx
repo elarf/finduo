@@ -1,13 +1,16 @@
 import React, { useEffect, useRef } from 'react';
-import { Animated, StyleSheet, Text, View } from 'react-native';
+import { Animated, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { uiPath, uiProps } from '../../lib/devtools';
 
 const PANEL_HEIGHT = 52;
 
 type Props = {
   isActive: boolean;
+  isPaused: boolean;
   liveElapsed: number;
   liveDistance: number;
+  onPause?: () => void;
+  onResume?: () => void;
 };
 
 function formatElapsed(secs: number): string {
@@ -29,7 +32,7 @@ function formatSpeed(km: number, secs: number): string {
   return `${((km / secs) * 3600).toFixed(1)} km/h`;
 }
 
-export default function TrackingPanel({ isActive, liveElapsed, liveDistance }: Props) {
+export default function TrackingPanel({ isActive, isPaused, liveElapsed, liveDistance, onPause, onResume }: Props) {
   const containerHeight = useRef(new Animated.Value(0)).current;
   const pulse = useRef(new Animated.Value(0.3)).current;
 
@@ -44,8 +47,8 @@ export default function TrackingPanel({ isActive, liveElapsed, liveDistance }: P
   }, [isActive, containerHeight]);
 
   useEffect(() => {
-    if (!isActive) {
-      pulse.setValue(0.3);
+    if (!isActive || isPaused) {
+      pulse.setValue(isPaused ? 1 : 0.3);
       return;
     }
     const loop = Animated.loop(
@@ -56,7 +59,7 @@ export default function TrackingPanel({ isActive, liveElapsed, liveDistance }: P
     );
     loop.start();
     return () => loop.stop();
-  }, [isActive, pulse]);
+  }, [isActive, isPaused, pulse]);
 
   return (
     <Animated.View
@@ -64,12 +67,34 @@ export default function TrackingPanel({ isActive, liveElapsed, liveDistance }: P
       style={[styles.wrapper, { height: containerHeight }]}
     >
       <View style={styles.panel}>
-        <Animated.View style={[styles.dot, { opacity: pulse }]} />
+        <Animated.View style={[styles.dot, isPaused ? styles.dotPaused : styles.dotActive, { opacity: pulse }]} />
         <Text style={styles.elapsed}>{formatElapsed(liveElapsed)}</Text>
         <Text style={styles.separator}>·</Text>
         <Text style={styles.distance}>{formatDistance(liveDistance)}</Text>
         <Text style={styles.separator}>·</Text>
-        <Text style={styles.speed}>{formatSpeed(liveDistance, liveElapsed)}</Text>
+        {isPaused ? (
+          <Text style={styles.pausedLabel}>PAUSED</Text>
+        ) : (
+          <Text style={styles.speed}>{formatSpeed(liveDistance, liveElapsed)}</Text>
+        )}
+        <View style={styles.spacer} />
+        {isPaused ? (
+          <TouchableOpacity
+            {...uiProps(uiPath('fingo', 'tracking_panel', 'resume_button'))}
+            style={styles.controlButton}
+            onPress={onResume}
+          >
+            <Text style={styles.controlButtonText}>▶</Text>
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity
+            {...uiProps(uiPath('fingo', 'tracking_panel', 'pause_button'))}
+            style={styles.controlButton}
+            onPress={onPause}
+          >
+            <Text style={styles.controlButtonText}>⏸</Text>
+          </TouchableOpacity>
+        )}
       </View>
     </Animated.View>
   );
@@ -94,7 +119,12 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
+  },
+  dotActive: {
     backgroundColor: '#e53e3e',
+  },
+  dotPaused: {
+    backgroundColor: '#f59e0b',
   },
   elapsed: {
     color: '#fff',
@@ -116,5 +146,26 @@ const styles = StyleSheet.create({
   speed: {
     color: '#aaa',
     fontSize: 13,
+  },
+  pausedLabel: {
+    color: '#f59e0b',
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.8,
+  },
+  spacer: {
+    flex: 1,
+  },
+  controlButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#1a2d1a',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  controlButtonText: {
+    color: '#53E3A6',
+    fontSize: 14,
   },
 });

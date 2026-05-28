@@ -15,8 +15,7 @@ export function useUsageLogs(user: User | null) {
         .from('usage_logs')
         .select('*')
         .eq('asset_id', assetId)
-        .order('recorded_at', { ascending: false })
-        .limit(50);
+        .order('recorded_at', { ascending: false });
       if (error) throw error;
       setLogs((prev) => ({ ...prev, [assetId]: (data ?? []) as UsageLog[] }));
     } catch {
@@ -353,5 +352,5 @@ export function useUsageLogs(user: User | null) {
     }
   }, [user, deleteLogAndReverseAsset]);
 
-  return { logs, loadLogs, addUsageLog, updateLog, deleteLog, pruneHCDuplicateLogs, fetchLoggedExternalIds };
+  return { logs, loadLogs, addUsageLog, updateLog, deleteLog, deleteLogAndReverseAsset, pruneHCDuplicateLogs, fetchLoggedExternalIds };
 }

@@ -31,7 +31,7 @@ export default function GoButton({ assetId, isTracking, gpsReady, onPress }: Pro
     return () => loop.stop();
   }, [isTracking, pulse]);
 
-  const canStart = isNative && gpsReady && !!assetId;
+  const canStart = isNative && gpsReady;
   const disabled = isTracking ? false : !canStart;
 
   const borderColor = isTracking ? '#e53e3e' : canStart ? '#4ade80' : '#1F3A59';

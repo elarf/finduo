@@ -4,6 +4,85 @@
 
 ---
 
+## [1.5.0] — 2026-05-28
+
+### Features
+
+#### FinMed — Medication Tracker (New Module)
+
+- New **FinMed** screen: medication management with intake scheduling
+- Medications list with detail sheet; add and edit medications
+- Schedule modal for setting intake times and reminders
+- Link medication costs to Dashboard transactions via `FindashTransactionPicker`
+- Accessible from Quick Navigation (pink Pill icon)
+- Notification channels: `finmed_intake` (intake reminders), `finmed_low_stock` (stock alerts)
+
+#### FinVen — Vending & Inventory Tracker (New Module)
+
+- New **FinVen** screen: location-based product inventory management
+- Locations list with detail sheet; products per location with form modal
+- Transaction breakdown sheet for linking inventory costs to financial data
+- Shopping list badge on the FinVen Quick Navigation button (unchecked items count)
+- Link inventory costs to Dashboard transactions via `FindashTransactionPicker`
+- Accessible from Quick Navigation (blue Package icon)
+- Notification channels: `finven_expiry` (expiry reminders), `finven_low_stock` (stock alerts)
+
+#### FinGo — GPS Tracking Pause/Resume
+
+- Tracking sessions can be paused and resumed without ending the session
+- Elapsed timer freezes while paused; paused duration excluded from final moving time
+- `TrackingPanel` gains a **Pause** / **Resume** button and shows a static indicator when paused
+- `GpsTrackingProvider` removes the GPS watcher on pause and reattaches on resume; route buffer flushed to AsyncStorage on pause
+
+#### FinGo — Background Tracking Notification
+
+- Foreground service notification displayed while a tracking session is active
+- Notification actions: **Pause**, **Resume**, **Stop** — wired back to `FinGoScreen` via a callback registry
+- `setupTrackingChannel()` creates the `fingo_tracking` Android notification channel on startup
+- `registerTrackingCallbacks()` / `unregisterTrackingCallbacks()` let `FinGoScreen` own notification actions while mounted; pending actions buffered and replayed on next registration
+
+#### FinGo — Tracking Animation Overlay
+
+- `TrackingAnimationOverlay` displayed on tracking start and stop
+- Two-phase completion: animation finishes AND async operation resolves before transitioning to the Journey screen on stop
+
+#### FinGo — Usage Log Deletion
+
+- Delete a usage log and reverse its contribution to asset totals in one operation
+- `deleteLogAndReverseAsset(log, asset)` in `useUsageLogs` subtracts the log's delta values from `total_distance`, `total_steps`, `total_moving_time`, `total_rides`, and `total_elevation`
+- Delete button available in the edit log modal inside `AssetAccordion`
+
+#### FinGo — Asset Header Stats from Logs
+
+- Asset header stat chips compute totals live from loaded usage logs instead of relying on DB-denormalized columns
+- Self-heals stale totals: loaded logs are the source of truth; denormalized columns used only as fallback before logs arrive
+
+### Technical
+
+- `src/screens/FinMedScreen.tsx` — new FinMed module screen
+- `src/screens/FinVenScreen.tsx` — new FinVen module screen
+- `src/components/finmed/MedicationDetailSheet.tsx`, `ScheduleModal.tsx` — FinMed UI components
+- `src/components/finven/LocationDetailSheet.tsx`, `ProductFormModal.tsx`, `TransactionBreakdownSheet.tsx` — FinVen UI components
+- `src/components/shared/FindashTransactionPicker.tsx` — shared transaction-picker for FinMed and FinVen
+- `src/hooks/useFinmed.ts` — medication data hook
+- `src/hooks/useFinven.ts` — inventory data hook
+- `src/types/finmed.ts` — TypeScript types for FinMed
+- `src/types/finven.ts` — TypeScript types for FinVen
+- `src/lib/fingo/trackingNotification.ts` — notification action wiring, callback registry, `showTrackingNotification`, `cancelTrackingNotification`, `setupTrackingChannel`, `setupTrackingActionListener`
+- `src/lib/notificationChannels.ts` — centralized notification channel ID constants for all modules
+- `src/hooks/useGpsTracking.ts` — `pauseTracking`, `resumeTracking` added; `isPaused` exposed; `pausedAt`/`pausedMs` added to `ActiveSessionInfo`; elapsed excludes all paused time; tracking notification shown on start, pause, and resume
+- `src/lib/fingo/tracking/GpsTrackingProvider.ts` — `pauseSession`, `resumeSession`, `attachWatcher` helper; watcher removed on pause and re-added on resume
+- `src/components/fingo/TrackingPanel.tsx` — `isPaused`, `onPause`, `onResume` props; pause/resume button; static indicator when paused
+- `src/components/fingo/AssetAccordion.tsx` — `onDeleteLog` prop; asset header stats derived from logs; delete button in edit log modal
+- `src/hooks/useUsageLogs.ts` — `deleteLogAndReverseAsset` added
+- `src/navigation/index.tsx` — `FinMed` and `FinVen` routes added; `TrackingShortcut` uses `StackActions.push`
+- `App.tsx` — `setupTrackingActionListener` called on mount; `TrackingShortcut` uses `StackActions.push`
+- `plugins/foreground-timer/` — new Capacitor plugin for foreground service
+- `src/plugins/foregroundTimer.ts` — TypeScript interface for the ForegroundTimer plugin
+- `supabase/migrations/20260528_finmed_finven.sql` — DB schema for medications and inventory tables
+
+---
+
 ## [1.4.0] — 2026-05-26
 
 ### Features

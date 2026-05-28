@@ -1,5 +1,7 @@
 # Android Background Sync — WorkManager Implementation
 
+<!-- markdownlint-disable MD013 MD040 MD060 -->
+
 ## What this does
 
 Registers a native Android WorkManager `PeriodicWorkRequest` that fires every hour,

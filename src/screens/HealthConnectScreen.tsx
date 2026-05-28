@@ -209,6 +209,8 @@ export default function HealthConnectScreen() {
   const [filter, setFilter] = useState<FilterType>('all');
   const [viewTab, setViewTab] = useState<ViewTab>('aggregated');
 
+  const [attachedIdsLoaded, setAttachedIdsLoaded] = useState(false);
+
   // Attach sheet state
   const [attachRecord, setAttachRecord] = useState<HCRecord | null>(null);
   const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
@@ -223,7 +225,10 @@ export default function HealthConnectScreen() {
 
   useEffect(() => {
     void loadAssets();
-    void fetchLoggedExternalIds('health_connect').then(setAttachedIds);
+    void fetchLoggedExternalIds('health_connect').then((ids) => {
+      setAttachedIds(ids);
+      setAttachedIdsLoaded(true);
+    });
     if (isAvailable) {
       void checkSdkAvailable().then((ok) => {
         setSdkAvailable(ok);
@@ -248,6 +253,7 @@ export default function HealthConnectScreen() {
   // Auto-attach to active assets whenever records or attachedIds change
   useEffect(() => {
     if (records.length === 0 || assets.length === 0) return;
+    if (!attachedIdsLoaded) return;
 
     const activeBike = assets.find((a) => a.type === 'bike' && a.is_active);
     const activeShoe = assets.find((a) => a.type === 'shoe' && a.is_active);
@@ -353,7 +359,7 @@ export default function HealthConnectScreen() {
       if (activeBike) void pruneHCDuplicateLogs(activeBike);
       if (activeShoe) void pruneHCDuplicateLogs(activeShoe);
     })();
-  }, [records, assets, attachedIds, addUsageLog, loadAssets, pruneHCDuplicateLogs]);
+  }, [records, assets, attachedIds, attachedIdsLoaded, addUsageLog, loadAssets, pruneHCDuplicateLogs]);
 
   const openAttachSheet = useCallback((r: HCRecord) => {
     setAttachRecord(r);

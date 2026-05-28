@@ -1,6 +1,6 @@
 {
   "name": "finduo",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "main": "index.js",
   "scripts": {
     "start": "expo start",
@@ -15,6 +15,7 @@
     "import:monefy": "node scripts/import-monefy.js"
   },
   "dependencies": {
+    "foreground-timer": "file:plugins/foreground-timer",
     "@capacitor-community/background-geolocation": "^1.2.26",
     "@capacitor/android": "^7.0.0",
     "@capacitor/app": "^7.0.0",

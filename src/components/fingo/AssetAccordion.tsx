@@ -52,6 +52,7 @@ type Props = {
   categories: AppCategory[];
   onLogUsage: (entry: UsageEntry) => Promise<void>;
   onEditLog: (log: UsageLog, entry: UsageEntry) => Promise<void>;
+  onDeleteLog: (log: UsageLog) => Promise<void>;
   onServicePart: (part: AssetPart) => void;
   onLinkCategory: (categoryId: string) => void;
   onUnlinkCategory: (categoryId: string) => void;
@@ -102,6 +103,7 @@ export default function AssetAccordion({
   categories,
   onLogUsage,
   onEditLog,
+  onDeleteLog,
   onServicePart,
   onLinkCategory,
   onUnlinkCategory,
@@ -129,6 +131,24 @@ export default function AssetAccordion({
 
   const isOwner = asset.created_by === user?.id;
   const { formatCurrency } = useDashboard();
+
+  // Derive header stats from logs when available — self-heals stale DB denormalized totals
+  const logsLoaded = usageLogs.length > 0;
+  const headerDistance = logsLoaded
+    ? usageLogs.reduce((s, l) => s + (l.usage_delta ?? 0), 0)
+    : asset.total_distance;
+  const headerSteps = logsLoaded
+    ? usageLogs.reduce((s, l) => s + (l.usage_delta ?? 0), 0)
+    : asset.total_steps;
+  const headerMovingTime = logsLoaded
+    ? usageLogs.reduce((s, l) => s + (l.moving_time_delta ?? 0), 0)
+    : asset.total_moving_time;
+  const headerRides = logsLoaded
+    ? (asset.type === 'bike' ? usageLogs.length : 0)
+    : asset.total_rides;
+  const headerElevation = logsLoaded
+    ? usageLogs.reduce((s, l) => s + (l.elevation_delta ?? 0), 0)
+    : asset.total_elevation;
 
   const totalSpent = transactions
     .filter((t) => t.type === 'expense')
@@ -180,41 +200,41 @@ export default function AssetAccordion({
           <View style={styles.headerStats}>
             {asset.type === 'shoe' ? (
               <>
-                {asset.total_steps > 0 && (
+                {headerSteps > 0 && (
                   <View style={styles.statChip}>
                     <Image source={FINGO_ASSETS.step} style={styles.statChipIcon} resizeMode="contain" />
-                    <Text style={styles.statChipText}>{asset.total_steps.toLocaleString()} steps</Text>
+                    <Text style={styles.statChipText}>{Math.round(headerSteps).toLocaleString()} steps</Text>
                   </View>
                 )}
-                {asset.total_moving_time > 0 && (
+                {headerMovingTime > 0 && (
                   <View style={styles.statChip}>
                     <Image source={FINGO_ASSETS.time} style={styles.statChipIcon} resizeMode="contain" />
-                    <Text style={styles.statChipText}>{formatMovingTime(asset.total_moving_time)}</Text>
+                    <Text style={styles.statChipText}>{formatMovingTime(headerMovingTime)}</Text>
                   </View>
                 )}
               </>
             ) : (
               <>
-                {asset.total_distance > 0 && (
+                {headerDistance > 0 && (
                   <View style={styles.statChip}>
                     <Image source={FINGO_ASSETS.route} style={styles.statChipIcon} resizeMode="contain" />
-                    <Text style={styles.statChipText}>{asset.total_distance.toLocaleString()} km</Text>
+                    <Text style={styles.statChipText}>{Math.round(headerDistance * 10) / 10} km</Text>
                   </View>
                 )}
-                {asset.total_moving_time > 0 && (
+                {headerMovingTime > 0 && (
                   <View style={styles.statChip}>
                     <Image source={FINGO_ASSETS.time} style={styles.statChipIcon} resizeMode="contain" />
-                    <Text style={styles.statChipText}>{formatMovingTime(asset.total_moving_time)}</Text>
+                    <Text style={styles.statChipText}>{formatMovingTime(headerMovingTime)}</Text>
                   </View>
                 )}
-                {asset.total_rides > 0 && (
+                {headerRides > 0 && (
                   <View style={styles.statChip}>
                     <Image source={FINGO_ASSETS.ride} style={styles.statChipIcon} resizeMode="contain" />
-                    <Text style={styles.statChipText}>{asset.total_rides.toLocaleString()}</Text>
+                    <Text style={styles.statChipText}>{headerRides.toLocaleString()}</Text>
                   </View>
                 )}
-                {asset.total_elevation > 0 && (
-                  <Text style={styles.statChipText}>▲ {asset.total_elevation.toLocaleString()} m</Text>
+                {headerElevation > 0 && (
+                  <Text style={styles.statChipText}>▲ {Math.round(headerElevation).toLocaleString()} m</Text>
                 )}
               </>
             )}
@@ -463,6 +483,10 @@ export default function AssetAccordion({
             await onLogUsage(entry);
           }
         }}
+        onDelete={editingLog ? async () => {
+          await onDeleteLog(editingLog);
+          setEditingLog(null);
+        } : undefined}
       />
 
       <ServiceRecordSheet

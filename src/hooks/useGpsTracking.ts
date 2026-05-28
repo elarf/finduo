@@ -2,6 +2,10 @@ import { useState, useEffect, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../lib/supabase';
 import { GpsTrackingProvider } from '../lib/fingo/tracking/GpsTrackingProvider';
+import {
+  showTrackingNotification,
+  cancelTrackingNotification,
+} from '../lib/fingo/trackingNotification';
 import type { TrackingSession } from '../types/fingo';
 
 const ACTIVE_SESSION_KEY = 'FINGO_ACTIVE_TRACKING_SESSION';
@@ -13,6 +17,8 @@ export type ActiveSessionInfo = {
   sessionId: string;
   assetId: string | null;
   startedAt: string;
+  pausedAt: string | null;  // ISO timestamp when current pause started, null when running
+  pausedMs: number;          // total accumulated pause duration in ms
 };
 
 export function useGpsTracking(userId: string | null) {
@@ -28,8 +34,9 @@ export function useGpsTracking(userId: string | null) {
     });
   }, []);
 
-  // Tick every second while a session is active to update elapsed time and
-  // current distance from the in-memory GPS point buffer.
+  // Tick every second. Elapsed excludes all paused time.
+  // When paused: currentPauseMs grows at the same rate as (now - startMs), so
+  // liveElapsed stays frozen at the value it had at pause time.
   useEffect(() => {
     if (!activeSession) {
       setLiveDistance(0);
@@ -38,8 +45,14 @@ export function useGpsTracking(userId: string | null) {
     }
     const startMs = new Date(activeSession.startedAt).getTime();
     const tick = () => {
-      setLiveElapsed(Math.round((Date.now() - startMs) / 1000));
-      setLiveDistance(provider.getCurrentDistance());
+      const pausedMs = activeSession.pausedMs;
+      const currentPauseMs = activeSession.pausedAt
+        ? (Date.now() - new Date(activeSession.pausedAt).getTime())
+        : 0;
+      setLiveElapsed(Math.round((Date.now() - startMs - pausedMs - currentPauseMs) / 1000));
+      if (!activeSession.pausedAt) {
+        setLiveDistance(provider.getCurrentDistance());
+      }
     };
     tick();
     const id = setInterval(tick, 1000);
@@ -61,22 +74,60 @@ export function useGpsTracking(userId: string | null) {
       sessionId: data.id as string,
       assetId,
       startedAt: data.started_at as string,
+      pausedAt: null,
+      pausedMs: 0,
     };
 
     await AsyncStorage.setItem(ACTIVE_SESSION_KEY, JSON.stringify(info));
     setActiveSession(info);
     await provider.startSession();
+    void showTrackingNotification('active', 0);
   }, [userId]);
+
+  const pauseTracking = useCallback(async () => {
+    if (!activeSession || activeSession.pausedAt) return;
+    await provider.pauseSession();
+    const updated: ActiveSessionInfo = {
+      ...activeSession,
+      pausedAt: new Date().toISOString(),
+    };
+    await AsyncStorage.setItem(ACTIVE_SESSION_KEY, JSON.stringify(updated));
+    setActiveSession(updated);
+    const elapsedMs =
+      Date.now() - new Date(activeSession.startedAt).getTime() - activeSession.pausedMs;
+    void showTrackingNotification('paused', elapsedMs);
+  }, [activeSession]);
+
+  const resumeTracking = useCallback(async () => {
+    if (!activeSession?.pausedAt) return;
+    const additionalPauseMs = Date.now() - new Date(activeSession.pausedAt).getTime();
+    const updated: ActiveSessionInfo = {
+      ...activeSession,
+      pausedAt: null,
+      pausedMs: activeSession.pausedMs + additionalPauseMs,
+    };
+    await provider.resumeSession();
+    await AsyncStorage.setItem(ACTIVE_SESSION_KEY, JSON.stringify(updated));
+    setActiveSession(updated);
+    // Elapsed at the moment pause began (chronometer resumes from this offset)
+    const elapsedAtPauseMs =
+      new Date(activeSession.pausedAt).getTime() -
+      new Date(activeSession.startedAt).getTime() -
+      activeSession.pausedMs;
+    void showTrackingNotification('active', elapsedAtPauseMs);
+  }, [activeSession]);
 
   const stopTracking = useCallback(async () => {
     const info = activeSession;
     if (!info) return null;
 
     const { distanceKm, route } = await provider.stopSession();
-    // Elapsed time is always derived from the persisted start time so it
-    // remains correct even when the app was killed between start and stop.
+    const pausedMs = info.pausedMs;
+    const currentPauseMs = info.pausedAt
+      ? (Date.now() - new Date(info.pausedAt).getTime())
+      : 0;
     const elapsedSeconds = Math.round(
-      (Date.now() - new Date(info.startedAt).getTime()) / 1000,
+      (Date.now() - new Date(info.startedAt).getTime() - pausedMs - currentPauseMs) / 1000,
     );
 
     await supabase
@@ -91,6 +142,7 @@ export function useGpsTracking(userId: string | null) {
 
     await AsyncStorage.removeItem(ACTIVE_SESSION_KEY);
     setActiveSession(null);
+    void cancelTrackingNotification();
 
     return { ...info, distanceKm, elapsedSeconds, route };
   }, [activeSession]);
@@ -118,9 +170,12 @@ export function useGpsTracking(userId: string | null) {
   return {
     activeSession,
     checking,
+    isPaused: activeSession?.pausedAt != null,
     liveDistance,
     liveElapsed,
     startTracking,
+    pauseTracking,
+    resumeTracking,
     stopTracking,
     fetchSessions,
     fetchSession,

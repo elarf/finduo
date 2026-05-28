@@ -13,6 +13,7 @@ type Props = {
   editingLog?: UsageLog | null;
   onClose: () => void;
   onSubmit: (entry: UsageEntry) => Promise<void>;
+  onDelete?: () => Promise<void>;
 };
 
 function parseNum(v: string): number {
@@ -60,7 +61,7 @@ function buildIso(dateStr: string, timeStr: string): string {
   return isNaN(d.getTime()) ? new Date().toISOString() : d.toISOString();
 }
 
-export default function UsageLogModal({ visible, asset, editingLog, onClose, onSubmit }: Props) {
+export default function UsageLogModal({ visible, asset, editingLog, onClose, onSubmit, onDelete }: Props) {
   const [inputMode, setInputMode] = useState<'distance' | 'odometer'>('distance');
   const [distance, setDistance] = useState('');
   const [odometer, setOdometer] = useState('');
@@ -71,12 +72,14 @@ export default function UsageLogModal({ visible, asset, editingLog, onClose, onS
   const [dateStr, setDateStr] = useState('');
   const [timeStr, setTimeStr] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   const isEditMode = !!editingLog;
 
   // Initialise fields when modal opens
   useEffect(() => {
     if (!visible || !asset) return;
+    setConfirmingDelete(false);
     if (editingLog) {
       const iso = editingLog.recorded_at;
       setDateStr(isoToDateStr(iso));
@@ -146,6 +149,17 @@ export default function UsageLogModal({ visible, asset, editingLog, onClose, onS
     } else {
       setMovingTime(newDigits);
     }
+  };
+
+  const handleDelete = () => {
+    if (!onDelete) return;
+    setConfirmingDelete(true);
+  };
+
+  const handleDeleteConfirm = () => {
+    if (!onDelete) return;
+    setSubmitting(true);
+    void onDelete().then(() => { onClose(); }).finally(() => { setSubmitting(false); });
   };
 
   const handleSubmit = async () => {
@@ -315,7 +329,37 @@ export default function UsageLogModal({ visible, asset, editingLog, onClose, onS
             placeholderTextColor="#475569"
           />
 
+          {confirmingDelete ? (
+            <View style={styles.confirmDeleteBox}>
+              <Text style={styles.confirmDeleteText}>Delete this log entry and reverse asset totals?</Text>
+              <View style={styles.actions}>
+                <TouchableOpacity
+                  style={styles.cancelButton}
+                  onPress={() => setConfirmingDelete(false)}
+                >
+                  <Text style={styles.cancelText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.deleteConfirmButton, submitting && styles.submitDisabled]}
+                  onPress={() => { handleDeleteConfirm(); }}
+                  disabled={submitting}
+                >
+                  <Text style={styles.deleteText}>{submitting ? 'Deleting…' : 'Confirm Delete'}</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ) : (
           <View style={styles.actions}>
+            {isEditMode && onDelete && (
+              <TouchableOpacity
+                {...uiProps(uiPath('fingo', 'usage_log_modal', 'delete_button'))}
+                style={[styles.deleteButton, submitting && styles.submitDisabled]}
+                onPress={() => { logUI(uiPath('fingo', 'usage_log_modal', 'delete_button'), 'press'); handleDelete(); }}
+                disabled={submitting}
+              >
+                <Text style={styles.deleteText}>Delete</Text>
+              </TouchableOpacity>
+            )}
             <TouchableOpacity
               {...uiProps(uiPath('fingo', 'usage_log_modal', 'cancel_button'))}
               style={styles.cancelButton}
@@ -332,6 +376,7 @@ export default function UsageLogModal({ visible, asset, editingLog, onClose, onS
               <Text style={styles.submitText}>{submitting ? 'Saving…' : isEditMode ? 'Update' : 'Save'}</Text>
             </TouchableOpacity>
           </View>
+          )}
         </View>
       </View>
     </Modal>
@@ -455,5 +500,43 @@ const styles = StyleSheet.create({
   submitText: {
     color: '#4ade80',
     fontWeight: '700',
+  },
+  deleteButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#7f1d1d',
+    backgroundColor: '#1a0000',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  deleteText: {
+    color: '#f87171',
+    fontWeight: '600',
+  },
+  confirmDeleteBox: {
+    marginTop: 20,
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#7f1d1d',
+    backgroundColor: '#1a0000',
+    gap: 10,
+  },
+  confirmDeleteText: {
+    color: '#f87171',
+    fontSize: 13,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  deleteConfirmButton: {
+    flex: 2,
+    paddingVertical: 12,
+    borderRadius: 8,
+    backgroundColor: '#7f1d1d',
+    borderWidth: 1,
+    borderColor: '#f87171',
+    alignItems: 'center',
   },
 });

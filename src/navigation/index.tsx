@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Image, View } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { StackActions } from '@react-navigation/native';
 import { useQueryClient } from '@tanstack/react-query';
 import { navigationRef, isLaunchReady, getPendingShortcut, setPendingShortcut } from './navigationRef';
 import { initCapacitorBackButton } from '../lib/capacitorBack';
@@ -12,6 +13,8 @@ import LoginScreen from '../screens/LoginScreen';
 import DashboardScreen from '../screens/DashboardScreen';
 import FinBiomeScreen from '../screens/FinBiomeScreen';
 import FinGoScreen from '../screens/FinGoScreen';
+import FinMedScreen from '../screens/FinMedScreen';
+import FinVenScreen from '../screens/FinVenScreen';
 import EntryScreen from '../screens/EntryScreen';
 import CategoryScreen from '../screens/CategoryScreen';
 import TagScreen from '../screens/TagScreen';
@@ -39,6 +42,8 @@ export type RootStackParamList = {
   Dashboard: { prefillEntry?: { type: 'expense' | 'income' } } | undefined;
   FinBiome: undefined;
   FinGo: undefined;
+  FinMed: undefined;
+  FinVen: undefined;
 
   // Modal screens
   Entry: { transactionId?: string } | undefined;
@@ -133,7 +138,7 @@ export default function RootNavigator() {
         navigationRef.navigate('FinGo');
         break;
       case 'tracking':
-        navigationRef.navigate('TrackingShortcut');
+        navigationRef.dispatch(StackActions.push('TrackingShortcut'));
         break;
     }
     setPendingShortcut(null);
@@ -160,6 +165,8 @@ export default function RootNavigator() {
             <Stack.Screen name="Dashboard" component={DashboardScreen} />
             <Stack.Screen name="FinBiome" component={FinBiomeScreen} />
             <Stack.Screen name="FinGo" component={FinGoScreen} />
+            <Stack.Screen name="FinMed" component={FinMedScreen} />
+            <Stack.Screen name="FinVen" component={FinVenScreen} />
 
             {/* Modal screens - presentation handled per-platform */}
             <Stack.Group screenOptions={{

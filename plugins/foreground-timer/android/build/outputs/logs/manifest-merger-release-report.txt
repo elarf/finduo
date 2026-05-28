@@ -1,0 +1,40 @@
+-- Merging decision tree log ---
+manifest
+ADDED from C:\Users\ggeck\Documents\GitHub\finduo\plugins\foreground-timer\android\src\main\AndroidManifest.xml:2:1-18:12
+INJECTED from C:\Users\ggeck\Documents\GitHub\finduo\plugins\foreground-timer\android\src\main\AndroidManifest.xml:2:1-18:12
+	package
+		INJECTED from C:\Users\ggeck\Documents\GitHub\finduo\plugins\foreground-timer\android\src\main\AndroidManifest.xml
+	xmlns:android
+		ADDED from C:\Users\ggeck\Documents\GitHub\finduo\plugins\foreground-timer\android\src\main\AndroidManifest.xml:2:11-69
+uses-permission#android.permission.FOREGROUND_SERVICE
+ADDED from C:\Users\ggeck\Documents\GitHub\finduo\plugins\foreground-timer\android\src\main\AndroidManifest.xml:4:5-77
+	android:name
+		ADDED from C:\Users\ggeck\Documents\GitHub\finduo\plugins\foreground-timer\android\src\main\AndroidManifest.xml:4:22-74
+uses-permission#android.permission.FOREGROUND_SERVICE_SPECIAL_USE
+ADDED from C:\Users\ggeck\Documents\GitHub\finduo\plugins\foreground-timer\android\src\main\AndroidManifest.xml:5:5-89
+	android:name
+		ADDED from C:\Users\ggeck\Documents\GitHub\finduo\plugins\foreground-timer\android\src\main\AndroidManifest.xml:5:22-86
+application
+ADDED from C:\Users\ggeck\Documents\GitHub\finduo\plugins\foreground-timer\android\src\main\AndroidManifest.xml:7:5-16:19
+service#com.finduo.fingo.TrackingForegroundService
+ADDED from C:\Users\ggeck\Documents\GitHub\finduo\plugins\foreground-timer\android\src\main\AndroidManifest.xml:8:9-11:40
+	android:exported
+		ADDED from C:\Users\ggeck\Documents\GitHub\finduo\plugins\foreground-timer\android\src\main\AndroidManifest.xml:11:13-37
+	android:foregroundServiceType
+		ADDED from C:\Users\ggeck\Documents\GitHub\finduo\plugins\foreground-timer\android\src\main\AndroidManifest.xml:10:13-55
+	android:name
+		ADDED from C:\Users\ggeck\Documents\GitHub\finduo\plugins\foreground-timer\android\src\main\AndroidManifest.xml:9:13-70
+receiver#com.finduo.fingo.TrackingForegroundService$ActionReceiver
+ADDED from C:\Users\ggeck\Documents\GitHub\finduo\plugins\foreground-timer\android\src\main\AndroidManifest.xml:13:9-15:40
+	android:exported
+		ADDED from C:\Users\ggeck\Documents\GitHub\finduo\plugins\foreground-timer\android\src\main\AndroidManifest.xml:15:13-37
+	android:name
+		ADDED from C:\Users\ggeck\Documents\GitHub\finduo\plugins\foreground-timer\android\src\main\AndroidManifest.xml:14:13-85
+uses-sdk
+INJECTED from C:\Users\ggeck\Documents\GitHub\finduo\plugins\foreground-timer\android\src\main\AndroidManifest.xml reason: use-sdk injection requested
+INJECTED from C:\Users\ggeck\Documents\GitHub\finduo\plugins\foreground-timer\android\src\main\AndroidManifest.xml
+INJECTED from C:\Users\ggeck\Documents\GitHub\finduo\plugins\foreground-timer\android\src\main\AndroidManifest.xml
+	android:targetSdkVersion
+		INJECTED from C:\Users\ggeck\Documents\GitHub\finduo\plugins\foreground-timer\android\src\main\AndroidManifest.xml
+	android:minSdkVersion
+		INJECTED from C:\Users\ggeck\Documents\GitHub\finduo\plugins\foreground-timer\android\src\main\AndroidManifest.xml

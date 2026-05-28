@@ -18,6 +18,7 @@ import SymptomCheckSheet from '../components/finmed/SymptomCheckSheet';
 import AppointmentModal from '../components/finmed/AppointmentModal';
 import { logUI, uiPath, uiProps } from '../lib/devtools';
 import { bottomInset } from '../lib/safeArea';
+import { setupFinMedChannels } from '../lib/fingo/notifications';
 import type {
   FinmedMedication, FinmedReminder, ReminderType,
   MeasurementValue, SymptomCheckValue, FinmedReminderLog,
@@ -99,6 +100,11 @@ export default function FinMedScreen() {
 
   // ─── Today: resolved accordion ────────────────────────────────────────────
   const [resolvedOpen, setResolvedOpen] = useState(false);
+
+  // ─── Setup notification channels ──────────────────────────────────────────
+  useEffect(() => {
+    void setupFinMedChannels();
+  }, []);
 
   // ─── Load schedules for medication reminders + Today view ─────────────────
   useEffect(() => {

@@ -164,6 +164,7 @@ export default function ComponentFormSheet({
                       Since beginning
                     </Text>
                     <Switch
+                      {...uiProps(uiPath('fingo', 'component_form', 'since_beginning_switch'))}
                       value={sinceBeginning}
                       onValueChange={handleSinceBeginning}
                       trackColor={{ false: '#1F3A59', true: '#053d1e' }}

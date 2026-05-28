@@ -81,8 +81,15 @@ export default function FinGoScreen() {
     setOverlayPhase(null);
     overlayAnimDone.current = false;
     overlayOpDone.current = false;
-    overlayOnFinish.current?.();
+    const finishFn = overlayOnFinish.current;
     overlayOnFinish.current = null;
+    if (finishFn) {
+      try {
+        finishFn();
+      } catch (e) {
+        console.error('overlayOnFinish error:', e);
+      }
+    }
   }, []);
 
   // Register notification action callbacks while this screen is mounted
@@ -132,17 +139,30 @@ export default function FinGoScreen() {
     overlayAnimDone.current = false;
     overlayOpDone.current = false;
     if (isTracking) {
-      overlayOnFinish.current = () => navigation.push('Journey');
+      overlayOnFinish.current = () => {
+        console.log('[FinGo] Navigating to Journey after stop');
+        navigation.push('Journey');
+      };
       setOverlayPhase('stopping');
       void stopTracking()
-        .catch(e => console.warn('stop error:', e))
-        .finally(() => { overlayOpDone.current = true; tryFinishOverlay(); });
+        .then(() => console.log('[FinGo] stopTracking resolved'))
+        .catch(e => console.warn('[FinGo] stop error:', e))
+        .finally(() => {
+          console.log('[FinGo] stopTracking finally, setting overlayOpDone');
+          overlayOpDone.current = true;
+          tryFinishOverlay();
+        });
     } else {
       overlayOnFinish.current = null;
       setOverlayPhase('starting');
       void startTracking(selectedAssetId)
-        .catch(e => console.warn('start error:', e))
-        .finally(() => { overlayOpDone.current = true; tryFinishOverlay(); });
+        .then(() => console.log('[FinGo] startTracking resolved'))
+        .catch(e => console.warn('[FinGo] start error:', e))
+        .finally(() => {
+          console.log('[FinGo] startTracking finally, setting overlayOpDone');
+          overlayOpDone.current = true;
+          tryFinishOverlay();
+        });
     }
   }, [isTracking, stopTracking, startTracking, selectedAssetId, navigation, tryFinishOverlay]);
 

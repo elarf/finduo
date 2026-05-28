@@ -24,6 +24,7 @@ import { computeIntervalHealthFromLogs, formatIntervalRemaining, healthColor, ge
 import { FINGO_ASSETS } from '../lib/fingo/fingoAssets';
 import { bottomInset } from '../lib/safeArea';
 import { registerBackHandler } from '../lib/capacitorBack';
+import { recalculateComponentTracking } from '../lib/fingo/componentTracking';
 import type { RootStackParamList } from '../navigation';
 import AppHeader from '../components/AppHeader';
 import ComponentIcon from '../components/fingo/ComponentIcon';
@@ -242,6 +243,17 @@ export default function ComponentDetailScreen({ route }: Props) {
         break;
       case 'log_service':
         setShowRecordSheet(true);
+        break;
+      case 'recalculate_tracking':
+        if (comp.installed_at) {
+          await recalculateComponentTracking(comp.id, assetId, comp.installed_at);
+          await loadData();
+          if (Platform.OS === 'web') {
+            alert('Tracking totals recalculated successfully!');
+          } else {
+            Alert.alert('Success', 'Tracking totals recalculated successfully!');
+          }
+        }
         break;
       case 'uninstall':
         await supabase.from('components')
@@ -532,6 +544,13 @@ export default function ComponentDetailScreen({ route }: Props) {
               onPress={() => navigation.push('ComponentDetail', { componentId: sub.id, assetId })}
               activeOpacity={0.7}
             >
+              <View style={styles.subComponentIconWrap}>
+                <ComponentIcon
+                  name={getComponentIcon(sub.name, sub.template_key)}
+                  size={32}
+                  color="#8FA8C9"
+                />
+              </View>
               <View style={styles.subComponentBody}>
                 <Text style={styles.subComponentName}>{sub.name}</Text>
                 {sub.status === 'storage' && (
@@ -742,12 +761,14 @@ export default function ComponentDetailScreen({ route }: Props) {
           setShowLibrary(false);
           if (!asset) return;
           if (sel.type === 'storage') {
+            const installedAt = new Date().toISOString();
             await supabase.from('components').update({
               status: 'installed',
               installed_on_asset_id: assetId,
               parent_component_id: componentId,
-              installed_at: new Date().toISOString(),
+              installed_at: installedAt,
             }).eq('id', sel.component.id);
+            await recalculateComponentTracking(sel.component.id, assetId, installedAt);
             void loadData();
             return;
           }
@@ -775,7 +796,8 @@ export default function ComponentDetailScreen({ route }: Props) {
         currentAssetId={assetId}
         onSave={async (name, notes, installedAt) => {
           if (!user || !asset) return;
-          await supabase.from('components').insert({
+          const resolvedInstalledAt = installedAt ?? new Date().toISOString();
+          const { data, error } = await supabase.from('components').insert({
             created_by: user.id,
             template_key: pendingTemplate?.key ?? null,
             name,
@@ -783,9 +805,16 @@ export default function ComponentDetailScreen({ route }: Props) {
             installed_on_asset_id: assetId,
             parent_component_id: componentId,
             status: 'installed',
-            installed_at: installedAt ?? new Date().toISOString(),
+            installed_at: resolvedInstalledAt,
             notes: notes ?? null,
-          });
+          }).select().single();
+          if (error) {
+            console.error('Failed to create sub-component:', error);
+            return;
+          }
+          if (data) {
+            await recalculateComponentTracking(data.id, assetId, resolvedInstalledAt);
+          }
           logAPI('supabase://components', { source: 'fingo.component_detail', action: 'createSubComponent' });
           void loadData();
         }}
@@ -1144,14 +1173,22 @@ const styles = StyleSheet.create({
   // Sub-components
   subComponentRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#0E1A2B',
+    alignItems: 'stretch',
+    backgroundColor: '#000000',
     borderRadius: 8,
     borderWidth: 1,
     borderColor: '#1F3A59',
+    overflow: 'hidden',
     padding: 10,
     marginBottom: 5,
     gap: 8,
+  },
+  subComponentIconWrap: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    flexShrink: 0,
   },
   subComponentBody: { flex: 1 },
   subComponentName: {

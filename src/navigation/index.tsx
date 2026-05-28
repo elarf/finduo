@@ -9,6 +9,7 @@ import { initCapacitorBackButton } from '../lib/capacitorBack';
 import { useAuth } from '../context/AuthContext';
 import { DashboardProvider } from '../context/DashboardContext';
 import { fetchAssets, fingoAssetsQueryKey } from '../hooks/useAssets';
+import { useHCAutoSync } from '../hooks/useHCAutoSync';
 import LoginScreen from '../screens/LoginScreen';
 import DashboardScreen from '../screens/DashboardScreen';
 import FinBiomeScreen from '../screens/FinBiomeScreen';
@@ -79,6 +80,9 @@ export default function RootNavigator() {
   const queryClient = useQueryClient();
   const [appReady, setAppReady] = useState(false);
   const checkTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Run HC auto-sync at app level (not screen-specific) so it works on all screens
+  useHCAutoSync();
 
   useEffect(() => {
     initCapacitorBackButton();

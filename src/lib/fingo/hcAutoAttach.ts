@@ -113,7 +113,13 @@ export async function runHCAutoAttach(
           (new Date(r.endTime).getTime() - new Date(r.startTime).getTime()) / 60000,
         rawRecord: r,
       };
-    });
+    })
+      // Filter out short segments — likely fragmented data, not complete rides
+      .filter((w) => {
+        // Skip if both distance and duration are very short (likely a segment)
+        const tooShort = (w.distanceKm ?? 0) < 0.5 && w.durationMin < 5;
+        return !tooShort;
+      });
     const dupeRideIds = detectDuplicates(rideWorkouts);
 
     let runningBike = activeBike;

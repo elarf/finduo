@@ -4,6 +4,24 @@
 
 ---
 
+## [1.6.1] — 2026-05-28
+
+### Bug Fixes
+
+#### FinGo
+
+- Fixed service record row card background color (now black instead of dark blue) in ServiceIntervalDetailScreen
+- Fixed service record icon rendering at 400×400px instead of intended 60×60px
+- Added missing icons to sub-component cards in ComponentDetailScreen
+- Sub-component cards now match interval card styling with black backgrounds
+
+### Technical
+
+- `src/screens/ServiceIntervalDetailScreen.tsx` — updated `serviceCard` background to `#000000`, fixed `serviceCardIcon` height constraint
+- `src/screens/ComponentDetailScreen.tsx` — added `ComponentIcon` to sub-component cards, updated `subComponentRow` styling
+
+---
+
 ## [1.6.0] — 2026-06-03
 
 ### Features

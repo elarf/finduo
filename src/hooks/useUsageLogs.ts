@@ -198,6 +198,27 @@ export function useUsageLogs(user: User | null) {
         .eq('id', asset.id);
       if (assetError) throw assetError;
 
+      // Update component tracking values to reflect the change
+      const { data: installedComps } = await supabase
+        .from('components')
+        .select('id, track_distance, track_moving_time, track_elapsed_time, track_elevation_gain')
+        .eq('installed_on_asset_id', asset.id)
+        .eq('status', 'installed');
+
+      if (installedComps && installedComps.length > 0 && (deltaDiff !== 0 || movingTimeDiff !== 0 || elevationDiff !== 0)) {
+        const movingTimeHDiff = movingTimeDiff / 60.0;
+        await Promise.all(
+          installedComps.map((comp) =>
+            supabase.from('components').update({
+              track_distance:       Math.max(0, comp.track_distance       + deltaDiff),
+              track_moving_time:    Math.max(0, comp.track_moving_time    + movingTimeHDiff),
+              track_elapsed_time:   Math.max(0, comp.track_elapsed_time   + movingTimeHDiff),
+              track_elevation_gain: Math.max(0, comp.track_elevation_gain + elevationDiff),
+            }).eq('id', comp.id),
+          ),
+        );
+      }
+
       await loadLogs(asset.id);
       return true;
     } catch (err) {
@@ -269,11 +290,12 @@ export function useUsageLogs(user: User | null) {
           ),
         );
       }
+      await loadLogs(asset.id);
       return true;
     } catch {
       return false;
     }
-  }, []);
+  }, [loadLogs]);
 
   const pruneHCDuplicateLogs = useCallback(async (asset: FinGoAsset): Promise<number> => {
     if (!user) return 0;

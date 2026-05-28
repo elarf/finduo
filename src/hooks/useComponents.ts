@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { logAPI, webAlert } from '../lib/devtools';
 import { isMissingTableError } from '../types/dashboard';
+import { recalculateComponentTracking } from '../lib/fingo/componentTracking';
 import type { User } from '@supabase/supabase-js';
 import type { AssetType, Component, ComponentNode, ComponentStatus } from '../types/fingo';
 
@@ -86,7 +87,8 @@ export function useComponents(user: User | null) {
     if (!user) return false;
     try {
       logAPI('supabase://components', { source: 'fingo.component_form', action: 'createComponent' });
-      const { error } = await supabase
+      const resolvedInstalledAt = installedAt ?? new Date().toISOString();
+      const { data, error } = await supabase
         .from('components')
         .insert({
           created_by: user.id,
@@ -96,10 +98,18 @@ export function useComponents(user: User | null) {
           installed_on_asset_id: assetId,
           parent_component_id: parentId,
           status: 'installed' as ComponentStatus,
-          installed_at: installedAt ?? new Date().toISOString(),
+          installed_at: resolvedInstalledAt,
           notes: notes ?? null,
-        });
+        })
+        .select()
+        .single();
       if (error) throw error;
+
+      // Recalculate tracking totals from historical rides
+      if (data) {
+        await recalculateComponentTracking(data.id, assetId, resolvedInstalledAt);
+      }
+
       await loadComponents(assetId);
       return true;
     } catch (err) {
@@ -117,6 +127,12 @@ export function useComponents(user: User | null) {
       logAPI('supabase://components', { source: 'fingo.component_form', action: 'updateComponent' });
       const { error } = await supabase.from('components').update(patch).eq('id', id);
       if (error) throw error;
+
+      // Recalculate tracking if installed_at was changed
+      if (patch.installed_at) {
+        await recalculateComponentTracking(id, assetId, patch.installed_at);
+      }
+
       await loadComponents(assetId);
       return true;
     } catch (err) {
@@ -148,16 +164,21 @@ export function useComponents(user: User | null) {
   ): Promise<boolean> => {
     try {
       logAPI('supabase://components', { source: 'fingo.component_library', action: 'install' });
+      const installedAt = new Date().toISOString();
       const { error } = await supabase
         .from('components')
         .update({
           status: 'installed',
           installed_on_asset_id: assetId,
           parent_component_id: parentId,
-          installed_at: new Date().toISOString(),
+          installed_at: installedAt,
         })
         .eq('id', id);
       if (error) throw error;
+
+      // Recalculate tracking from installation date
+      await recalculateComponentTracking(id, assetId, installedAt);
+
       await loadComponents(assetId);
       return true;
     } catch (err) {

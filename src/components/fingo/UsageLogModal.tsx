@@ -20,6 +20,16 @@ function parseNum(v: string): number {
   return parseFloat(v.replace(',', '.')) || 0;
 }
 
+/** Restrict distance input to 1 decimal place */
+function formatDistanceInput(val: string): string {
+  // Replace comma with dot for consistency
+  let formatted = val.replace(',', '.');
+
+  // Only allow digits, one dot, and max 1 decimal place
+  const match = formatted.match(/^\d*\.?\d?/);
+  return match ? match[0] : '';
+}
+
 /** Convert "HH:MM" digit-mask string to minutes */
 function parseTime(v: string): number {
   const trimmed = v.trim();
@@ -131,14 +141,16 @@ export default function UsageLogModal({ visible, asset, editingLog, onClose, onS
     : distNum > 0;
 
   const handleOdometerChange = (val: string) => {
-    setOdometer(val);
-    const delta = Math.max(0, parseNum(val) - asset.current_usage);
+    const formatted = formatDistanceInput(val);
+    setOdometer(formatted);
+    const delta = Math.max(0, parseNum(formatted) - asset.current_usage);
     setDistance(delta > 0 ? String(delta) : '');
   };
 
   const handleDistanceChange = (val: string) => {
-    setDistance(val);
-    const total = asset.current_usage + parseNum(val);
+    const formatted = formatDistanceInput(val);
+    setDistance(formatted);
+    const total = asset.current_usage + parseNum(formatted);
     setOdometer(total > 0 ? String(total) : '');
   };
 
@@ -185,8 +197,8 @@ export default function UsageLogModal({ visible, asset, editingLog, onClose, onS
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <View style={styles.overlay}>
-        <View style={styles.sheet}>
-          <Text style={styles.title}>
+        <View {...uiProps(uiPath('fingo', 'usage_log_modal', 'sheet'))} style={styles.sheet}>
+          <Text {...uiProps(uiPath('fingo', 'usage_log_modal', 'title'))} style={styles.title}>
             {isEditMode ? 'Edit Log' : 'Log Usage'} — {asset.name}
           </Text>
 
@@ -212,7 +224,7 @@ export default function UsageLogModal({ visible, asset, editingLog, onClose, onS
                 keyboardType="numeric"
               />
               {stepsNum > 0 && (
-                <Text style={styles.preview}>
+                <Text {...uiProps(uiPath('fingo', 'usage_log_modal', 'steps_preview'))} style={styles.preview}>
                   {stepsNum.toLocaleString()} steps
                 </Text>
               )}
@@ -247,19 +259,25 @@ export default function UsageLogModal({ visible, asset, editingLog, onClose, onS
                     style={styles.input}
                     value={odometer}
                     onChangeText={handleOdometerChange}
-                    placeholder={`current: ${asset.current_usage.toLocaleString()} km`}
+                    placeholder={`current: ${(
+                      asset.current_usage
+                      - (isEditMode && editingLog ? editingLog.usage_delta : 0)
+                    ).toLocaleString()} km`}
                     placeholderTextColor="#475569"
                     keyboardType="numeric"
                     autoFocus
                   />
                   {distNum > 0 && (
-                    <Text style={styles.preview}>
-                      +{distNum.toLocaleString()} km travelled — total: {odomNum.toLocaleString()} km
+                    <Text {...uiProps(uiPath('fingo', 'usage_log_modal', 'odometer_preview'))} style={styles.preview}>
+                      +{distNum.toFixed(1)} km travelled — total: {odomNum.toFixed(1)} km
                     </Text>
                   )}
-                  {odomNum > 0 && odomNum <= asset.current_usage && (
-                    <Text style={styles.previewWarn}>
-                      Reading must be above current {asset.current_usage.toLocaleString()} km
+                  {odomNum > 0 && odomNum <= (asset.current_usage - (isEditMode && editingLog ? editingLog.usage_delta : 0)) && (
+                    <Text {...uiProps(uiPath('fingo', 'usage_log_modal', 'odometer_warning'))} style={styles.previewWarn}>
+                      Reading must be above current {(
+                        asset.current_usage
+                        - (isEditMode && editingLog ? editingLog.usage_delta : 0)
+                      ).toLocaleString()} km
                     </Text>
                   )}
                 </>
@@ -270,15 +288,30 @@ export default function UsageLogModal({ visible, asset, editingLog, onClose, onS
                     {...uiProps(uiPath('fingo', 'usage_log_modal', 'distance_input'))}
                     style={styles.input}
                     value={distance}
-                    onChangeText={isVehicle ? handleDistanceChange : setDistance}
+                    onChangeText={(val) => {
+                      const formatted = formatDistanceInput(val);
+                      setDistance(formatted);
+                      if (isVehicle) {
+                        const total = asset.current_usage + parseNum(formatted);
+                        setOdometer(total > 0 ? String(total) : '');
+                      }
+                    }}
                     placeholder="e.g. 42.5"
                     placeholderTextColor="#475569"
                     keyboardType="numeric"
                   />
                   {distNum > 0 && (
-                    <Text style={styles.preview}>
-                      +{distNum.toLocaleString()} km — total: {((asset.total_distance ?? 0) + distNum).toLocaleString()} km
-                      {isVehicle && ` (odometer: ${(asset.current_usage + distNum).toLocaleString()} km)`}
+                    <Text {...uiProps(uiPath('fingo', 'usage_log_modal', 'distance_preview'))} style={styles.preview}>
+                      +{distNum.toFixed(1)} km — total: {(
+                        (asset.total_distance ?? 0)
+                        - (isEditMode && editingLog ? editingLog.usage_delta : 0)
+                        + distNum
+                      ).toFixed(1)} km
+                      {isVehicle && ` (odometer: ${(
+                        asset.current_usage
+                        - (isEditMode && editingLog ? editingLog.usage_delta : 0)
+                        + distNum
+                      ).toFixed(1)} km)`}
                     </Text>
                   )}
                 </>
@@ -296,7 +329,7 @@ export default function UsageLogModal({ visible, asset, editingLog, onClose, onS
                 maxLength={5}
               />
               {movingTime.length === 4 && timeMin > 0 && (
-                <Text style={styles.preview}>{formatMinutes(timeMin)}</Text>
+                <Text {...uiProps(uiPath('fingo', 'usage_log_modal', 'time_preview'))} style={styles.preview}>{formatMinutes(timeMin)}</Text>
               )}
 
               {type === 'bike' && (
@@ -312,7 +345,7 @@ export default function UsageLogModal({ visible, asset, editingLog, onClose, onS
                     keyboardType="numeric"
                   />
                   {elevNum > 0 && (
-                    <Text style={styles.preview}>+{elevNum.toLocaleString()} m elevation</Text>
+                    <Text {...uiProps(uiPath('fingo', 'usage_log_modal', 'elevation_preview'))} style={styles.preview}>+{elevNum.toLocaleString()} m elevation</Text>
                   )}
                 </>
               )}

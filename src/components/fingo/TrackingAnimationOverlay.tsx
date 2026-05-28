@@ -11,10 +11,14 @@ export default function TrackingAnimationOverlay({ source, onComplete }: Props) 
   const opacity = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
+    console.log('[TrackingAnimationOverlay] Animation starting');
     Animated.sequence([
       Animated.timing(opacity, { toValue: 1, duration: 200, useNativeDriver: true }),
       Animated.timing(opacity, { toValue: 0, duration: 800, useNativeDriver: true }),
-    ]).start(() => onComplete());
+    ]).start(() => {
+      console.log('[TrackingAnimationOverlay] Animation completed, calling onComplete');
+      onComplete();
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

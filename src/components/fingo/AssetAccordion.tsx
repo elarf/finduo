@@ -22,6 +22,7 @@ import {
 import { getComponentIcon } from '../../lib/fingo/componentIcons';
 import { FINGO_ASSETS } from '../../lib/fingo/fingoAssets';
 import { uiPath, uiProps, logUI } from '../../lib/devtools';
+import { recalculateMultipleComponents } from '../../lib/fingo/componentTracking';
 
 const ASSET_ICONS: Record<AssetType, ImageSourcePropType> = {
   vehicle:   require('../../../assets/car.png'),
@@ -172,6 +173,36 @@ export default function AssetAccordion({
         { text: 'Cancel', style: 'cancel' },
         { text: 'Delete', style: 'destructive', onPress: () => onDeleteAsset(asset.id) },
       ]);
+    }
+  };
+
+  const handleRecalculateAllComponents = async () => {
+    const allComponents = flattenTree(componentTree).map((node) => node.component);
+    const installedComponents = allComponents.filter((c) => c.status === 'installed' && c.installed_at);
+
+    if (installedComponents.length === 0) {
+      if (Platform.OS === 'web') {
+        alert('No installed components to recalculate.');
+      } else {
+        Alert.alert('No Components', 'No installed components to recalculate.');
+      }
+      return;
+    }
+
+    setShowAssetActions(false);
+
+    const componentsToRecalc = installedComponents.map((c) => ({
+      id: c.id,
+      assetId: asset.id,
+      installedAt: c.installed_at!,
+    }));
+
+    const successCount = await recalculateMultipleComponents(componentsToRecalc);
+
+    if (Platform.OS === 'web') {
+      alert(`Successfully recalculated ${successCount} of ${installedComponents.length} component(s).`);
+    } else {
+      Alert.alert('Success', `Recalculated ${successCount} of ${installedComponents.length} component(s).`);
     }
   };
 
@@ -540,6 +571,13 @@ export default function AssetAccordion({
             onPress={() => { setShowAssetActions(false); onEditAsset(asset); }}
           >
             <Text style={styles.assetActionText}>✎  Edit Asset</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            {...uiProps(uiPath('fingo', 'asset_accordion', 'recalculate_all_button', asset.id))}
+            style={styles.assetActionRow}
+            onPress={() => void handleRecalculateAllComponents()}
+          >
+            <Text style={styles.assetActionText}>🔄  Recalculate All Components</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.assetActionRow}

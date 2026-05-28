@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
-  View, Text, ScrollView, StyleSheet, ActivityIndicator,
+  View, Text, ScrollView, StyleSheet,
 } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
@@ -10,6 +10,7 @@ import type { RootStackParamList } from '../navigation';
 import { useAuth } from '../context/AuthContext';
 import { useGpsTracking } from '../hooks/useGpsTracking';
 import AppHeader from '../components/AppHeader';
+import LoadingOverlay from '../components/LoadingOverlay';
 import type { TrackingSession, RoutePoint } from '../types/fingo';
 
 type RouteType = RouteProp<RootStackParamList, 'JourneyDetail'>;
@@ -91,31 +92,27 @@ export default function JourneyDetailScreen() {
     <View style={styles.container}>
       <AppHeader onBack={() => navigation.goBack()} />
 
-      {loading ? (
-        <View style={styles.center}>
-          <ActivityIndicator color="#53E3A6" />
-        </View>
-      ) : !session_data ? (
+      {!loading && !session_data ? (
         <View style={styles.center}>
           <Text style={styles.empty}>Session not found.</Text>
         </View>
-      ) : (
+      ) : !loading ? (
         <ScrollView contentContainerStyle={{ paddingBottom: bottom + 24 }}>
-          <Text style={styles.dateLabel}>{formatDateTime(session_data.started_at)}</Text>
+          <Text style={styles.dateLabel}>{formatDateTime(session_data!.started_at)}</Text>
 
           {/* Stats row */}
           <View style={styles.statsRow}>
             <View style={styles.stat}>
-              <Text style={styles.statValue}>{formatDistance(session_data.distance_km)}</Text>
+              <Text style={styles.statValue}>{formatDistance(session_data!.distance_km)}</Text>
               <Text style={styles.statLabel}>Distance</Text>
             </View>
             <View style={styles.stat}>
-              <Text style={styles.statValue}>{formatDuration(session_data.elapsed_seconds)}</Text>
+              <Text style={styles.statValue}>{formatDuration(session_data!.elapsed_seconds)}</Text>
               <Text style={styles.statLabel}>Duration</Text>
             </View>
             <View style={styles.stat}>
               <Text style={styles.statValue}>
-                {formatAvgSpeed(session_data.distance_km, session_data.elapsed_seconds)}
+                {formatAvgSpeed(session_data!.distance_km, session_data!.elapsed_seconds)}
               </Text>
               <Text style={styles.statLabel}>Avg Speed</Text>
             </View>
@@ -142,12 +139,14 @@ export default function JourneyDetailScreen() {
           </View>
 
           <Text style={styles.routeNote}>
-            {session_data.route?.length
-              ? `${session_data.route.length} GPS points recorded`
+            {session_data!.route?.length
+              ? `${session_data!.route.length} GPS points recorded`
               : 'GPS points are only collected while the app is in the foreground.'}
           </Text>
         </ScrollView>
-      )}
+      ) : null}
+
+      <LoadingOverlay visible={loading} />
     </View>
   );
 }

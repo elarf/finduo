@@ -207,6 +207,54 @@ export default function ServiceIntervalDetailScreen({ route }: Props) {
         {/* ── Service history ────────────────────────────────────────────────── */}
         {(() => {
           const componentRecords = records.filter((r) => r.component_id === componentId);
+
+          // Calculate stats for each service record
+          const serviceStats = componentRecords.map((rec, i) => {
+            const prevRecord = componentRecords[i + 1];
+            const prevDate = prevRecord
+              ? new Date(prevRecord.serviced_at)
+              : component?.installed_at ? new Date(component.installed_at) : null;
+            const recDate = new Date(rec.serviced_at);
+
+            // Logs in this period (between previous service and this service)
+            const logsInPeriod = prevDate
+              ? assetLogs.filter((l) => {
+                  const d = new Date(l.recorded_at);
+                  return d > prevDate && d <= recDate;
+                })
+              : [];
+
+            // Delta stats (since last service)
+            const deltaKm = logsInPeriod.reduce((s, l) => s + (l.usage_delta ?? 0), 0);
+            const deltaMovingTimeMin = logsInPeriod.reduce((s, l) => s + (l.moving_time_delta ?? 0), 0);
+            const deltaMovingTimeH = deltaMovingTimeMin / 60.0;
+            const elapsedDays = prevDate
+              ? Math.floor((recDate.getTime() - prevDate.getTime()) / (1000 * 60 * 60 * 24))
+              : null;
+            const elapsedHours = prevDate
+              ? Math.floor(((recDate.getTime() - prevDate.getTime()) % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60))
+              : null;
+
+            // Total stats (since component beginning)
+            const logsUntilNow = assetLogs.filter((l) => {
+              if (!component?.installed_at) return false;
+              const d = new Date(l.recorded_at);
+              return d >= new Date(component.installed_at) && d <= recDate;
+            });
+            const totalKm = logsUntilNow.reduce((s, l) => s + (l.usage_delta ?? 0), 0);
+            const totalMovingTimeMin = logsUntilNow.reduce((s, l) => s + (l.moving_time_delta ?? 0), 0);
+            const totalMovingTimeH = totalMovingTimeMin / 60.0;
+
+            return {
+              deltaKm,
+              deltaMovingTimeH,
+              elapsedDays,
+              elapsedHours,
+              totalKm,
+              totalMovingTimeH,
+            };
+          });
+
           return (
             <>
               <View {...uiProps(uiPath('fingo', 'service_interval_detail', 'section_services'))} style={styles.sectionHeader}>
@@ -215,26 +263,70 @@ export default function ServiceIntervalDetailScreen({ route }: Props) {
               {componentRecords.length === 0 ? (
                 <Text style={styles.emptyText}>No services logged yet.</Text>
               ) : (
-                componentRecords.map((rec) => (
-                  <TouchableOpacity key={rec.id} {...uiProps(uiPath('fingo', 'service_interval_detail', 'service_record_row', rec.id))} style={styles.serviceRow} onPress={() => setEditingRecord(rec)} activeOpacity={0.7}>
-                    <Image source={SERVICE_TYPE_ICONS[interval.service_type ?? 'general']} style={styles.serviceTypeIcon} resizeMode="contain" />
-                    <View style={styles.serviceBody}>
-                      <Text style={styles.serviceName}>{rec.name}</Text>
-                      <Text style={styles.serviceMeta}>
-                        {new Date(rec.serviced_at).toLocaleString(undefined, { year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
-                      </Text>
-                      {rec.notes ? <Text style={styles.serviceNotes} numberOfLines={2}>{rec.notes}</Text> : null}
-                    </View>
-                    <View style={styles.serviceRight}>
-                      {rec.cost != null && (
-                        <Text style={styles.serviceCost}>
-                          {rec.cost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                componentRecords.map((rec, i) => {
+                  const stats = serviceStats[i];
+                  return (
+                    <TouchableOpacity
+                      key={rec.id}
+                      {...uiProps(uiPath('fingo', 'service_interval_detail', 'service_record_row', rec.id))}
+                      style={styles.serviceCard}
+                      onPress={() => setEditingRecord(rec)}
+                      activeOpacity={0.7}
+                    >
+                      <Image source={SERVICE_TYPE_ICONS[interval.service_type ?? 'general']} style={styles.serviceCardIcon} resizeMode="contain" />
+                      <View style={styles.serviceCardBody}>
+                        <Text style={styles.serviceCardName}>{rec.name}</Text>
+                        <Text style={styles.serviceCardDate}>
+                          {new Date(rec.serviced_at).toLocaleString(undefined, { year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
                         </Text>
-                      )}
-                      <Text style={styles.editHint}>tap to edit</Text>
-                    </View>
-                  </TouchableOpacity>
-                ))
+                        {rec.notes ? <Text style={styles.serviceCardNotes} numberOfLines={2}>{rec.notes}</Text> : null}
+
+                        {/* Stats */}
+                        <View style={styles.serviceStatsSection}>
+                          {stats && stats.totalKm > 0 && (
+                            <View style={styles.serviceStatRow}>
+                              <Text style={styles.serviceStatLabel}>Distance:</Text>
+                              <Text style={styles.serviceStatValue}>
+                                {stats.totalKm.toLocaleString(undefined, { maximumFractionDigits: 1 })} km
+                                {stats.deltaKm > 0 && (
+                                  <Text style={styles.serviceStatDelta}> (+{stats.deltaKm.toLocaleString(undefined, { maximumFractionDigits: 1 })} km)</Text>
+                                )}
+                              </Text>
+                            </View>
+                          )}
+                          {stats && stats.totalMovingTimeH > 0 && (
+                            <View style={styles.serviceStatRow}>
+                              <Text style={styles.serviceStatLabel}>Ride Time:</Text>
+                              <Text style={styles.serviceStatValue}>
+                                {formatTimeHours(stats.totalMovingTimeH)}
+                                {stats.deltaMovingTimeH > 0 && (
+                                  <Text style={styles.serviceStatDelta}> (+{formatTimeHours(stats.deltaMovingTimeH)})</Text>
+                                )}
+                              </Text>
+                            </View>
+                          )}
+                          {stats && stats.elapsedDays !== null && stats.elapsedDays >= 0 && (
+                            <View style={styles.serviceStatRow}>
+                              <Text style={styles.serviceStatLabel}>Days until service:</Text>
+                              <Text style={styles.serviceStatValue}>
+                                {stats.elapsedDays > 0 && `${stats.elapsedDays}d `}
+                                {stats.elapsedHours !== null && stats.elapsedHours > 0 && `${stats.elapsedHours}h`}
+                                {stats.elapsedDays === 0 && stats.elapsedHours === 0 && '<1h'}
+                              </Text>
+                            </View>
+                          )}
+                        </View>
+
+                        {rec.cost != null && (
+                          <Text style={styles.serviceCardCost}>
+                            Cost: {rec.cost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </Text>
+                        )}
+                        <Text style={styles.serviceCardEditHint}>tap to edit</Text>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })
               )}
             </>
           );
@@ -514,49 +606,77 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     paddingVertical: 10,
   },
-  serviceRow: {
+  // Service card (expanded view with stats)
+  serviceCard: {
     flexDirection: 'row',
-    alignItems: 'center',
-    borderBottomWidth: 1,
-    borderColor: '#0E1A2B',
+    backgroundColor: '#000000',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#1F3A59',
+    marginBottom: 12,
+    overflow: 'hidden',
   },
-  serviceTypeIcon: {
-    width: 44,
-    height: 44,
+  serviceCardIcon: {
+    width: 60,
+    height: 60,
     flexShrink: 0,
   },
-  serviceBody: {
+  serviceCardBody: {
     flex: 1,
-    paddingVertical: 8,
-    paddingLeft: 8,
+    padding: 12,
   },
-  serviceName: {
+  serviceCardName: {
     color: '#CBD5E1',
-    fontSize: 13,
+    fontSize: 14,
+    fontWeight: '700',
+    marginBottom: 2,
+  },
+  serviceCardDate: {
+    color: '#475569',
+    fontSize: 11,
+    marginBottom: 4,
+  },
+  serviceCardNotes: {
+    color: '#64748B',
+    fontSize: 11,
+    marginBottom: 8,
+  },
+  serviceStatsSection: {
+    gap: 6,
+    marginTop: 6,
+    marginBottom: 8,
+  },
+  serviceStatRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 6,
+  },
+  serviceStatLabel: {
+    color: '#475569',
+    fontSize: 11,
     fontWeight: '600',
+    minWidth: 85,
   },
-  serviceMeta: {
-    color: '#475569',
+  serviceStatValue: {
+    color: '#CBD5E1',
+    fontSize: 12,
+    fontWeight: '600',
+    flex: 1,
+  },
+  serviceStatDelta: {
+    color: '#4ade80',
     fontSize: 11,
-    marginTop: 2,
+    fontWeight: '700',
   },
-  serviceNotes: {
-    color: '#475569',
-    fontSize: 11,
-    marginTop: 2,
-  },
-  serviceCost: {
+  serviceCardCost: {
     color: '#f87171',
     fontSize: 12,
     fontWeight: '700',
+    marginTop: 4,
   },
-  serviceRight: {
-    alignItems: 'flex-end',
-    gap: 4,
-    paddingRight: 4,
-  },
-  editHint: {
+  serviceCardEditHint: {
     color: '#334155',
     fontSize: 9,
+    marginTop: 6,
   },
 });

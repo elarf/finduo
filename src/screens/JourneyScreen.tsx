@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
-  View, Text, FlatList, TouchableOpacity, StyleSheet, ActivityIndicator,
+  View, Text, FlatList, TouchableOpacity, StyleSheet,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -10,6 +10,7 @@ import type { RootStackParamList } from '../navigation';
 import { useAuth } from '../context/AuthContext';
 import { useGpsTracking } from '../hooks/useGpsTracking';
 import AppHeader from '../components/AppHeader';
+import LoadingOverlay from '../components/LoadingOverlay';
 import type { TrackingSession } from '../types/fingo';
 
 function formatDistance(km: number | null): string {
@@ -55,11 +56,7 @@ export default function JourneyScreen() {
     <View style={styles.container}>
       <AppHeader onBack={() => navigation.goBack()} />
 
-      {loading ? (
-        <View style={styles.center}>
-          <ActivityIndicator color="#53E3A6" />
-        </View>
-      ) : sessions.length === 0 ? (
+      {sessions.length === 0 && !loading ? (
         <View style={styles.center}>
           <Text style={styles.empty}>No rides recorded yet.</Text>
         </View>
@@ -83,6 +80,8 @@ export default function JourneyScreen() {
           )}
         />
       )}
+
+      <LoadingOverlay visible={loading} />
     </View>
   );
 }

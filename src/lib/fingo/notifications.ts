@@ -36,6 +36,31 @@ export async function setupFinGoChannels(): Promise<void> {
   }
 }
 
+export async function setupFinMedChannels(): Promise<void> {
+  if (!Capacitor.isNativePlatform()) return;
+  const { LocalNotifications } = await import('@capacitor/local-notifications');
+  try {
+    await LocalNotifications.createChannel({
+      id: 'finmed_intake',
+      name: 'Med Take reminder',
+      description: 'Reminders to take medications',
+      importance: 4,
+      visibility: 1,
+      vibration: true,
+    });
+    await LocalNotifications.createChannel({
+      id: 'finmed_low_stock',
+      name: 'Med Stock reminder',
+      description: 'Alerts when medication stock is low',
+      importance: 3,
+      visibility: 1,
+      vibration: true,
+    });
+  } catch {
+    // non-fatal — channels may already exist
+  }
+}
+
 /** Cancel pending or delivered notifications for the given interval IDs */
 export async function cancelIntervalNotifications(intervalIds: string[]): Promise<void> {
   if (!Capacitor.isNativePlatform() || intervalIds.length === 0) return;
@@ -133,10 +158,15 @@ export async function notifyDueIntervals(
     const unit = trackingMethodUnit(interval.tracking_method);
     const overdueBy = Math.round(Math.abs(health.remaining) * 10) / 10;
 
+    // Distinguish "due" (remaining === 0) from "overdue" (remaining < 0)
+    const isDue = health.remaining === 0;
+
     toSchedule.push({
       id: notifId,
       title: interval.name,
-      body: health.isOverdue
+      body: isDue
+        ? `${comp.name}: service due`
+        : health.isOverdue
         ? `${comp.name}: overdue by ${overdueBy} ${unit}`
         : `${comp.name}: ${formatIntervalRemaining(health)} remaining`,
       smallIcon: 'ic_stat_name',

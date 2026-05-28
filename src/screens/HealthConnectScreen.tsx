@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  ActivityIndicator, Modal, FlatList, Image,
+  Modal, FlatList, Image,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -12,6 +12,7 @@ import { useUsageLogs } from '../hooks/useUsageLogs';
 import { useHealthConnect } from '../hooks/useHealthConnect';
 import type { HCRecord } from '../hooks/useHealthConnect';
 import DashboardHeader from '../components/dashboard/layout/DashboardHeader';
+import LoadingOverlay from '../components/LoadingOverlay';
 import { bottomInset } from '../lib/safeArea';
 import { uiPath, uiProps, logUI } from '../lib/devtools';
 import type { RootStackParamList } from '../navigation';
@@ -289,7 +290,13 @@ export default function HealthConnectScreen() {
             isBiking: true,
             rawRecord: r,
           };
-        });
+        })
+          // Filter out short segments — likely fragmented data, not complete rides
+          .filter((w) => {
+            // Skip if both distance and duration are very short (likely a segment)
+            const tooShort = (w.distanceKm ?? 0) < 0.5 && w.durationMin < 5;
+            return !tooShort;
+          });
         const dupeRideIds = detectDuplicates(rideWorkouts);
 
         let runningBike = activeBike;
@@ -471,9 +478,7 @@ export default function HealthConnectScreen() {
     return (
       <View style={[styles.screen, { paddingBottom: bottom }]}>
         <DashboardHeader onBack={() => navigation.goBack()} />
-        <View style={styles.centeredRow}>
-          <ActivityIndicator color="#4ade80" />
-        </View>
+        <LoadingOverlay visible={true} />
       </View>
     );
   }
@@ -561,12 +566,7 @@ export default function HealthConnectScreen() {
       </View>
 
       {/* Body */}
-      {loading ? (
-        <View style={styles.centeredRow}>
-          <ActivityIndicator color="#4ade80" />
-          <Text style={styles.loadingText}>Reading Health Connect…</Text>
-        </View>
-      ) : error ? (
+      {error ? (
         <View style={styles.centeredRow}>
           <Text style={styles.errorText}>{error}</Text>
         </View>
@@ -706,6 +706,8 @@ export default function HealthConnectScreen() {
           </View>
         </View>
       </Modal>
+
+      <LoadingOverlay visible={loading} />
     </View>
   );
 }

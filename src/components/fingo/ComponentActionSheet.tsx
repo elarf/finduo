@@ -11,6 +11,7 @@ export type ComponentActionType =
   | 'add_sub'
   | 'add_interval'
   | 'log_service'
+  | 'recalculate_tracking'
   | 'uninstall'
   | 'install'
   | 'replace_same'
@@ -97,6 +98,13 @@ export default function ComponentActionSheet({ visible, component, onAction, onC
               <Text style={styles.rowIcon}>📷</Text>
               <Text style={styles.rowTitle}>Set picture</Text>
             </TouchableOpacity>
+
+            {isInstalled && (
+              <TouchableOpacity style={styles.row} onPress={() => emit('recalculate_tracking')}>
+                <Text style={styles.rowIcon}>🔄</Text>
+                <Text style={styles.rowTitle}>Recalculate tracking</Text>
+              </TouchableOpacity>
+            )}
 
             {isInstalled ? (
               <>

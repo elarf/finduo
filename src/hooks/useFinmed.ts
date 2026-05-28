@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 import { logAPI, webAlert } from '../lib/devtools';
@@ -302,6 +302,21 @@ export function useFinmed(user: User | null) {
   const invalidateReminders = useCallback(async () => {
     await queryClient.invalidateQueries({ queryKey: finmedRemindersQueryKey(userId) });
   }, [queryClient, userId]);
+
+  // Reschedule notifications for all active reminders on first load after boot.
+  // Runs once per mount so notifications survive app restarts.
+  const scheduledRef = useRef(false);
+  useEffect(() => {
+    if (reminders.length === 0 || scheduledRef.current) return;
+    scheduledRef.current = true;
+    void (async () => {
+      for (const reminder of reminders) {
+        if (!reminder.active) continue;
+        await cancelIntakeReminder(reminder);
+        await scheduleIntakeReminder(reminder);
+      }
+    })();
+  }, [reminders]);
 
   const saveReminder = useCallback(async (
     reminder: Omit<FinmedReminder, 'id' | 'user_id' | 'created_at'> & { id?: string },

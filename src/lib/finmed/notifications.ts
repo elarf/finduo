@@ -25,23 +25,6 @@ function slotIds(reminder: FinmedReminder): number[] {
   return [reminderNotifId(reminder.id)];
 }
 
-function nextTimeToday(hhmm: string): Date {
-  const [h, m] = hhmm.split(':').map(Number);
-  const d = new Date();
-  d.setHours(h, m, 0, 0);
-  if (d <= new Date()) d.setDate(d.getDate() + 1);
-  return d;
-}
-
-function nextWeekdayDate(dow: number): Date {
-  const d = new Date();
-  let daysAhead = dow - d.getDay();
-  if (daysAhead <= 0) daysAhead += 7;
-  d.setDate(d.getDate() + daysAhead);
-  d.setHours(8, 0, 0, 0);
-  return d;
-}
-
 function nextCyclicIntakeDate(reminder: FinmedReminder): Date | null {
   const { cycle_intake_days, cycle_pause_days } = reminder.frequency_config;
   if (!cycle_intake_days || !cycle_pause_days) return null;
@@ -79,35 +62,65 @@ export async function scheduleIntakeReminder(reminder: FinmedReminder): Promise<
       ? `${medConfig.dose_amount} ${medConfig.dose_unit} — time to take your medication`
       : 'Time for your reminder';
 
-    const toSchedule: { id: number; at: Date }[] = [];
+    type NotifEntry = {
+      id: number;
+      schedule: Record<string, unknown>;
+    };
+    const toSchedule: NotifEntry[] = [];
 
     if (reminder.frequency_type === 'multiple_times_daily') {
+      // repeating daily at each configured time using `on:` for true daily repeat
       (reminder.frequency_config.times ?? ['08:00']).forEach((t, i) => {
-        toSchedule.push({ id: reminderNotifId(reminder.id, i), at: nextTimeToday(t) });
+        const [hour, minute] = t.split(':').map(Number);
+        toSchedule.push({
+          id: reminderNotifId(reminder.id, i),
+          schedule: { on: { hour, minute }, repeating: true, allowWhileIdle: true },
+        });
       });
     } else if (reminder.frequency_type === 'interval') {
+      // repeating hourly is the closest Capacitor supports natively;
+      // for multi-hour intervals we schedule once then rely on re-scheduling on app open
       const hours = reminder.frequency_config.interval_hours ?? 8;
-      toSchedule.push({ id: reminderNotifId(reminder.id), at: new Date(Date.now() + hours * 3_600_000) });
+      if (hours === 1) {
+        toSchedule.push({
+          id: reminderNotifId(reminder.id),
+          schedule: { every: 'hour', repeating: true, allowWhileIdle: true },
+        });
+      } else {
+        toSchedule.push({
+          id: reminderNotifId(reminder.id),
+          schedule: { at: new Date(Date.now() + hours * 3_600_000), allowWhileIdle: true },
+        });
+      }
     } else if (reminder.frequency_type === 'specific_day_of_week') {
-      (reminder.frequency_config.weekdays ?? []).forEach((dow, i) => {
-        toSchedule.push({ id: reminderNotifId(reminder.id, i), at: nextWeekdayDate(dow) });
+      // repeating weekly on each configured weekday at 08:00
+      (reminder.frequency_config.weekdays ?? []).forEach((weekday, i) => {
+        toSchedule.push({
+          id: reminderNotifId(reminder.id, i),
+          schedule: { on: { weekday: weekday + 1, hour: 8, minute: 0 }, repeating: true, allowWhileIdle: true },
+        });
       });
     } else if (reminder.frequency_type === 'cyclic') {
       const at = nextCyclicIntakeDate(reminder);
-      if (at) toSchedule.push({ id: reminderNotifId(reminder.id), at });
+      if (at) {
+        toSchedule.push({
+          id: reminderNotifId(reminder.id),
+          schedule: { at, allowWhileIdle: true },
+        });
+      }
     }
 
     if (toSchedule.length === 0) return;
 
     await LocalNotifications.schedule({
-      notifications: toSchedule.map(({ id, at }) => ({
+      notifications: toSchedule.map(({ id, schedule }) => ({
         id,
         title: reminder.label,
         body,
         smallIcon: SMALL_ICON,
         largeIcon: LARGE_ICON,
         channelId: FINMED_INTAKE_CHANNEL,
-        schedule: { at },
+        schedule,
         extra: { reminderId: reminder.id },
       })),
     });

@@ -225,8 +225,6 @@ export default function TransactionSection() {
     txDisplayLabel,
     formatCurrency,
     openEditTransaction,
-    openEntryModal,
-    filterIsExpense,
     inviteToken,
     shareInvite,
     selectedSummary,

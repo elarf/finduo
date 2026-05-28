@@ -3,7 +3,6 @@ import { supabase } from '../lib/supabase';
 import { logAPI, webAlert } from '../lib/devtools';
 import { isMissingTableError } from '../types/dashboard';
 import type { AppTransaction } from '../types/dashboard';
-import type { AssetCategory } from '../types/fingo';
 
 /**
  * Manages the asset ↔ FinDuo category links and fetches transactions
@@ -21,7 +20,7 @@ export function useAssetTransactions() {
         .select('category_id')
         .eq('asset_id', assetId);
       if (error) throw error;
-      const ids = (data ?? []).map((r: AssetCategory) => r.category_id);
+      const ids = (data ?? []).map((r: { category_id: string }) => r.category_id);
       setCategoryLinks((prev) => ({ ...prev, [assetId]: ids }));
       return ids;
     } catch {

@@ -39,8 +39,6 @@ export default function EntryScreen() {
     entryTagIds,
     toggleTag,
     noteFieldFocused, setNoteFieldFocused,
-    accounts,
-    entryAccountId, setEntryAccountId,
     entryAccount,
     selectedCurrency,
     entryCategories, entryTags, entryTagUsage,

@@ -11,6 +11,11 @@ import type {
   ReminderLogValue, FrequencyConfig, ReminderTypeConfig,
   FrequencyType, ReminderType,
 } from '../types/finmed';
+import {
+  scheduleIntakeReminder,
+  cancelIntakeReminder,
+  scheduleStockAlert,
+} from '../lib/finmed/notifications';
 
 export const finmedMedsQueryKey = (userId: string | undefined) =>
   ['finmed_medications', userId] as const;
@@ -239,6 +244,9 @@ export function useFinmed(user: User | null) {
       const { error: stockError } = await supabase
         .from('finmed_medications').update({ stock_quantity: newStock }).eq('id', medication.id);
       if (stockError) throw stockError;
+      if (newStock <= medication.stock_low_threshold) {
+        await scheduleStockAlert({ ...medication, stock_quantity: newStock });
+      }
       await invalidateMeds();
       await loadIntakeLogs(medication.id);
       return true;
@@ -301,15 +309,20 @@ export function useFinmed(user: User | null) {
     if (!user) return false;
     try {
       logAPI('supabase://finmed_reminders', { source: 'finmed.reminder_setup', action: 'saveReminder' });
-      if (reminder.id) {
-        const { id, ...patch } = reminder;
-        const { error } = await supabase.from('finmed_reminders').update(patch).eq('id', id);
+      // strip client-only fields before writing to DB
+      const { notification_ids: _ids, id: maybeId, ...payload } = reminder as FinmedReminder & { id?: string };
+      if (maybeId) {
+        const old = reminders.find(r => r.id === maybeId);
+        if (old) await cancelIntakeReminder(old);
+        const { error } = await supabase.from('finmed_reminders').update(payload).eq('id', maybeId);
         if (error) throw error;
+        if (old && payload.active) await scheduleIntakeReminder({ ...old, ...payload, id: maybeId });
       } else {
-        const { error } = await supabase.from('finmed_reminders').insert({
-          user_id: user.id, ...reminder,
-        });
+        const { data, error } = await supabase.from('finmed_reminders').insert({
+          user_id: user.id, ...payload,
+        }).select().single();
         if (error) throw error;
+        await scheduleIntakeReminder(data as FinmedReminder);
       }
       await invalidateReminders();
       return true;
@@ -317,20 +330,22 @@ export function useFinmed(user: User | null) {
       webAlert('Error', err instanceof Error ? err.message : 'Failed to save reminder');
       return false;
     }
-  }, [user, invalidateReminders]);
+  }, [user, invalidateReminders, reminders]);
 
   const deleteReminder = useCallback(async (id: string): Promise<boolean> => {
     try {
       logAPI('supabase://finmed_reminders', { source: 'finmed.treatment', action: 'deleteReminder' });
+      const reminder = reminders.find(r => r.id === id);
       const { error } = await supabase.from('finmed_reminders').update({ active: false }).eq('id', id);
       if (error) throw error;
+      if (reminder) await cancelIntakeReminder(reminder);
       await invalidateReminders();
       return true;
     } catch (err) {
       webAlert('Error', err instanceof Error ? err.message : 'Failed to delete reminder');
       return false;
     }
-  }, [invalidateReminders]);
+  }, [invalidateReminders, reminders]);
 
   const logReminderAction = useCallback(async (
     reminderId: string,
@@ -355,13 +370,17 @@ export function useFinmed(user: User | null) {
         note: note ?? null,
       });
       if (error) throw error;
+      if (action === 'complete' || action === 'ignore') {
+        const reminder = reminders.find(r => r.id === reminderId);
+        if (reminder) await cancelIntakeReminder(reminder);
+      }
       await queryClient.invalidateQueries({ queryKey: ['finmed_reminder_logs', userId] });
       return true;
     } catch (err) {
       webAlert('Error', err instanceof Error ? err.message : 'Failed to log action');
       return false;
     }
-  }, [user, queryClient, userId]);
+  }, [user, queryClient, userId, reminders]);
 
   const getReminderLogs = useCallback(async (reminderId?: string): Promise<FinmedReminderLog[]> => {
     try {

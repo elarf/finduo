@@ -22,6 +22,7 @@ import RootNavigator from './src/navigation';
 import { navigationRef, setPendingShortcut, getPendingShortcut, getPendingNotification, setPendingNotification, setLaunchReady } from './src/navigation/navigationRef';
 import { setupNotificationActionListener } from './src/lib/fingo/notifications';
 import { setupTrackingActionListener } from './src/lib/fingo/trackingNotification';
+import { setupFinMedChannels } from './src/lib/fingo/notifications';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -66,6 +67,7 @@ export default function App() {
   useEffect(() => {
     setupNotificationActionListener();
     setupTrackingActionListener();
+    void setupFinMedChannels();
   }, []);
 
   useEffect(() => {

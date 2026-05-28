@@ -139,6 +139,8 @@ export interface FinmedReminder {
   active: boolean;
   type_config: ReminderTypeConfig;
   created_at: string;
+  /** Client-side only — not persisted to DB; derived deterministically via reminderNotifId() */
+  notification_ids?: number[];
 }
 
 // ─── Log value types ──────────────────────────────────────────────────────────

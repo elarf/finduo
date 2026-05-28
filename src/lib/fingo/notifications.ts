@@ -136,6 +136,7 @@ export async function notifyDueIntervals(
     title: string;
     body: string;
     smallIcon: string;
+    largeIcon: string;
     channelId: string;
     schedule: { at: Date };
     extra: { intervalId: string; componentId: string; assetId: string };
@@ -169,7 +170,8 @@ export async function notifyDueIntervals(
         : health.isOverdue
         ? `${comp.name}: overdue by ${overdueBy} ${unit}`
         : `${comp.name}: ${formatIntervalRemaining(health)} remaining`,
-      smallIcon: 'ic_stat_name',
+      smallIcon: 'ic_maintenance_monochrome',
+      largeIcon: 'asset://assets/maintenance.png',
       channelId: CHANNEL_ID,
       schedule: { at: new Date(Date.now() + 1000) },
       extra: { intervalId: interval.id, componentId: interval.component_id, assetId },

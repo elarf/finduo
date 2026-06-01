@@ -14,6 +14,8 @@ import type {
 import {
   scheduleIntakeReminder,
   cancelIntakeReminder,
+  cancelReminderTimeSlot,
+  rescheduleAfterSnooze,
   scheduleStockAlert,
 } from '../lib/finmed/notifications';
 
@@ -368,6 +370,7 @@ export function useFinmed(user: User | null) {
     value?: ReminderLogValue,
     note?: string,
     snoozedUntil?: string,
+    slotIndex?: number,
   ): Promise<boolean> => {
     if (!user) return false;
     try {
@@ -383,12 +386,31 @@ export function useFinmed(user: User | null) {
         snoozed_until: action === 'snooze' ? (snoozedUntil ?? null) : null,
         value: value ?? null,
         note: note ?? null,
+        metadata: slotIndex !== undefined ? { slotIndex } : null,
       });
       if (error) throw error;
+
+      const reminder = reminders.find(r => r.id === reminderId);
+      if (!reminder) return true;
+
       if (action === 'complete' || action === 'ignore') {
-        const reminder = reminders.find(r => r.id === reminderId);
-        if (reminder) await cancelIntakeReminder(reminder);
+        // For multiple_times_daily, only cancel notifications for the specific slot
+        if (reminder.frequency_type === 'multiple_times_daily' && slotIndex !== undefined) {
+          await cancelReminderTimeSlot(
+            reminderId,
+            slotIndex,
+            reminder.max_repeat_window_minutes,
+          );
+        } else {
+          // For other frequencies, cancel all notifications for this reminder
+          await cancelIntakeReminder(reminder);
+        }
+      } else if (action === 'snooze' && snoozedUntil && slotIndex !== undefined) {
+        // Reschedule from snoozed time
+        const snoozedDate = new Date(snoozedUntil);
+        await rescheduleAfterSnooze(reminder, slotIndex, snoozedDate);
       }
+
       await queryClient.invalidateQueries({ queryKey: ['finmed_reminder_logs', userId] });
       return true;
     } catch (err) {

@@ -3,12 +3,13 @@ import {
   KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet,
   Text, TextInput, TouchableOpacity, View,
 } from 'react-native';
-import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import { useNavigation, useFocusEffect, useRoute } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';
 import { useFinmed } from '../hooks/useFinmed';
+import { supabase } from '../lib/supabase';
 import DashboardHeader from '../components/dashboard/layout/DashboardHeader';
 import MedicationDetailSheet from '../components/finmed/MedicationDetailSheet';
 import FindashTransactionPicker from '../components/shared/FindashTransactionPicker';
@@ -16,6 +17,7 @@ import ReminderSetupModal from '../components/finmed/ReminderSetupModal';
 import MeasurementLogSheet from '../components/finmed/MeasurementLogSheet';
 import SymptomCheckSheet from '../components/finmed/SymptomCheckSheet';
 import AppointmentModal from '../components/finmed/AppointmentModal';
+import SnoozeSheet from '../components/finmed/SnoozeSheet';
 import { logUI, uiPath, uiProps } from '../lib/devtools';
 import { bottomInset } from '../lib/safeArea';
 import { setupFinMedChannels } from '../lib/fingo/notifications';
@@ -32,16 +34,20 @@ const REMINDER_TYPE_LABELS: Record<ReminderType, string> = {
   measurement: 'Measurement',
   symptom_check: 'Symptom Check',
   appointment: 'Appointment',
+  custom: 'Custom',
 };
 const REMINDER_TYPE_ICONS: Record<ReminderType, string> = {
   medication: '💊',
   measurement: '📏',
   symptom_check: '😐',
   appointment: '📅',
+  custom: '🔔',
 };
 
 export default function FinMedScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const route = useRoute();
+  const params = route.params as { action?: 'taken' | 'snooze'; reminderId?: string; slotIndex?: number } | undefined;
   const { session } = useAuth();
   const user = session?.user ?? null;
   const { bottom } = useSafeAreaInsets();
@@ -89,9 +95,11 @@ export default function FinMedScreen() {
 
   // ─── Active log sheet state ───────────────────────────────────────────────
   const [logReminder, setLogReminder] = useState<FinmedReminder | null>(null);
+  const [logReminderSlotIndex, setLogReminderSlotIndex] = useState<number>(0);
   const [showMeasurementLog, setShowMeasurementLog] = useState(false);
   const [showSymptomCheck, setShowSymptomCheck] = useState(false);
   const [showAppointment, setShowAppointment] = useState(false);
+  const [showSnoozeSheet, setShowSnoozeSheet] = useState(false);
 
   // ─── Progress tab ─────────────────────────────────────────────────────────
   const [progressLogs, setProgressLogs] = useState<FinmedReminderLog[]>([]);
@@ -100,6 +108,7 @@ export default function FinMedScreen() {
 
   // ─── Today: resolved accordion ────────────────────────────────────────────
   const [resolvedOpen, setResolvedOpen] = useState(false);
+  const [todayLogs, setTodayLogs] = useState<FinmedReminderLog[]>([]);
 
   // ─── Setup notification channels ──────────────────────────────────────────
   useEffect(() => {
@@ -142,6 +151,21 @@ export default function FinMedScreen() {
     }
   }, [activeTab, progressFilter, getReminderLogs]);
 
+  // Load today's logs for filtering completed reminders
+  useEffect(() => {
+    if (activeTab === 'today') {
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+      void getReminderLogs().then((logs) => {
+        const todayOnly = logs.filter((log) => {
+          const logDate = new Date(log.created_at);
+          return logDate >= todayStart;
+        });
+        setTodayLogs(todayOnly);
+      });
+    }
+  }, [activeTab, getReminderLogs]);
+
   // ─── Today items ─────────────────────────────────────────────────────────
   const todayStr = new Date().toISOString().slice(0, 10);
   const todayMedItems = useMemo(() => {
@@ -159,6 +183,78 @@ export default function FinMedScreen() {
   const allTodayItems = useMemo(() => {
     return [...todayReminderSlots, ...todayMedItems.map((m) => ({ med: m.med, sched: m.sched, time: m.time }))];
   }, [todayReminderSlots, todayMedItems]);
+
+  // Filter completed/ignored reminders for today - track per slot for multiple_times_daily
+  const { upcomingItems, resolvedItems } = useMemo(() => {
+    // For multiple_times_daily, track completion per slot (reminder_id + slotIndex)
+    // For other frequencies, track per reminder_id
+    const completedSlots = new Set<string>(); // "reminderId:slotIndex" or just "reminderId"
+    const latestLogBySlot = new Map<string, FinmedReminderLog>();
+
+    // Keep only the latest log per slot
+    for (const log of todayLogs) {
+      if (log.action === 'complete' || log.action === 'ignore') {
+        const reminder = reminders.find((r) => r.id === log.reminder_id);
+        const slotIndex = log.metadata?.slotIndex;
+
+        // Build key based on frequency type
+        let slotKey: string;
+        if (reminder?.frequency_type === 'multiple_times_daily' && slotIndex !== undefined) {
+          slotKey = `${log.reminder_id}:${slotIndex}`;
+        } else {
+          slotKey = log.reminder_id;
+        }
+
+        const existing = latestLogBySlot.get(slotKey);
+        if (!existing || new Date(log.created_at) > new Date(existing.created_at)) {
+          latestLogBySlot.set(slotKey, log);
+        }
+      }
+    }
+
+    // Build resolved items from latest logs
+    const resolved: Array<{ reminder: FinmedReminder; time: string | null; log: FinmedReminderLog }> = [];
+    for (const [slotKey, log] of latestLogBySlot) {
+      completedSlots.add(slotKey);
+      const reminder = reminders.find((r) => r.id === log.reminder_id);
+      if (reminder) {
+        // Find the matching slot from todayReminderSlots
+        const slotIndex = log.metadata?.slotIndex;
+        let matchingSlot;
+        if (reminder.frequency_type === 'multiple_times_daily' && slotIndex !== undefined) {
+          // Find the slot with matching slotIndex
+          const slots = todayReminderSlots.filter((s) => s.reminder.id === reminder.id);
+          matchingSlot = slots[slotIndex];
+        } else {
+          matchingSlot = todayReminderSlots.find((s) => s.reminder.id === reminder.id);
+        }
+        resolved.push({ reminder, time: matchingSlot?.time ?? null, log });
+      }
+    }
+
+    const upcoming = allTodayItems.filter((item) => {
+      if ('reminder' in item) {
+        const { reminder, time } = item;
+        // Determine slot index for this item
+        const slotIndex = todayReminderSlots.findIndex(
+          (s) => s.reminder.id === reminder.id && s.time === time
+        );
+
+        // Build key to check completion
+        let slotKey: string;
+        if (reminder.frequency_type === 'multiple_times_daily' && slotIndex >= 0) {
+          slotKey = `${reminder.id}:${slotIndex}`;
+        } else {
+          slotKey = reminder.id;
+        }
+
+        return !completedSlots.has(slotKey);
+      }
+      return true; // Keep legacy medication items
+    });
+
+    return { upcomingItems: upcoming, resolvedItems: resolved };
+  }, [allTodayItems, todayLogs, reminders, todayReminderSlots]);
 
   // ─── Handlers: medication CRUD ───────────────────────────────────────────
   const openCreateMed = useCallback(() => {
@@ -201,40 +297,74 @@ export default function FinMedScreen() {
   };
 
   // ─── Handlers: reminder logging ───────────────────────────────────────────
-  const openLogSheet = (reminder: FinmedReminder) => {
+  const refreshTodayLogs = useCallback(async () => {
+    console.log('[FinMed] Refreshing today logs...');
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const logs = await getReminderLogs();
+    console.log('[FinMed] Total logs fetched:', logs.length);
+    const todayOnly = logs.filter((log) => {
+      const logDate = new Date(log.created_at);
+      return logDate >= todayStart;
+    });
+    console.log('[FinMed] Today logs:', todayOnly.length);
+    setTodayLogs(todayOnly);
+  }, [getReminderLogs]);
+
+  const openLogSheet = (reminder: FinmedReminder, slotIndex = 0) => {
+    console.log('[FinMed] openLogSheet called for:', reminder.label, 'type:', reminder.type, 'slot:', slotIndex);
     setLogReminder(reminder);
+    setLogReminderSlotIndex(slotIndex);
     if (reminder.type === 'measurement') setShowMeasurementLog(true);
     else if (reminder.type === 'symptom_check') setShowSymptomCheck(true);
     else if (reminder.type === 'appointment') setShowAppointment(true);
     else {
-      // medication reminder — quick complete
-      void logReminderAction(reminder.id, 'complete');
+      // medication or custom reminder — quick complete
+      console.log('[FinMed] Quick completing', reminder.type, 'reminder');
+      void logReminderAction(reminder.id, 'complete', undefined, undefined, undefined, slotIndex).then(() => refreshTodayLogs());
     }
   };
 
   const handleMeasurementComplete = async (value: MeasurementValue, note?: string) => {
     if (!logReminder) return;
-    await logReminderAction(logReminder.id, 'complete', value, note);
+    await logReminderAction(logReminder.id, 'complete', value, note, undefined, logReminderSlotIndex);
+    await refreshTodayLogs();
   };
 
   const handleSymptomComplete = async (value: SymptomCheckValue, note?: string) => {
     if (!logReminder) return;
-    await logReminderAction(logReminder.id, 'complete', value as any, note);
+    await logReminderAction(logReminder.id, 'complete', value as any, note, undefined, logReminderSlotIndex);
+    await refreshTodayLogs();
   };
 
   const handleApptComplete = async (note?: string) => {
     if (!logReminder) return;
-    await logReminderAction(logReminder.id, 'complete', {}, note);
+    await logReminderAction(logReminder.id, 'complete', {}, note, undefined, logReminderSlotIndex);
+    await refreshTodayLogs();
   };
 
   const handleSnooze = async (minutes: number, until: string) => {
     if (!logReminder) return;
-    await logReminderAction(logReminder.id, 'snooze', undefined, undefined, until);
+    await logReminderAction(logReminder.id, 'snooze', undefined, undefined, until, logReminderSlotIndex);
+    await refreshTodayLogs();
+    setShowSnoozeSheet(false);
   };
 
   const handleIgnore = async () => {
     if (!logReminder) return;
-    await logReminderAction(logReminder.id, 'ignore');
+    await logReminderAction(logReminder.id, 'ignore', undefined, undefined, undefined, logReminderSlotIndex);
+    await refreshTodayLogs();
+  };
+
+  const handleDeleteLog = async (logId: string) => {
+    try {
+      console.log('[FinMed] Deleting log:', logId);
+      const { error } = await supabase.from('finmed_reminder_logs').delete().eq('id', logId);
+      if (error) throw error;
+      await refreshTodayLogs();
+    } catch (err) {
+      console.error('[FinMed] Failed to delete log:', err);
+    }
   };
 
   // ─── Treatment tab: grouped reminders ────────────────────────────────────
@@ -247,7 +377,7 @@ export default function FinMedScreen() {
     return groups;
   }, [reminders]);
 
-  const reminderTypeOrder: ReminderType[] = ['medication', 'measurement', 'symptom_check', 'appointment'];
+  const reminderTypeOrder: ReminderType[] = ['medication', 'measurement', 'symptom_check', 'appointment', 'custom'];
 
   // ─── Progress tab: grouped logs ──────────────────────────────────────────
   const groupedLogs = useMemo(() => {
@@ -266,6 +396,32 @@ export default function FinMedScreen() {
 
   const formatDateTime = (iso: string) =>
     new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+  // ─── Handle notification action params ───────────────────────────────────
+  useEffect(() => {
+    if (!params?.action || !params?.reminderId) return;
+
+    const reminder = reminders.find(r => r.id === params.reminderId);
+    if (!reminder) return;
+
+    const slotIndex = params.slotIndex ?? 0;
+
+    if (params.action === 'taken') {
+      // Automatically complete the reminder
+      void logReminderAction(reminder.id, 'complete', undefined, undefined, undefined, slotIndex).then(() => {
+        refreshTodayLogs();
+        // Clear params after handling
+        navigation.setParams({ action: undefined, reminderId: undefined, slotIndex: undefined });
+      });
+    } else if (params.action === 'snooze') {
+      // Show snooze sheet for this reminder
+      setLogReminder(reminder);
+      setLogReminderSlotIndex(slotIndex);
+      setShowSnoozeSheet(true);
+      // Clear params after handling
+      navigation.setParams({ action: undefined, reminderId: undefined, slotIndex: undefined });
+    }
+  }, [params, reminders, logReminderAction, refreshTodayLogs, navigation]);
 
   const TABS: { key: Tab; label: string }[] = [
     { key: 'today', label: 'Today' },
@@ -327,9 +483,9 @@ export default function FinMedScreen() {
               </Text>
             </View>
 
-            {loading && remindersLoading && allTodayItems.length === 0 ? (
+            {loading && remindersLoading && upcomingItems.length === 0 ? (
               <Text style={styles.loadingText}>Loading…</Text>
-            ) : allTodayItems.length === 0 ? (
+            ) : upcomingItems.length === 0 && resolvedItems.length === 0 ? (
               <View style={styles.emptyState}>
                 <Text style={styles.emptyTitle}>Nothing scheduled for today</Text>
                 <Text style={styles.emptyHint}>Add a reminder in the Treatment tab to see today's schedule here.</Text>
@@ -337,19 +493,24 @@ export default function FinMedScreen() {
             ) : (
               <>
                 <Text style={styles.sectionHeader}>Upcoming</Text>
-                {allTodayItems.map((item, idx) => {
+                {upcomingItems.map((item, idx) => {
                   if ('reminder' in item) {
                     const { reminder, time } = item;
+                    const displayIcon = reminder.type === 'custom' && (reminder.type_config as any)?.icon
+                      ? (reminder.type_config as any).icon
+                      : REMINDER_TYPE_ICONS[reminder.type];
+                    // Determine slot index from time in todayReminderSlots
+                    const slotIndex = todayReminderSlots.findIndex(s => s.reminder.id === reminder.id && s.time === time);
                     return (
                       <TouchableOpacity
                         {...uiProps(uiPath('finmed', 'today', 'reminder_row', reminder.id))}
                         key={`r_${reminder.id}_${idx}`}
                         style={styles.todayCard}
-                        onPress={() => { logUI(uiPath('finmed', 'today', 'reminder_row', reminder.id), 'press'); openLogSheet(reminder); }}
+                        onPress={() => { logUI(uiPath('finmed', 'today', 'reminder_row', reminder.id), 'press'); openLogSheet(reminder, slotIndex >= 0 ? slotIndex : 0); }}
                       >
                         <View style={styles.todayTimeCol}>
                           <Text style={styles.todayTimeText}>{time ?? '—'}</Text>
-                          <Text style={styles.todayTypeIcon}>{REMINDER_TYPE_ICONS[reminder.type]}</Text>
+                          <Text style={styles.todayTypeIcon}>{displayIcon}</Text>
                         </View>
                         <View style={styles.todayInfo}>
                           <Text style={styles.todayMedName}>{reminder.label}</Text>
@@ -358,7 +519,7 @@ export default function FinMedScreen() {
                         <TouchableOpacity
                           {...uiProps(uiPath('finmed', 'today', 'complete_button', reminder.id))}
                           style={styles.takeBtn}
-                          onPress={() => { logUI(uiPath('finmed', 'today', 'complete_button', reminder.id), 'press'); void logReminderAction(reminder.id, 'complete'); }}
+                          onPress={() => { logUI(uiPath('finmed', 'today', 'complete_button', reminder.id), 'press'); openLogSheet(reminder, slotIndex >= 0 ? slotIndex : 0); }}
                         >
                           <Text style={styles.takeBtnText}>✓</Text>
                         </TouchableOpacity>
@@ -398,12 +559,45 @@ export default function FinMedScreen() {
 
                 {/* Resolved accordion */}
                 <TouchableOpacity style={styles.accordionHeader} onPress={() => setResolvedOpen((v) => !v)}>
-                  <Text style={styles.accordionTitle}>Resolved today</Text>
+                  <Text style={styles.accordionTitle}>Resolved today {resolvedItems.length > 0 && `(${resolvedItems.length})`}</Text>
                   <Text style={styles.accordionChevron}>{resolvedOpen ? '▲' : '▼'}</Text>
                 </TouchableOpacity>
                 {resolvedOpen && (
                   <View style={styles.resolvedBlock}>
-                    <Text style={styles.resolvedHint}>Completed and ignored reminders will appear here.</Text>
+                    {resolvedItems.length === 0 ? (
+                      <Text style={styles.resolvedHint}>Completed and ignored reminders will appear here.</Text>
+                    ) : (
+                      resolvedItems.map(({ reminder, time, log }) => {
+                        const displayIcon = reminder.type === 'custom' && (reminder.type_config as any)?.icon
+                          ? (reminder.type_config as any).icon
+                          : REMINDER_TYPE_ICONS[reminder.type];
+                        return (
+                          <View
+                            key={`resolved_${reminder.id}_${log.id}`}
+                            style={styles.resolvedCard}
+                          >
+                            <View style={styles.todayTimeCol}>
+                              <Text style={styles.todayTimeText}>{time ?? '—'}</Text>
+                              <Text style={styles.todayTypeIcon}>{displayIcon}</Text>
+                            </View>
+                            <View style={styles.todayInfo}>
+                              <Text style={styles.todayMedName}>{reminder.label}</Text>
+                              <Text style={styles.todayDose}>{REMINDER_TYPE_LABELS[reminder.type]}</Text>
+                            </View>
+                            <Text style={styles.resolvedStatus}>
+                              {log.action === 'complete' ? '✓' : '✗'}
+                            </Text>
+                            <TouchableOpacity
+                              {...uiProps(uiPath('finmed', 'today', 'delete_log_button', log.id))}
+                              style={styles.deleteLogBtn}
+                              onPress={() => { logUI(uiPath('finmed', 'today', 'delete_log_button', log.id), 'press'); void handleDeleteLog(log.id); }}
+                            >
+                              <Text style={styles.deleteLogBtnText}>×</Text>
+                            </TouchableOpacity>
+                          </View>
+                        );
+                      })
+                    )}
                   </View>
                 )}
               </>
@@ -508,17 +702,22 @@ export default function FinMedScreen() {
                 >
                   <Text style={[styles.filterChipText, !progressFilter && styles.filterChipTextActive]}>All</Text>
                 </TouchableOpacity>
-                {reminders.map((r) => (
-                  <TouchableOpacity
-                    key={r.id}
-                    style={[styles.filterChip, progressFilter === r.id && styles.filterChipActive]}
-                    onPress={() => setProgressFilter(r.id)}
-                  >
-                    <Text style={[styles.filterChipText, progressFilter === r.id && styles.filterChipTextActive]}>
-                      {REMINDER_TYPE_ICONS[r.type]} {r.label}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
+                {reminders.map((r) => {
+                  const displayIcon = r.type === 'custom' && (r.type_config as any)?.icon
+                    ? (r.type_config as any).icon
+                    : REMINDER_TYPE_ICONS[r.type];
+                  return (
+                    <TouchableOpacity
+                      key={r.id}
+                      style={[styles.filterChip, progressFilter === r.id && styles.filterChipActive]}
+                      onPress={() => setProgressFilter(r.id)}
+                    >
+                      <Text style={[styles.filterChipText, progressFilter === r.id && styles.filterChipTextActive]}>
+                        {displayIcon} {r.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
               </ScrollView>
             )}
 
@@ -530,26 +729,31 @@ export default function FinMedScreen() {
                 <Text style={styles.emptyHint}>Complete reminders to see your history here.</Text>
               </View>
             ) : (
-              groupedLogs.map(({ reminder, logs }) => (
-                <View key={reminder?.id ?? 'unknown'} style={styles.progressGroup}>
-                  <Text style={styles.progressGroupTitle}>
-                    {reminder ? `${REMINDER_TYPE_ICONS[reminder.type]} ${reminder.label}` : 'Unknown reminder'}
-                  </Text>
-                  {logs.map((log) => (
-                    <View key={log.id} style={styles.logRow}>
-                      <Text style={styles.logAction}>
-                        {log.action === 'complete' ? '✓' : log.action === 'ignore' ? '✗' : '↺'}
-                      </Text>
-                      <Text style={styles.logDate}>{formatDateTime(log.created_at)}</Text>
-                      {log.value && Object.keys(log.value).length > 0 && (
-                        <Text style={styles.logValue}>
-                          {JSON.stringify(log.value).slice(0, 40)}
+              groupedLogs.map(({ reminder, logs }) => {
+                const displayIcon = reminder && reminder.type === 'custom' && (reminder.type_config as any)?.icon
+                  ? (reminder.type_config as any).icon
+                  : reminder ? REMINDER_TYPE_ICONS[reminder.type] : '❓';
+                return (
+                  <View key={reminder?.id ?? 'unknown'} style={styles.progressGroup}>
+                    <Text style={styles.progressGroupTitle}>
+                      {reminder ? `${displayIcon} ${reminder.label}` : 'Unknown reminder'}
+                    </Text>
+                    {logs.map((log) => (
+                      <View key={log.id} style={styles.logRow}>
+                        <Text style={styles.logAction}>
+                          {log.action === 'complete' ? '✓' : log.action === 'ignore' ? '✗' : '↺'}
                         </Text>
-                      )}
-                    </View>
-                  ))}
-                </View>
-              ))
+                        <Text style={styles.logDate}>{formatDateTime(log.created_at)}</Text>
+                        {log.value && Object.keys(log.value).length > 0 && (
+                          <Text style={styles.logValue}>
+                            {JSON.stringify(log.value).slice(0, 40)}
+                          </Text>
+                        )}
+                      </View>
+                    ))}
+                  </View>
+                );
+              })
             )}
           </>
         )}
@@ -649,6 +853,7 @@ export default function FinMedScreen() {
         medications={medications.map((m) => ({ id: m.id, name: m.name, unit: m.unit }))}
         initialType={addReminderType}
         editing={editingReminder}
+        onCreateMedStock={openCreateMed}
       />
 
       {logReminder?.type === 'measurement' && (
@@ -691,6 +896,12 @@ export default function FinMedScreen() {
         visible={showTxPicker}
         onClose={() => setShowTxPicker(false)}
         onSelect={handlePickTransaction}
+      />
+
+      <SnoozeSheet
+        visible={showSnoozeSheet}
+        onClose={() => setShowSnoozeSheet(false)}
+        onSnooze={handleSnooze}
       />
     </View>
   );
@@ -756,6 +967,17 @@ const styles = StyleSheet.create({
   accordionChevron: { color: '#475569', fontSize: 12 },
   resolvedBlock: { paddingBottom: 8 },
   resolvedHint: { color: '#475569', fontSize: 12, fontStyle: 'italic' },
+  resolvedCard: {
+    flexDirection: 'row', alignItems: 'center', backgroundColor: '#0B1728',
+    borderRadius: 10, borderWidth: 1, borderColor: '#1F3A59',
+    padding: 12, marginBottom: 6, gap: 10, opacity: 0.6,
+  },
+  resolvedStatus: { color: '#8FA8C9', fontSize: 18, fontWeight: '700' },
+  deleteLogBtn: {
+    width: 28, height: 28, borderRadius: 14,
+    backgroundColor: '#1F3A59', alignItems: 'center', justifyContent: 'center',
+  },
+  deleteLogBtnText: { color: '#F472B6', fontSize: 20, fontWeight: '700', lineHeight: 20 },
   // Treatment
   treatmentGroup: { marginBottom: 20 },
   treatmentGroupTitle: {

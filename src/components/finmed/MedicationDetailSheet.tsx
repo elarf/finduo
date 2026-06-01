@@ -37,6 +37,8 @@ export default function MedicationDetailSheet({
   const [logNote, setLogNote] = useState('');
   const [intaking, setIntaking] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [editingStock, setEditingStock] = useState(false);
+  const [stockInput, setStockInput] = useState('');
 
   useEffect(() => {
     if (medication) {
@@ -47,6 +49,8 @@ export default function MedicationDetailSheet({
       setNotes(medication.notes ?? '');
       setEditing(false);
       setConfirmDelete(false);
+      setEditingStock(false);
+      setStockInput(String(medication.stock_quantity));
     }
   }, [medication]);
 
@@ -71,6 +75,14 @@ export default function MedicationDetailSheet({
   const handleStockAdjust = async (delta: number) => {
     const next = Math.max(0, medication.stock_quantity + delta);
     await onUpdate({ stock_quantity: next });
+  };
+
+  const handleStockInputSubmit = async () => {
+    const value = parseFloat(stockInput);
+    if (!isNaN(value) && value >= 0) {
+      await onUpdate({ stock_quantity: value });
+    }
+    setEditingStock(false);
   };
 
   const handleLogIntake = async () => {
@@ -120,13 +132,35 @@ export default function MedicationDetailSheet({
               {editing ? (
                 <View style={styles.editSection}>
                   <Text style={styles.label}>Form</Text>
-                  <TextInput style={styles.input} value={form} onChangeText={setForm} placeholder="tablet / inhaler / liquid" placeholderTextColor="#475569" />
+                  <TextInput
+                    {...uiProps(uiPath('finmed', 'detail_sheet', 'form_input'))}
+                    style={styles.input}
+                    value={form}
+                    onChangeText={setForm}
+                    placeholder="tablet / inhaler / liquid"
+                    placeholderTextColor="#475569"
+                  />
                   <Text style={styles.label}>Unit</Text>
-                  <TextInput style={styles.input} value={unit} onChangeText={setUnit} placeholder="mg / ml / puff" placeholderTextColor="#475569" />
+                  <TextInput
+                    {...uiProps(uiPath('finmed', 'detail_sheet', 'unit_input'))}
+                    style={styles.input}
+                    value={unit}
+                    onChangeText={setUnit}
+                    placeholder="mg / ml / puff"
+                    placeholderTextColor="#475569"
+                  />
                   <Text style={styles.label}>Low stock threshold</Text>
-                  <TextInput style={styles.input} value={threshold} onChangeText={setThreshold} keyboardType="decimal-pad" placeholderTextColor="#475569" />
+                  <TextInput
+                    {...uiProps(uiPath('finmed', 'detail_sheet', 'threshold_input'))}
+                    style={styles.input}
+                    value={threshold}
+                    onChangeText={setThreshold}
+                    keyboardType="decimal-pad"
+                    placeholderTextColor="#475569"
+                  />
                   <Text style={styles.label}>Notes</Text>
                   <TextInput
+                    {...uiProps(uiPath('finmed', 'detail_sheet', 'notes_input'))}
                     style={[styles.input, { minHeight: 60, textAlignVertical: 'top' }]}
                     value={notes}
                     onChangeText={setNotes}
@@ -135,6 +169,7 @@ export default function MedicationDetailSheet({
                     placeholderTextColor="#475569"
                   />
                   <TouchableOpacity
+                    {...uiProps(uiPath('finmed', 'detail_sheet', 'save_button'))}
                     style={[styles.saveBtn, saving && styles.saveBtnDisabled]}
                     onPress={() => void handleSave()}
                     disabled={saving}
@@ -153,16 +188,41 @@ export default function MedicationDetailSheet({
                   <View style={styles.section}>
                     <Text style={styles.sectionTitle}>Stock</Text>
                     <View style={styles.stockRow}>
-                      <TouchableOpacity style={styles.stockBtn} onPress={() => void handleStockAdjust(-1)}>
+                      <TouchableOpacity
+                        {...uiProps(uiPath('finmed', 'detail_sheet', 'stock_decrement_button'))}
+                        style={styles.stockBtn}
+                        onPress={() => { logUI(uiPath('finmed', 'detail_sheet', 'stock_decrement_button'), 'press'); void handleStockAdjust(-1); }}
+                      >
                         <Text style={styles.stockBtnText}>−</Text>
                       </TouchableOpacity>
-                      <View style={styles.stockValue}>
-                        <Text style={[styles.stockNum, isLow && { color: '#FBBF24' }]}>
-                          {medication.stock_quantity}
-                        </Text>
-                        <Text style={styles.stockUnit}>{medication.unit}</Text>
-                      </View>
-                      <TouchableOpacity style={styles.stockBtn} onPress={() => void handleStockAdjust(1)}>
+                      {editingStock ? (
+                        <TextInput
+                          {...uiProps(uiPath('finmed', 'detail_sheet', 'stock_input'))}
+                          style={[styles.input, styles.stockInput]}
+                          value={stockInput}
+                          onChangeText={setStockInput}
+                          keyboardType="decimal-pad"
+                          autoFocus
+                          onBlur={() => void handleStockInputSubmit()}
+                          onSubmitEditing={() => void handleStockInputSubmit()}
+                        />
+                      ) : (
+                        <TouchableOpacity
+                          {...uiProps(uiPath('finmed', 'detail_sheet', 'stock_value'))}
+                          style={styles.stockValue}
+                          onPress={() => { logUI(uiPath('finmed', 'detail_sheet', 'stock_value'), 'press'); setEditingStock(true); }}
+                        >
+                          <Text style={[styles.stockNum, isLow && { color: '#FBBF24' }]}>
+                            {medication.stock_quantity}
+                          </Text>
+                          <Text style={styles.stockUnit}>{medication.unit}</Text>
+                        </TouchableOpacity>
+                      )}
+                      <TouchableOpacity
+                        {...uiProps(uiPath('finmed', 'detail_sheet', 'stock_increment_button'))}
+                        style={styles.stockBtn}
+                        onPress={() => { logUI(uiPath('finmed', 'detail_sheet', 'stock_increment_button'), 'press'); void handleStockAdjust(1); }}
+                      >
                         <Text style={styles.stockBtnText}>＋</Text>
                       </TouchableOpacity>
                     </View>
@@ -189,7 +249,11 @@ export default function MedicationDetailSheet({
                       <Text style={styles.emptyHint}>No active schedules</Text>
                     ) : (
                       activeSchedules.map((s) => (
-                        <View key={s.id} style={styles.scheduleRow}>
+                        <View
+                          {...uiProps(uiPath('finmed', 'detail_sheet', 'schedule_row', s.id))}
+                          key={s.id}
+                          style={styles.scheduleRow}
+                        >
                           <View style={styles.schedulePrimary}>
                             <Text style={styles.scheduleTitle}>
                               {s.dose_amount} {s.dose_unit} × {s.times_per_day}×/day
@@ -200,8 +264,9 @@ export default function MedicationDetailSheet({
                             </Text>
                           </View>
                           <TouchableOpacity
+                            {...uiProps(uiPath('finmed', 'detail_sheet', 'deactivate_schedule_button', s.id))}
                             style={styles.deactivateBtn}
-                            onPress={() => void onDeactivateSchedule(s.id)}
+                            onPress={() => { logUI(uiPath('finmed', 'detail_sheet', 'deactivate_schedule_button', s.id), 'press'); void onDeactivateSchedule(s.id); }}
                           >
                             <Text style={styles.deactivateBtnText}>✕</Text>
                           </TouchableOpacity>
@@ -214,6 +279,7 @@ export default function MedicationDetailSheet({
                   <View style={styles.section}>
                     <Text style={styles.sectionTitle}>Log Intake</Text>
                     <TextInput
+                      {...uiProps(uiPath('finmed', 'detail_sheet', 'log_note_input'))}
                       style={styles.input}
                       value={logNote}
                       onChangeText={setLogNote}
@@ -237,7 +303,11 @@ export default function MedicationDetailSheet({
                       <Text style={styles.emptyHint}>No logs this week</Text>
                     ) : (
                       intakeLogs.map((log) => (
-                        <View key={log.id} style={styles.logRow}>
+                        <View
+                          {...uiProps(uiPath('finmed', 'detail_sheet', 'intake_log_row', log.id))}
+                          key={log.id}
+                          style={styles.logRow}
+                        >
                           <Text style={styles.logDose}>{log.dose_amount} {medication.unit}</Text>
                           <Text style={styles.logDate}>{formatDate(log.taken_at)}</Text>
                           {log.note ? <Text style={styles.logNote}>{log.note}</Text> : null}
@@ -263,19 +333,28 @@ export default function MedicationDetailSheet({
                       <View style={styles.confirmDeleteRow}>
                         <Text style={styles.confirmDeleteText}>Delete this medication and all its data?</Text>
                         <View style={styles.confirmDeleteButtons}>
-                          <TouchableOpacity style={styles.cancelBtn} onPress={() => setConfirmDelete(false)}>
+                          <TouchableOpacity
+                            {...uiProps(uiPath('finmed', 'detail_sheet', 'cancel_delete_button'))}
+                            style={styles.cancelBtn}
+                            onPress={() => { logUI(uiPath('finmed', 'detail_sheet', 'cancel_delete_button'), 'press'); setConfirmDelete(false); }}
+                          >
                             <Text style={styles.cancelBtnText}>Cancel</Text>
                           </TouchableOpacity>
                           <TouchableOpacity
+                            {...uiProps(uiPath('finmed', 'detail_sheet', 'confirm_delete_button'))}
                             style={styles.deleteBtn}
-                            onPress={async () => { await onDelete(); onClose(); }}
+                            onPress={() => { logUI(uiPath('finmed', 'detail_sheet', 'confirm_delete_button'), 'press'); void onDelete().then(() => onClose()); }}
                           >
                             <Text style={styles.deleteBtnText}>Delete</Text>
                           </TouchableOpacity>
                         </View>
                       </View>
                     ) : (
-                      <TouchableOpacity style={styles.deleteBtn} onPress={() => setConfirmDelete(true)}>
+                      <TouchableOpacity
+                        {...uiProps(uiPath('finmed', 'detail_sheet', 'delete_button'))}
+                        style={styles.deleteBtn}
+                        onPress={() => { logUI(uiPath('finmed', 'detail_sheet', 'delete_button'), 'press'); setConfirmDelete(true); }}
+                      >
                         <Text style={styles.deleteBtnText}>Delete medication</Text>
                       </TouchableOpacity>
                     )}
@@ -366,6 +445,10 @@ const styles = StyleSheet.create({
   },
   stockBtnText: { color: '#CBD5E1', fontSize: 18 },
   stockValue: { alignItems: 'center' },
+  stockInput: {
+    width: 100, textAlign: 'center', fontSize: 22, fontWeight: '700',
+    paddingVertical: 4, marginBottom: 0,
+  },
   stockNum: { color: '#CBD5E1', fontSize: 22, fontWeight: '700' },
   stockUnit: { color: '#475569', fontSize: 11 },
   lowStockWarning: { color: '#FBBF24', fontSize: 12, marginTop: 6 },

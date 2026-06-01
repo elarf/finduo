@@ -3,6 +3,8 @@ import { supabase } from '../supabase';
 import { navigationRef, setPendingNotification } from '../../navigation/navigationRef';
 import { computeIntervalHealthFromLogs, formatIntervalRemaining, trackingMethodUnit } from './health';
 import type { Component, ComponentServiceInterval, UsageLog } from '../../types/fingo';
+import { logNotif } from '../devtools';
+import { mirrorNotification } from '../notifications/bridge';
 
 const CHANNEL_ID = 'fingo_service_due';
 
@@ -85,6 +87,17 @@ export function setupNotificationActionListener(): void {
       const extra = event.notification.extra as
         | { intervalId?: string; componentId?: string; assetId?: string }
         | undefined;
+
+      // Log action performed
+      logNotif('ACTION', {
+        module: 'fingo',
+        actionId: event.actionId,
+        notificationId: event.notification.id,
+        title: event.notification.title,
+        body: event.notification.body,
+        extra,
+      });
+
       if (!extra?.intervalId || !extra?.componentId || !extra?.assetId) return;
       if (navigationRef.isReady()) {
         navigationRef.navigate('ServiceIntervalDetail', {
@@ -99,6 +112,27 @@ export function setupNotificationActionListener(): void {
           assetId: extra.assetId,
         });
       }
+    }).catch(() => {});
+  }).catch(() => {});
+}
+
+/**
+ * Setup notification received listener for FinGo.
+ * Logs when notifications are shown/received.
+ * Should be called once at app startup.
+ */
+export function setupFinGoNotificationReceivedListener(): void {
+  if (!Capacitor.isNativePlatform()) return;
+
+  import('@capacitor/local-notifications').then(({ LocalNotifications }) => {
+    LocalNotifications.addListener('localNotificationReceived', (event) => {
+      logNotif('RECEIVED', {
+        module: 'fingo',
+        notificationId: event.id,
+        title: event.title,
+        body: event.body,
+        extra: event.extra,
+      });
     }).catch(() => {});
   }).catch(() => {});
 }
@@ -162,27 +196,60 @@ export async function notifyDueIntervals(
     // Distinguish "due" (remaining === 0) from "overdue" (remaining < 0)
     const isDue = health.remaining === 0;
 
+    const notificationBody = isDue
+      ? `${comp.name}: service due`
+      : health.isOverdue
+      ? `${comp.name}: overdue by ${overdueBy} ${unit}`
+      : `${comp.name}: ${formatIntervalRemaining(health)} remaining`;
+
     toSchedule.push({
       id: notifId,
       title: interval.name,
-      body: isDue
-        ? `${comp.name}: service due`
-        : health.isOverdue
-        ? `${comp.name}: overdue by ${overdueBy} ${unit}`
-        : `${comp.name}: ${formatIntervalRemaining(health)} remaining`,
+      body: notificationBody,
       smallIcon: 'ic_maintenance_monochrome',
       largeIcon: 'asset://assets/maintenance.png',
       channelId: CHANNEL_ID,
       schedule: { at: new Date(Date.now() + 1000) },
       extra: { intervalId: interval.id, componentId: interval.component_id, assetId },
     });
+
+    // Mirror to in-app notification center
+    await mirrorNotification(
+      'fingo_service_due',
+      interval.name,
+      notificationBody,
+      {
+        intervalId: interval.id,
+        componentId: interval.component_id,
+        assetId,
+      },
+    );
   }
 
   if (toCancel.length > 0) {
     await LocalNotifications.cancel({ notifications: toCancel }).catch(() => {});
+    toCancel.forEach((notif) => {
+      logNotif('CANCELLED', {
+        module: 'fingo',
+        type: 'service_interval',
+        id: notif.id,
+      });
+    });
   }
 
   if (toSchedule.length > 0) {
     await LocalNotifications.schedule({ notifications: toSchedule });
+    toSchedule.forEach((notif) => {
+      logNotif('SCHEDULED', {
+        module: 'fingo',
+        type: 'service_interval',
+        id: notif.id,
+        title: notif.title,
+        body: notif.body,
+        scheduledAt: notif.schedule.at.toISOString(),
+        extra: notif.extra,
+        channelId: notif.channelId,
+      });
+    });
   }
 }

@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, Image } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../navigation';
 import type { InAppNotification } from '../../lib/notifications/types';
-import { getNotificationIcon, getNotificationColor } from '../../lib/notifications/icons';
+import { getNotificationImage } from '../../lib/notifications/icons';
 import { useNotificationCenter } from '../../context/NotificationCenterContext';
 
 interface NotificationRowProps {
@@ -16,8 +16,7 @@ export default function NotificationRow({ notification }: NotificationRowProps) 
   const { markRead, markDone, closePanel } = useNotificationCenter();
   const [doneLoading, setDoneLoading] = useState(false);
 
-  const icon = getNotificationIcon(notification.source);
-  const color = getNotificationColor(notification.source);
+  const iconImage = getNotificationImage(notification.source);
 
   const formatTimestamp = (iso: string) => {
     const date = new Date(iso);
@@ -42,6 +41,9 @@ export default function NotificationRow({ notification }: NotificationRowProps) 
     switch (notification.source) {
       case 'finmed_intake_reminder':
       case 'finmed_low_stock':
+      case 'finmed_symptom_check':
+      case 'finmed_measurement':
+      case 'finmed_appointment':
         navigation.navigate('FinMed');
         break;
 
@@ -63,6 +65,7 @@ export default function NotificationRow({ notification }: NotificationRowProps) 
 
       case 'finven_expiry':
       case 'finven_low_stock':
+      case 'finven_notification':
         navigation.navigate('FinVen');
         break;
     }
@@ -87,8 +90,8 @@ export default function NotificationRow({ notification }: NotificationRowProps) 
       style={[styles.row, !notification.isRead && styles.rowUnread]}
       onPress={handleTap}
     >
-      <View style={[styles.iconContainer, { backgroundColor: color + '20' }]}>
-        <Text style={styles.icon}>{icon}</Text>
+      <View style={styles.iconContainer}>
+        <Image source={iconImage} style={styles.iconImage} resizeMode="contain" />
       </View>
 
       <View style={styles.content}>
@@ -126,19 +129,20 @@ const styles = StyleSheet.create({
     borderBottomColor: '#0E1A2B',
     alignItems: 'center',
     gap: 12,
+    backgroundColor: '#000000',
   },
   rowUnread: {
-    backgroundColor: '#0E1A2B',
+    backgroundColor: '#03070F',
   },
   iconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 50,
+    height: 50,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  icon: {
-    fontSize: 20,
+  iconImage: {
+    width: 50,
+    height: 50,
   },
   content: {
     flex: 1,

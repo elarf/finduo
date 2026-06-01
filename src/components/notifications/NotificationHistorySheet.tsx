@@ -3,6 +3,7 @@ import {
   Modal,
   View,
   Text,
+  Image,
   TouchableOpacity,
   Pressable,
   ScrollView,
@@ -10,6 +11,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNotificationCenter } from '../../context/NotificationCenterContext';
+import { getNoNotificationImage } from '../../lib/notifications/icons';
 import { topInset } from '../../lib/safeArea';
 import NotificationRow from './NotificationRow';
 
@@ -59,7 +61,7 @@ export default function NotificationHistorySheet() {
           <ScrollView showsVerticalScrollIndicator={false}>
             {notifications.length === 0 ? (
               <View style={styles.emptyState}>
-                <Text style={styles.emptyIcon}>🔔</Text>
+                <Image source={getNoNotificationImage()} style={styles.emptyIconImage} resizeMode="contain" />
                 <Text style={styles.emptyText}>No notifications</Text>
                 <Text style={styles.emptyHint}>You'll see reminders and alerts here</Text>
               </View>
@@ -138,8 +140,9 @@ const styles = StyleSheet.create({
     paddingVertical: 48,
     alignItems: 'center',
   },
-  emptyIcon: {
-    fontSize: 48,
+  emptyIconImage: {
+    width: 64,
+    height: 64,
     marginBottom: 12,
   },
   emptyText: {

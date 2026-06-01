@@ -1,9 +1,14 @@
 export type NotificationSource =
   | 'finmed_intake_reminder'
   | 'finmed_low_stock'
+  | 'finmed_symptom_check'
+  | 'finmed_measurement'
+  | 'finmed_appointment'
   | 'fingo_service_due'
   | 'finven_expiry'
-  | 'finven_low_stock';
+  | 'finven_low_stock'
+  | 'finven_notification'
+  | 'custom_reminder';
 
 export interface InAppNotification {
   id: string;

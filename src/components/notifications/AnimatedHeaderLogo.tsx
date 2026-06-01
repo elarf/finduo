@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { Animated, Easing, Image, TouchableOpacity, StyleSheet, View, Text } from 'react-native';
 import LottieView from 'lottie-react-native';
 import { useNotificationCenter } from '../../context/NotificationCenterContext';
-import { getNotificationIcon } from '../../lib/notifications/icons';
+import { getNoNotificationImage, getNotificationImage } from '../../lib/notifications/icons';
 import type { NotificationSource } from '../../lib/notifications/types';
 
 type LogoState =
@@ -83,7 +83,7 @@ export default function AnimatedHeaderLogo() {
   const typeItems = useMemo(() => {
     const unread = notifications.filter((n) => !n.isRead);
     if (unread.length === 0) {
-      return [{ key: 'none', icon: '🔔', count: 0 }];
+      return [{ key: 'none', image: getNoNotificationImage(), count: 0 }];
     }
 
     const bySource = new Map<NotificationSource, number>();
@@ -93,7 +93,7 @@ export default function AnimatedHeaderLogo() {
 
     return Array.from(bySource.entries()).map(([source, count]) => ({
       key: source,
-      icon: getNotificationIcon(source),
+      image: getNotificationImage(source),
       count,
     }));
   }, [notifications]);
@@ -144,9 +144,9 @@ export default function AnimatedHeaderLogo() {
   const currentItem = typeItems[displayIndex] ?? typeItems[0];
   const prevItem = previousIndex !== null ? (typeItems[previousIndex] ?? null) : null;
 
-  const renderTypeItem = (item: { icon: string; count: number }) => (
+  const renderTypeItem = (item: { image: ReturnType<typeof getNotificationImage>; count: number }) => (
     <View style={styles.iconContent}>
-      <Text style={styles.iconText}>{item.icon}</Text>
+      <Image source={item.image} style={styles.iconImage} resizeMode="contain" />
       {item.count > 0 && <Text style={styles.countText}>{item.count}</Text>}
     </View>
   );
@@ -272,8 +272,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
   },
-  iconText: {
-    fontSize: 20,
+  iconImage: {
+    width: 26,
+    height: 26,
   },
   countText: {
     color: '#F472B6',

@@ -77,16 +77,13 @@ export default function AnimatedHeaderLogo() {
   }, [isPanelOpen, logoState, unreadCount]);
 
   const handleTap = () => {
-    if (!isPanelOpen && logoState !== 'IDLE_LOGO') {
+    if (!isPanelOpen) {
       openPanel();
     }
     dispatch({ type: 'TAP_LOGO', wasPanelOpen: isPanelOpen });
   };
 
   const handleAnimationFinish = () => {
-    if (logoState === 'ANIMATING_TO_FRAME_OPEN') {
-      openPanel();
-    }
     if (logoState === 'ANIMATING_TO_LOGO') {
       closePanel();
     }

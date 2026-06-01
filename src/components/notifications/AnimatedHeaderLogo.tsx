@@ -29,6 +29,7 @@ function logoReducer(state: LogoState, action: LogoAction): LogoState {
       return state;
 
     case 'TAP_LOGO':
+      if (state === 'IDLE_LOGO') return 'ANIMATING_TO_FRAME';
       return state;
 
     case 'CLOSE_PANEL':

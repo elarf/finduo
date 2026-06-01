@@ -70,6 +70,7 @@ export const styles = StyleSheet.create({
     height: '100%',
     alignItems: 'center',
     justifyContent: 'center',
+    transform: [{ translateY: -8 }],
   },
   headerLogo: {
     width: 168,

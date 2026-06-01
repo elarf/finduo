@@ -144,6 +144,7 @@ const s = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     minHeight: 66,
+    transform: [{ translateY: -8 }],
   },
   headerLogo: {
     width: 214,

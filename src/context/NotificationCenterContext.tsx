@@ -72,6 +72,14 @@ function formatNextTime(date: Date): string {
   return `${date.toLocaleDateString()} ${time}`;
 }
 
+function isSameLocalDay(a: Date, b: Date): boolean {
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  );
+}
+
 function nextReminderDate(reminder: any): Date | null {
   const now = new Date();
 
@@ -314,6 +322,7 @@ export function NotificationCenterProvider({ children }: { children: React.React
           : null;
 
         const next = nextReminderDate(reminder);
+        if (!next || !isSameLocalDay(next, now)) continue;
         const cadence = next ? `Next ${formatNextTime(next)}` : 'Upcoming reminder';
         const doseText = medConfig
           ? `${medConfig.dose_amount} ${medConfig.dose_unit}`

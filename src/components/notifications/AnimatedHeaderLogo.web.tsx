@@ -54,6 +54,7 @@ export default function AnimatedHeaderLogo() {
   const [previousIndex, setPreviousIndex] = useState<number | null>(null);
 
   const prevUnreadCount = useRef(unreadCount);
+  const prevIsPanelOpen = useRef(isPanelOpen);
   const crossfade = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
@@ -64,9 +65,13 @@ export default function AnimatedHeaderLogo() {
   }, [unreadCount, logoState]);
 
   useEffect(() => {
-    if (!isPanelOpen && (logoState === 'SHOWING' || logoState === 'IDLE_FRAME')) {
+    const wasPanelOpen = prevIsPanelOpen.current;
+
+    if (wasPanelOpen && !isPanelOpen && (logoState === 'SHOWING' || logoState === 'IDLE_FRAME')) {
       dispatch({ type: 'CLOSE_PANEL', hasUnread: unreadCount > 0 });
     }
+
+    prevIsPanelOpen.current = isPanelOpen;
   }, [isPanelOpen, logoState, unreadCount]);
 
   // Keep visual state in sync if unread drops to zero while panel is closed.

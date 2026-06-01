@@ -4,6 +4,16 @@
 
 ---
 
+## [1.6.2] — 2026-06-01
+
+### Maintenance
+
+- Version bump to `1.6.2` in project metadata
+- Updated release label in README
+- Synced Expo app version with package version
+
+---
+
 ## [1.6.1] — 2026-05-28
 
 ### Bug Fixes

@@ -173,3 +173,18 @@ export function logAPI(
     console.debug('[API]', meta, url);
   }
 }
+
+/**
+ * Log a notification event (scheduled, triggered, action).
+ * Appears in Console tab as: [NOTIF] <event> <notification data>
+ *
+ * @example
+ * logNotif('SCHEDULED', { id: 123, title: 'Reminder', body: 'Take medication', at: '2026-05-29T10:00:00' })
+ * logNotif('TRIGGERED', { id: 123, title: 'Reminder' })
+ * logNotif('ACTION', { actionId: 'taken', reminderId: 'abc-123' })
+ */
+export function logNotif(event: string, data: Record<string, any>): void {
+  if (DEBUG_UI) {
+    console.debug(`[NOTIF] ${event}`, data);
+  }
+}

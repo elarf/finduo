@@ -53,7 +53,7 @@ export interface FinmedStockTransaction {
 
 // ─── Reminder system ──────────────────────────────────────────────────────────
 
-export type ReminderType = 'medication' | 'measurement' | 'symptom_check' | 'appointment';
+export type ReminderType = 'medication' | 'measurement' | 'symptom_check' | 'appointment' | 'custom';
 
 export type FrequencyType =
   | 'interval'
@@ -121,11 +121,16 @@ export interface AppointmentConfig {
   archived?: boolean;
 }
 
+export interface CustomReminderConfig {
+  icon: string; // emoji or icon identifier
+}
+
 export type ReminderTypeConfig =
   | MedicationReminderConfig
   | MeasurementConfig
   | SymptomCheckConfig
-  | AppointmentConfig;
+  | AppointmentConfig
+  | CustomReminderConfig;
 
 export interface FinmedReminder {
   id: string;
@@ -139,6 +144,8 @@ export interface FinmedReminder {
   active: boolean;
   type_config: ReminderTypeConfig;
   created_at: string;
+  /** Max repeat window in minutes (default 120 = 2 hours). After this window, reminder is marked as missed. */
+  max_repeat_window_minutes?: number;
   /** Client-side only — not persisted to DB; derived deterministically via reminderNotifId() */
   notification_ids?: number[];
 }
@@ -174,6 +181,7 @@ export interface FinmedReminderLog {
   snoozed_until: string | null;
   value: ReminderLogValue | null;
   note: string | null;
+  metadata: { slotIndex?: number } | null;
   created_at: string;
 }
 

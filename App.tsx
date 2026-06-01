@@ -20,9 +20,11 @@ import { StackActions } from '@react-navigation/native';
 import { AuthProvider } from './src/context/AuthContext';
 import RootNavigator from './src/navigation';
 import { navigationRef, setPendingShortcut, getPendingShortcut, getPendingNotification, setPendingNotification, setLaunchReady } from './src/navigation/navigationRef';
-import { setupNotificationActionListener } from './src/lib/fingo/notifications';
+import { setupNotificationActionListener, setupFinGoNotificationReceivedListener } from './src/lib/fingo/notifications';
 import { setupTrackingActionListener } from './src/lib/fingo/trackingNotification';
 import { setupFinMedChannels } from './src/lib/fingo/notifications';
+import { setupIntakeNotificationActions, setupIntakeNotificationActionListener, setupIntakeNotificationReceivedListener } from './src/lib/finmed/notifications';
+import { navigationRef as navRef } from './src/navigation/navigationRef';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -66,8 +68,36 @@ function routeShortcut(shortcutId: string) {
 export default function App() {
   useEffect(() => {
     setupNotificationActionListener();
+    setupFinGoNotificationReceivedListener();
     setupTrackingActionListener();
     void setupFinMedChannels();
+    void setupIntakeNotificationActions();
+
+    // Setup FinMed notification action handlers
+    setupIntakeNotificationActionListener(
+      (reminderId, slotIndex) => {
+        // Handle "Taken" action - navigate to FinMed and trigger completion
+        console.log('[App] Taken action:', { reminderId, slotIndex });
+        if (navigationRef.isReady()) {
+          navigationRef.navigate('FinMed', { action: 'taken', reminderId, slotIndex });
+        }
+      },
+      (reminderId, slotIndex) => {
+        // Handle "Snooze" action - navigate to FinMed and show snooze sheet
+        console.log('[App] Snooze action:', { reminderId, slotIndex });
+        if (navigationRef.isReady()) {
+          navigationRef.navigate('FinMed', { action: 'snooze', reminderId, slotIndex });
+        }
+      },
+      (reminderId, slotIndex) => {
+        // Handle "Tap" action - navigate to FinMed screen
+        console.log('[App] Tap action:', { reminderId, slotIndex });
+        if (navigationRef.isReady()) {
+          navigationRef.navigate('FinMed');
+        }
+      },
+    );
+    setupIntakeNotificationReceivedListener();
   }, []);
 
   useEffect(() => {

@@ -8,8 +8,10 @@ import { navigationRef, isLaunchReady, getPendingShortcut, setPendingShortcut } 
 import { initCapacitorBackButton } from '../lib/capacitorBack';
 import { useAuth } from '../context/AuthContext';
 import { DashboardProvider } from '../context/DashboardContext';
+import { NotificationCenterProvider } from '../context/NotificationCenterContext';
 import { fetchAssets, fingoAssetsQueryKey } from '../hooks/useAssets';
 import { useHCAutoSync } from '../hooks/useHCAutoSync';
+import NotificationHistorySheet from '../components/notifications/NotificationHistorySheet';
 import LoginScreen from '../screens/LoginScreen';
 import DashboardScreen from '../screens/DashboardScreen';
 import FinBiomeScreen from '../screens/FinBiomeScreen';
@@ -43,7 +45,7 @@ export type RootStackParamList = {
   Dashboard: { prefillEntry?: { type: 'expense' | 'income' } } | undefined;
   FinBiome: undefined;
   FinGo: undefined;
-  FinMed: undefined;
+  FinMed: { action?: 'taken' | 'snooze'; reminderId?: string; slotIndex?: number } | undefined;
   FinVen: undefined;
 
   // Modal screens
@@ -163,47 +165,50 @@ export default function RootNavigator() {
   return (
     <NavigationContainer ref={navigationRef} onReady={handleNavigationReady}>
       {session ? (
-        <DashboardProvider>
-          <Stack.Navigator screenOptions={{ headerShown: false }}>
-            {/* Main screens */}
-            <Stack.Screen name="Dashboard" component={DashboardScreen} />
-            <Stack.Screen name="FinBiome" component={FinBiomeScreen} />
-            <Stack.Screen name="FinGo" component={FinGoScreen} />
-            <Stack.Screen name="FinMed" component={FinMedScreen} />
-            <Stack.Screen name="FinVen" component={FinVenScreen} />
+        <NotificationCenterProvider>
+          <DashboardProvider>
+            <Stack.Navigator screenOptions={{ headerShown: false }}>
+              {/* Main screens */}
+              <Stack.Screen name="Dashboard" component={DashboardScreen} />
+              <Stack.Screen name="FinBiome" component={FinBiomeScreen} />
+              <Stack.Screen name="FinGo" component={FinGoScreen} />
+              <Stack.Screen name="FinMed" component={FinMedScreen} />
+              <Stack.Screen name="FinVen" component={FinVenScreen} />
 
-            {/* Modal screens - presentation handled per-platform */}
-            <Stack.Group screenOptions={{
-              presentation: 'transparentModal',
-              animation: 'slide_from_bottom',
-            }}>
-              <Stack.Screen name="Entry" component={EntryScreen} />
-              <Stack.Screen name="Category" component={CategoryScreen} />
-              <Stack.Screen name="Tag" component={TagScreen} />
-              <Stack.Screen name="Account" component={AccountScreen} />
-              <Stack.Screen name="Transfer" component={TransferScreen} />
-              <Stack.Screen name="Invitations" component={InvitationsScreen} />
-              <Stack.Screen name="Friends" component={FriendsScreen} />
-              <Stack.Screen name="QuickNav" component={QuickNavScreen} />
-            </Stack.Group>
+              {/* Modal screens - presentation handled per-platform */}
+              <Stack.Group screenOptions={{
+                presentation: 'transparentModal',
+                animation: 'slide_from_bottom',
+              }}>
+                <Stack.Screen name="Entry" component={EntryScreen} />
+                <Stack.Screen name="Category" component={CategoryScreen} />
+                <Stack.Screen name="Tag" component={TagScreen} />
+                <Stack.Screen name="Account" component={AccountScreen} />
+                <Stack.Screen name="Transfer" component={TransferScreen} />
+                <Stack.Screen name="Invitations" component={InvitationsScreen} />
+                <Stack.Screen name="Friends" component={FriendsScreen} />
+                <Stack.Screen name="QuickNav" component={QuickNavScreen} />
+              </Stack.Group>
 
-            {/* FinOps section screens */}
-            <Stack.Screen name="Pools" component={PoolsScreen} />
-            <Stack.Screen name="Lending" component={LendingScreen} />
-            <Stack.Screen name="Settlements" component={SettlementsScreen} />
-            <Stack.Screen name="Contacts" component={ContactsScreen} />
+              {/* FinOps section screens */}
+              <Stack.Screen name="Pools" component={PoolsScreen} />
+              <Stack.Screen name="Lending" component={LendingScreen} />
+              <Stack.Screen name="Settlements" component={SettlementsScreen} />
+              <Stack.Screen name="Contacts" component={ContactsScreen} />
 
-            {/* FinGo detail screens */}
-            <Stack.Screen name="ComponentDetail" component={ComponentDetailScreen} />
-            <Stack.Screen name="ServiceIntervalDetail" component={ServiceIntervalDetailScreen} />
-            <Stack.Screen name="HealthConnect" component={HealthConnectScreen} />
+              {/* FinGo detail screens */}
+              <Stack.Screen name="ComponentDetail" component={ComponentDetailScreen} />
+              <Stack.Screen name="ServiceIntervalDetail" component={ServiceIntervalDetailScreen} />
+              <Stack.Screen name="HealthConnect" component={HealthConnectScreen} />
 
-            {/* GPS tracking */}
-            <Stack.Screen name="TrackingShortcut" component={TrackingShortcutScreen} />
-            <Stack.Screen name="Journey" component={JourneyScreen} />
-            <Stack.Screen name="JourneyDetail" component={JourneyDetailScreen} />
-          </Stack.Navigator>
-        </DashboardProvider>
+              {/* GPS tracking */}
+              <Stack.Screen name="TrackingShortcut" component={TrackingShortcutScreen} />
+              <Stack.Screen name="Journey" component={JourneyScreen} />
+              <Stack.Screen name="JourneyDetail" component={JourneyDetailScreen} />
+            </Stack.Navigator>
+            <NotificationHistorySheet />
+          </DashboardProvider>
+        </NotificationCenterProvider>
       ) : (
         <Stack.Navigator screenOptions={{ headerShown: false }}>
           <Stack.Screen name="Login" component={LoginScreen} />

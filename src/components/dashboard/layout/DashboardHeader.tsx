@@ -8,6 +8,7 @@ import { topInset } from '../../../lib/safeArea';
 import { useDashboard } from '../../../context/DashboardContext';
 import Icon from '../../Icon';
 import { styles } from '../../../screens/DashboardScreen.styles';
+import AnimatedHeaderLogo from '../../notifications/AnimatedHeaderLogo';
 
 interface DashboardHeaderProps {
   onBack?: () => void;
@@ -133,12 +134,7 @@ export default function DashboardHeader({ onBack, rightElement }: DashboardHeade
       {/* Logo: absolutely centred within the visible content area */}
       <View style={[StyleSheet.absoluteFill, { paddingTop: topInset(14, top) }]} pointerEvents="box-none">
         <View style={styles.headerLogoCenter} pointerEvents="box-none">
-          <Image
-            source={require('../../../../assets/logo.png')}
-            style={styles.headerLogo}
-            resizeMode="contain"
-            {...uiProps(uiPath('dashboard', 'header', 'logo'))}
-          />
+          <AnimatedHeaderLogo />
         </View>
       </View>
       {/* Spacer so avatar and toggle don't overlap the logo */}

@@ -1,5 +1,7 @@
 # Background GPS Tracking — Implementation Guide
 
+<!-- markdownlint-disable MD013 MD031 -->
+
 ## Current State
 
 GPS tracking uses `@capacitor/geolocation` `watchPosition()`, which only fires while the app is in the **foreground**. When the user taps the Tracking shortcut and the app minimizes, position updates stop. Elapsed time is always accurate (derived from stored `started_at`), but route coordinates and distance will be 0 unless the app stayed visible.

@@ -6,7 +6,7 @@ Financial tracking app for couples and shared households. Track income, expenses
 
 ---
 
-## Latest Release — v1.6.1
+## Latest Release — v1.6.2
 
 - **Transaction Splits** — split a single transaction across multiple categories; split chips shown inline on transaction rows; category totals in the spending chart account for splits
 - **FinMed Reminder System** — unified reminders for medications, health measurements, symptom checks, and appointments; frequency types include interval, multiple-times-daily, specific day of week, cyclic, and on-demand

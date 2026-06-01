@@ -1,6 +1,6 @@
 {
   "name": "finduo",
-  "version": "1.6.1",
+  "version": "1.6.2",
   "main": "index.js",
   "scripts": {
     "start": "expo start",
@@ -15,7 +15,6 @@
     "import:monefy": "node scripts/import-monefy.js"
   },
   "dependencies": {
-    "foreground-timer": "file:plugins/foreground-timer",
     "@capacitor-community/background-geolocation": "^1.2.26",
     "@capacitor/android": "^7.0.0",
     "@capacitor/app": "^7.0.0",
@@ -40,6 +39,8 @@
     "expo-linear-gradient": "^55.0.13",
     "expo-status-bar": "~55.0.4",
     "expo-web-browser": "^55.0.10",
+    "foreground-timer": "file:plugins/foreground-timer",
+    "lottie-react-native": "~7.3.4",
     "lucide-react-native": "^1.7.0",
     "material-icons": "^1.13.14",
     "react": "19.2.0",

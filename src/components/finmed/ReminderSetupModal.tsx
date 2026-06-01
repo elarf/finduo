@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   KeyboardAvoidingView, Modal, Platform, Pressable,
   ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View,
@@ -41,74 +41,109 @@ interface ReminderSetupModalProps {
   medications?: Array<{ id: string; name: string; unit: string }>;
   initialType?: ReminderType;
   editing?: FinmedReminder | null;
+  onCreateMedStock?: () => void;
 }
 
 export default function ReminderSetupModal({
-  visible, onClose, onSave, medications = [], initialType, editing,
+  visible, onClose, onSave, medications = [], initialType, editing, onCreateMedStock,
 }: ReminderSetupModalProps) {
   const { bottom } = useSafeAreaInsets();
 
-  const [step, setStep] = useState<'type' | 'config'>(editing ? 'config' : (initialType ? 'config' : 'type'));
-  const [type, setType] = useState<ReminderType>(initialType ?? editing?.type ?? 'medication');
+  const [step, setStep] = useState<'type' | 'config'>('type');
+  const [type, setType] = useState<ReminderType>('medication');
 
   // shared fields
-  const [label, setLabel] = useState(editing?.label ?? '');
-  const [freqType, setFreqType] = useState<FrequencyType>(editing?.frequency_type ?? 'multiple_times_daily');
-  const [times, setTimes] = useState<string[]>(
-    (editing?.frequency_config as FrequencyConfig)?.times ?? ['08:00'],
-  );
-  const [intervalHours, setIntervalHours] = useState(
-    String((editing?.frequency_config as FrequencyConfig)?.interval_hours ?? 8),
-  );
-  const [weekdays, setWeekdays] = useState<number[]>(
-    (editing?.frequency_config as FrequencyConfig)?.weekdays ?? [],
-  );
-  const [cycleIntake, setCycleIntake] = useState(
-    String((editing?.frequency_config as FrequencyConfig)?.cycle_intake_days ?? 21),
-  );
-  const [cyclePause, setCyclePause] = useState(
-    String((editing?.frequency_config as FrequencyConfig)?.cycle_pause_days ?? 7),
-  );
-  const [startDate, setStartDate] = useState(
-    editing?.start_date ?? new Date().toISOString().slice(0, 10),
-  );
-  const [endDate, setEndDate] = useState(editing?.end_date ?? '');
+  const [label, setLabel] = useState('');
+  const [freqType, setFreqType] = useState<FrequencyType>('multiple_times_daily');
+  const [times, setTimes] = useState<string[]>(['08:00']);
+  const [intervalHours, setIntervalHours] = useState('8');
+  const [weekdays, setWeekdays] = useState<number[]>([]);
+  const [cycleIntake, setCycleIntake] = useState('21');
+  const [cyclePause, setCyclePause] = useState('7');
+  const [startDate, setStartDate] = useState(new Date().toISOString().slice(0, 10));
+  const [endDate, setEndDate] = useState('');
 
   // medication fields
-  const [medId, setMedId] = useState((editing?.type_config as MedicationReminderConfig)?.medication_id ?? '');
-  const [doseAmount, setDoseAmount] = useState(
-    String((editing?.type_config as MedicationReminderConfig)?.dose_amount ?? 1),
-  );
-  const [doseUnit, setDoseUnit] = useState(
-    (editing?.type_config as MedicationReminderConfig)?.dose_unit ?? 'pill',
-  );
+  const [medId, setMedId] = useState('');
+  const [doseAmount, setDoseAmount] = useState('1');
+  const [doseUnit, setDoseUnit] = useState('pill');
 
   // measurement fields
-  const [measKind, setMeasKind] = useState<MeasurementKind>(
-    (editing?.type_config as MeasurementConfig)?.kind ?? 'weight',
-  );
-  const [measCustomName, setMeasCustomName] = useState(
-    (editing?.type_config as MeasurementConfig)?.custom_name ?? '',
-  );
-  const [measUnit, setMeasUnit] = useState(
-    (editing?.type_config as MeasurementConfig)?.unit ?? 'kg',
-  );
-  const [measTarget, setMeasTarget] = useState(
-    String((editing?.type_config as MeasurementConfig)?.target_value ?? ''),
-  );
+  const [measKind, setMeasKind] = useState<MeasurementKind>('weight');
+  const [measCustomName, setMeasCustomName] = useState('');
+  const [measUnit, setMeasUnit] = useState('kg');
+  const [measTarget, setMeasTarget] = useState('');
 
   // appointment fields
-  const [apptDate, setApptDate] = useState(
-    (editing?.type_config as AppointmentConfig)?.date ?? new Date().toISOString().slice(0, 10),
-  );
-  const [apptTime, setApptTime] = useState(
-    (editing?.type_config as AppointmentConfig)?.time ?? '09:00',
-  );
-  const [apptDesc, setApptDesc] = useState(
-    (editing?.type_config as AppointmentConfig)?.description ?? '',
-  );
+  const [apptDate, setApptDate] = useState(new Date().toISOString().slice(0, 10));
+  const [apptTime, setApptTime] = useState('09:00');
+  const [apptDesc, setApptDesc] = useState('');
+
+  // custom reminder fields
+  const [customIcon, setCustomIcon] = useState('🔔');
 
   const [saving, setSaving] = useState(false);
+
+  // Reset form when modal opens or editing changes
+  useEffect(() => {
+    if (!visible) return;
+
+    if (editing) {
+      // Load existing reminder
+      setStep('config');
+      setType(editing.type);
+      setLabel(editing.label);
+      setFreqType(editing.frequency_type);
+      setTimes((editing.frequency_config as FrequencyConfig)?.times ?? ['08:00']);
+      setIntervalHours(String((editing.frequency_config as FrequencyConfig)?.interval_hours ?? 8));
+      setWeekdays((editing.frequency_config as FrequencyConfig)?.weekdays ?? []);
+      setCycleIntake(String((editing.frequency_config as FrequencyConfig)?.cycle_intake_days ?? 21));
+      setCyclePause(String((editing.frequency_config as FrequencyConfig)?.cycle_pause_days ?? 7));
+      setStartDate(editing.start_date);
+      setEndDate(editing.end_date ?? '');
+      // Type-specific config
+      if (editing.type === 'medication') {
+        setMedId((editing.type_config as MedicationReminderConfig)?.medication_id ?? '');
+        setDoseAmount(String((editing.type_config as MedicationReminderConfig)?.dose_amount ?? 1));
+        setDoseUnit((editing.type_config as MedicationReminderConfig)?.dose_unit ?? 'pill');
+      } else if (editing.type === 'measurement') {
+        setMeasKind((editing.type_config as MeasurementConfig)?.kind ?? 'weight');
+        setMeasCustomName((editing.type_config as MeasurementConfig)?.custom_name ?? '');
+        setMeasUnit((editing.type_config as MeasurementConfig)?.unit ?? 'kg');
+        setMeasTarget(String((editing.type_config as MeasurementConfig)?.target_value ?? ''));
+      } else if (editing.type === 'appointment') {
+        setApptDate((editing.type_config as AppointmentConfig)?.date ?? new Date().toISOString().slice(0, 10));
+        setApptTime((editing.type_config as AppointmentConfig)?.time ?? '09:00');
+        setApptDesc((editing.type_config as AppointmentConfig)?.description ?? '');
+      } else if (editing.type === 'custom') {
+        setCustomIcon((editing.type_config as any)?.icon ?? '🔔');
+      }
+    } else {
+      // New reminder
+      setStep(initialType ? 'config' : 'type');
+      setType(initialType ?? 'medication');
+      setLabel('');
+      setFreqType('multiple_times_daily');
+      setTimes(['08:00']);
+      setIntervalHours('8');
+      setWeekdays([]);
+      setCycleIntake('21');
+      setCyclePause('7');
+      setStartDate(new Date().toISOString().slice(0, 10));
+      setEndDate('');
+      setMedId('');
+      setDoseAmount('1');
+      setDoseUnit('pill');
+      setMeasKind('weight');
+      setMeasCustomName('');
+      setMeasUnit('kg');
+      setMeasTarget('');
+      setApptDate(new Date().toISOString().slice(0, 10));
+      setApptTime('09:00');
+      setApptDesc('');
+      setCustomIcon('🔔');
+    }
+  }, [visible, editing, initialType]);
 
   const reset = () => {
     setStep(initialType ? 'config' : 'type');
@@ -132,6 +167,7 @@ export default function ReminderSetupModal({
     setApptDate(new Date().toISOString().slice(0, 10));
     setApptTime('09:00');
     setApptDesc('');
+    setCustomIcon('🔔');
   };
 
   const selectType = (t: ReminderType) => {
@@ -163,7 +199,9 @@ export default function ReminderSetupModal({
     if (type === 'medication') return { medication_id: medId, dose_amount: parseFloat(doseAmount) || 1, dose_unit: doseUnit };
     if (type === 'measurement') return { kind: measKind, custom_name: measCustomName || undefined, unit: measUnit, target_value: measTarget ? parseFloat(measTarget) : undefined };
     if (type === 'symptom_check') return {};
-    return { date: apptDate, time: apptTime, description: apptDesc };
+    if (type === 'appointment') return { date: apptDate, time: apptTime, description: apptDesc };
+    if (type === 'custom') return { icon: customIcon };
+    return {};
   };
 
   const canSave = () => {
@@ -193,32 +231,42 @@ export default function ReminderSetupModal({
 
   const FREQ_OPTIONS: { key: FrequencyType; label: string }[] = type === 'medication'
     ? [
-        { key: 'multiple_times_daily', label: 'N times daily' },
+        { key: 'multiple_times_daily', label: `${times.length} times daily` },
         { key: 'interval', label: 'Every N hours' },
         { key: 'specific_day_of_week', label: 'Specific days' },
         { key: 'cyclic', label: 'Cyclic' },
         { key: 'on_demand', label: 'On demand' },
       ]
     : [
-        { key: 'multiple_times_daily', label: 'N times daily' },
+        { key: 'multiple_times_daily', label: `${times.length} times daily` },
         { key: 'interval', label: 'Every N hours' },
         { key: 'specific_day_of_week', label: 'Specific days' },
         { key: 'on_demand', label: 'On demand' },
       ];
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View style={styles.overlay}>
-        <Pressable style={styles.backdrop} onPress={onClose} />
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.wrapper}>
-          <View style={[styles.sheet, { paddingBottom: Math.max(bottom, 16) }]}>
-            <View style={styles.handle} />
-            <Text style={styles.title}>
-              {editing ? 'Edit Reminder' : step === 'type' ? 'What type of reminder?' : `New ${TYPE_LABELS[type]}`}
+    <Modal
+      {...uiProps(uiPath('finmed', 'reminder_setup', 'modal'))}
+      visible={visible}
+      transparent
+      animationType="slide"
+      onRequestClose={onClose}
+    >
+      <View {...uiProps(uiPath('finmed', 'reminder_setup', 'overlay'))} style={styles.overlay}>
+        <Pressable {...uiProps(uiPath('finmed', 'reminder_setup', 'backdrop'))} style={styles.backdrop} onPress={onClose} />
+        <KeyboardAvoidingView {...uiProps(uiPath('finmed', 'reminder_setup', 'wrapper'))} behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.wrapper}>
+          <View {...uiProps(uiPath('finmed', 'reminder_setup', 'sheet'))} style={[styles.sheet, { paddingBottom: Math.max(bottom, 16) }]}>
+            <View {...uiProps(uiPath('finmed', 'reminder_setup', 'handle'))} style={styles.handle} />
+            <Text {...uiProps(uiPath('finmed', 'reminder_setup', 'title'))} style={styles.title}>
+              {editing
+                ? 'Edit Reminder'
+                : step === 'type'
+                  ? (onCreateMedStock ? 'What would you like to add?' : 'What type of reminder?')
+                  : `New ${TYPE_LABELS[type]}`}
             </Text>
 
             {step === 'type' ? (
-              <View style={styles.typeGrid}>
+              <View {...uiProps(uiPath('finmed', 'reminder_setup', 'type_grid'))} style={styles.typeGrid}>
                 {(Object.entries(TYPE_LABELS) as [ReminderType, string][]).map(([t, lbl]) => (
                   <TouchableOpacity
                     {...uiProps(uiPath('finmed', 'reminder_setup', 'type', t))}
@@ -230,12 +278,23 @@ export default function ReminderSetupModal({
                     <Text style={styles.typeLabel}>{lbl}</Text>
                   </TouchableOpacity>
                 ))}
+                {onCreateMedStock && (
+                  <TouchableOpacity
+                    {...uiProps(uiPath('finmed', 'reminder_setup', 'type', 'med_stock'))}
+                    style={styles.typeCard}
+                    onPress={() => { logUI(uiPath('finmed', 'reminder_setup', 'type', 'med_stock'), 'press'); onClose(); onCreateMedStock(); }}
+                  >
+                    <Text style={styles.typeIcon}>💊</Text>
+                    <Text style={styles.typeLabel}>Med Stock</Text>
+                  </TouchableOpacity>
+                )}
               </View>
             ) : (
-              <ScrollView showsVerticalScrollIndicator={false}>
+              <ScrollView {...uiProps(uiPath('finmed', 'reminder_setup', 'config_scroll'))} showsVerticalScrollIndicator={false}>
                 {/* Label */}
-                <Text style={styles.label}>Label</Text>
+                <Text {...uiProps(uiPath('finmed', 'reminder_setup', 'label_text'))} style={styles.label}>Label</Text>
                 <TextInput
+                  {...uiProps(uiPath('finmed', 'reminder_setup', 'label_input'))}
                   style={styles.input}
                   value={label}
                   onChangeText={setLabel}
@@ -246,13 +305,14 @@ export default function ReminderSetupModal({
                 {/* TYPE-SPECIFIC CONFIG */}
                 {type === 'medication' && (
                   <>
-                    <Text style={styles.label}>Medication</Text>
+                    <Text {...uiProps(uiPath('finmed', 'reminder_setup', 'medication_label'))} style={styles.label}>Medication</Text>
                     {medications.length === 0 ? (
-                      <Text style={styles.hint}>No medications yet — add one first.</Text>
+                      <Text {...uiProps(uiPath('finmed', 'reminder_setup', 'medication_hint'))} style={styles.hint}>No medications yet — add one first.</Text>
                     ) : (
-                      <View style={styles.toggleRow}>
+                      <View {...uiProps(uiPath('finmed', 'reminder_setup', 'medication_row'))} style={styles.toggleRow}>
                         {medications.map((m) => (
                           <TouchableOpacity
+                            {...uiProps(uiPath('finmed', 'reminder_setup', 'medication_chip', m.id))}
                             key={m.id}
                             style={[styles.chip, medId === m.id && styles.chipActive]}
                             onPress={() => setMedId(m.id)}
@@ -262,17 +322,17 @@ export default function ReminderSetupModal({
                         ))}
                       </View>
                     )}
-                    <View style={styles.row2}>
+                    <View {...uiProps(uiPath('finmed', 'reminder_setup', 'dose_row'))} style={styles.row2}>
                       <View style={{ flex: 1 }}>
-                        <Text style={styles.label}>Dose amount</Text>
-                        <TextInput style={styles.input} value={doseAmount} onChangeText={setDoseAmount} keyboardType="decimal-pad" placeholderTextColor="#475569" />
+                        <Text {...uiProps(uiPath('finmed', 'reminder_setup', 'dose_amount_label'))} style={styles.label}>Dose amount</Text>
+                        <TextInput {...uiProps(uiPath('finmed', 'reminder_setup', 'dose_amount_input'))} style={styles.input} value={doseAmount} onChangeText={setDoseAmount} keyboardType="decimal-pad" placeholderTextColor="#475569" />
                       </View>
                       <View style={{ flex: 1 }}>
-                        <Text style={styles.label}>Unit</Text>
+                        <Text {...uiProps(uiPath('finmed', 'reminder_setup', 'dose_unit_label'))} style={styles.label}>Unit</Text>
                         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 4 }}>
-                          <View style={styles.toggleRow}>
+                          <View {...uiProps(uiPath('finmed', 'reminder_setup', 'dose_unit_row'))} style={styles.toggleRow}>
                             {MEDICATION_UNITS.map((u) => (
-                              <TouchableOpacity key={u} style={[styles.chip, doseUnit === u && styles.chipActive]} onPress={() => setDoseUnit(u)}>
+                              <TouchableOpacity {...uiProps(uiPath('finmed', 'reminder_setup', 'dose_unit_chip', u))} key={u} style={[styles.chip, doseUnit === u && styles.chipActive]} onPress={() => setDoseUnit(u)}>
                                 <Text style={[styles.chipText, doseUnit === u && styles.chipTextActive]}>{u}</Text>
                               </TouchableOpacity>
                             ))}
@@ -285,10 +345,11 @@ export default function ReminderSetupModal({
 
                 {type === 'measurement' && (
                   <>
-                    <Text style={styles.label}>Measurement type</Text>
-                    <View style={styles.toggleRow}>
+                    <Text {...uiProps(uiPath('finmed', 'reminder_setup', 'measurement_type_label'))} style={styles.label}>Measurement type</Text>
+                    <View {...uiProps(uiPath('finmed', 'reminder_setup', 'measurement_type_row'))} style={styles.toggleRow}>
                       {MEASUREMENT_PRESETS.map((p) => (
                         <TouchableOpacity
+                          {...uiProps(uiPath('finmed', 'reminder_setup', 'measurement_type_chip', p.kind))}
                           key={p.kind}
                           style={[styles.chip, measKind === p.kind && styles.chipActive]}
                           onPress={() => { setMeasKind(p.kind); if (p.unit) setMeasUnit(p.unit); }}
@@ -297,6 +358,7 @@ export default function ReminderSetupModal({
                         </TouchableOpacity>
                       ))}
                       <TouchableOpacity
+                        {...uiProps(uiPath('finmed', 'reminder_setup', 'measurement_type_chip', 'custom'))}
                         style={[styles.chip, measKind === 'custom' && styles.chipActive]}
                         onPress={() => setMeasKind('custom')}
                       >
@@ -305,18 +367,18 @@ export default function ReminderSetupModal({
                     </View>
                     {measKind === 'custom' && (
                       <>
-                        <Text style={styles.label}>Custom name</Text>
-                        <TextInput style={styles.input} value={measCustomName} onChangeText={setMeasCustomName} placeholder="e.g. Vitamin D" placeholderTextColor="#475569" />
+                        <Text {...uiProps(uiPath('finmed', 'reminder_setup', 'custom_name_label'))} style={styles.label}>Custom name</Text>
+                        <TextInput {...uiProps(uiPath('finmed', 'reminder_setup', 'custom_name_input'))} style={styles.input} value={measCustomName} onChangeText={setMeasCustomName} placeholder="e.g. Vitamin D" placeholderTextColor="#475569" />
                       </>
                     )}
-                    <View style={styles.row2}>
+                    <View {...uiProps(uiPath('finmed', 'reminder_setup', 'measurement_values_row'))} style={styles.row2}>
                       <View style={{ flex: 1 }}>
-                        <Text style={styles.label}>Unit</Text>
-                        <TextInput style={styles.input} value={measUnit} onChangeText={setMeasUnit} placeholder="kg, °C…" placeholderTextColor="#475569" />
+                        <Text {...uiProps(uiPath('finmed', 'reminder_setup', 'unit_label'))} style={styles.label}>Unit</Text>
+                        <TextInput {...uiProps(uiPath('finmed', 'reminder_setup', 'unit_input'))} style={styles.input} value={measUnit} onChangeText={setMeasUnit} placeholder="kg, °C…" placeholderTextColor="#475569" />
                       </View>
                       <View style={{ flex: 1 }}>
-                        <Text style={styles.label}>Target (optional)</Text>
-                        <TextInput style={styles.input} value={measTarget} onChangeText={setMeasTarget} keyboardType="decimal-pad" placeholder="e.g. 75" placeholderTextColor="#475569" />
+                        <Text {...uiProps(uiPath('finmed', 'reminder_setup', 'target_label'))} style={styles.label}>Target (optional)</Text>
+                        <TextInput {...uiProps(uiPath('finmed', 'reminder_setup', 'target_input'))} style={styles.input} value={measTarget} onChangeText={setMeasTarget} keyboardType="decimal-pad" placeholder="e.g. 75" placeholderTextColor="#475569" />
                       </View>
                     </View>
                   </>
@@ -324,18 +386,19 @@ export default function ReminderSetupModal({
 
                 {type === 'appointment' && (
                   <>
-                    <View style={styles.row2}>
+                    <View {...uiProps(uiPath('finmed', 'reminder_setup', 'appointment_datetime_row'))} style={styles.row2}>
                       <View style={{ flex: 1 }}>
-                        <Text style={styles.label}>Date</Text>
-                        <TextInput style={styles.input} value={apptDate} onChangeText={setApptDate} placeholder="YYYY-MM-DD" placeholderTextColor="#475569" />
+                        <Text {...uiProps(uiPath('finmed', 'reminder_setup', 'appointment_date_label'))} style={styles.label}>Date</Text>
+                        <TextInput {...uiProps(uiPath('finmed', 'reminder_setup', 'appointment_date_input'))} style={styles.input} value={apptDate} onChangeText={setApptDate} placeholder="YYYY-MM-DD" placeholderTextColor="#475569" />
                       </View>
                       <View style={{ flex: 1 }}>
-                        <Text style={styles.label}>Time</Text>
-                        <TextInput style={styles.input} value={apptTime} onChangeText={setApptTime} placeholder="HH:MM" placeholderTextColor="#475569" />
+                        <Text {...uiProps(uiPath('finmed', 'reminder_setup', 'appointment_time_label'))} style={styles.label}>Time</Text>
+                        <TextInput {...uiProps(uiPath('finmed', 'reminder_setup', 'appointment_time_input'))} style={styles.input} value={apptTime} onChangeText={setApptTime} placeholder="HH:MM" placeholderTextColor="#475569" />
                       </View>
                     </View>
-                    <Text style={styles.label}>Description</Text>
+                    <Text {...uiProps(uiPath('finmed', 'reminder_setup', 'appointment_desc_label'))} style={styles.label}>Description</Text>
                     <TextInput
+                      {...uiProps(uiPath('finmed', 'reminder_setup', 'appointment_desc_input'))}
                       style={[styles.input, styles.multiline]}
                       value={apptDesc}
                       onChangeText={setApptDesc}
@@ -347,13 +410,35 @@ export default function ReminderSetupModal({
                   </>
                 )}
 
+                {type === 'custom' && (
+                  <>
+                    <Text {...uiProps(uiPath('finmed', 'reminder_setup', 'custom_icon_label'))} style={styles.label}>Icon</Text>
+                    <Text {...uiProps(uiPath('finmed', 'reminder_setup', 'custom_icon_hint'))} style={styles.hint}>Choose an icon for this reminder's notification</Text>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 4 }}>
+                      <View {...uiProps(uiPath('finmed', 'reminder_setup', 'custom_icon_row'))} style={styles.toggleRow}>
+                        {['🔔', '⏰', '⚡', '💪', '🌙', '☀️', '💧', '🍎', '🏃', '🧘', '📖', '✍️', '🎯', '⭐', '🔥'].map((emoji) => (
+                          <TouchableOpacity
+                            {...uiProps(uiPath('finmed', 'reminder_setup', 'custom_icon_chip', emoji))}
+                            key={emoji}
+                            style={[styles.iconChip, customIcon === emoji && styles.iconChipActive]}
+                            onPress={() => setCustomIcon(emoji)}
+                          >
+                            <Text style={styles.iconChipText}>{emoji}</Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    </ScrollView>
+                  </>
+                )}
+
                 {/* FREQUENCY — not for appointment */}
                 {type !== 'appointment' && (
                   <>
-                    <Text style={styles.label}>Frequency</Text>
-                    <View style={styles.toggleRow}>
+                    <Text {...uiProps(uiPath('finmed', 'reminder_setup', 'frequency_label'))} style={styles.label}>Frequency</Text>
+                    <View {...uiProps(uiPath('finmed', 'reminder_setup', 'frequency_row'))} style={styles.toggleRow}>
                       {FREQ_OPTIONS.map((fo) => (
                         <TouchableOpacity
+                          {...uiProps(uiPath('finmed', 'reminder_setup', 'frequency_chip', fo.key))}
                           key={fo.key}
                           style={[styles.chip, freqType === fo.key && styles.chipActive]}
                           onPress={() => setFreqType(fo.key)}
@@ -366,8 +451,9 @@ export default function ReminderSetupModal({
                     {freqType === 'multiple_times_daily' && (
                       <>
                         {times.map((t, i) => (
-                          <View key={i} style={styles.timeRow}>
+                          <View {...uiProps(uiPath('finmed', 'reminder_setup', 'time_row', i))} key={i} style={styles.timeRow}>
                             <TextInput
+                              {...uiProps(uiPath('finmed', 'reminder_setup', 'time_input', i))}
                               style={[styles.input, { flex: 1 }]}
                               value={t}
                               onChangeText={(v) => setTimeAt(i, v)}
@@ -375,13 +461,13 @@ export default function ReminderSetupModal({
                               placeholderTextColor="#475569"
                             />
                             {times.length > 1 && (
-                              <TouchableOpacity style={styles.removeBtn} onPress={() => removeTime(i)}>
+                              <TouchableOpacity {...uiProps(uiPath('finmed', 'reminder_setup', 'remove_time_btn', i))} style={styles.removeBtn} onPress={() => removeTime(i)}>
                                 <Text style={styles.removeBtnText}>✕</Text>
                               </TouchableOpacity>
                             )}
                           </View>
                         ))}
-                        <TouchableOpacity style={styles.addTimeBtn} onPress={addTime}>
+                        <TouchableOpacity {...uiProps(uiPath('finmed', 'reminder_setup', 'add_time_btn'))} style={styles.addTimeBtn} onPress={addTime}>
                           <Text style={styles.addTimeBtnText}>＋ Add time</Text>
                         </TouchableOpacity>
                       </>
@@ -389,51 +475,74 @@ export default function ReminderSetupModal({
 
                     {freqType === 'interval' && (
                       <>
-                        <Text style={styles.label}>Every (hours)</Text>
-                        <TextInput style={styles.input} value={intervalHours} onChangeText={setIntervalHours} keyboardType="decimal-pad" placeholderTextColor="#475569" />
+                        <Text {...uiProps(uiPath('finmed', 'reminder_setup', 'interval_label'))} style={styles.label}>Every (hours)</Text>
+                        <TextInput {...uiProps(uiPath('finmed', 'reminder_setup', 'interval_input'))} style={styles.input} value={intervalHours} onChangeText={setIntervalHours} keyboardType="decimal-pad" placeholderTextColor="#475569" />
                       </>
                     )}
 
                     {freqType === 'specific_day_of_week' && (
-                      <View style={styles.toggleRow}>
-                        {WEEKDAY_LABELS.map((d, i) => (
-                          <TouchableOpacity
-                            key={i}
-                            style={[styles.dayChip, weekdays.includes(i) && styles.dayChipActive]}
-                            onPress={() => toggleWeekday(i)}
-                          >
-                            <Text style={[styles.dayChipText, weekdays.includes(i) && styles.dayChipTextActive]}>{d}</Text>
-                          </TouchableOpacity>
-                        ))}
-                      </View>
+                      <>
+                        <View {...uiProps(uiPath('finmed', 'reminder_setup', 'weekday_row'))} style={styles.toggleRow}>
+                          {WEEKDAY_LABELS.map((d, i) => (
+                            <TouchableOpacity
+                              {...uiProps(uiPath('finmed', 'reminder_setup', 'weekday_chip', i))}
+                              key={i}
+                              style={[styles.dayChip, weekdays.includes(i) && styles.dayChipActive]}
+                              onPress={() => toggleWeekday(i)}
+                            >
+                              <Text style={[styles.dayChipText, weekdays.includes(i) && styles.dayChipTextActive]}>{d}</Text>
+                            </TouchableOpacity>
+                          ))}
+                        </View>
+                        <Text {...uiProps(uiPath('finmed', 'reminder_setup', 'weekday_time_label'))} style={styles.label}>Reminder time</Text>
+                        <TextInput
+                          {...uiProps(uiPath('finmed', 'reminder_setup', 'weekday_time_input'))}
+                          style={styles.input}
+                          value={times[0]}
+                          onChangeText={(v) => setTimeAt(0, v)}
+                          placeholder="HH:MM"
+                          placeholderTextColor="#475569"
+                        />
+                      </>
                     )}
 
                     {freqType === 'cyclic' && (
-                      <View style={styles.row2}>
-                        <View style={{ flex: 1 }}>
-                          <Text style={styles.label}>Intake days</Text>
-                          <TextInput style={styles.input} value={cycleIntake} onChangeText={setCycleIntake} keyboardType="number-pad" placeholderTextColor="#475569" />
+                      <>
+                        <View {...uiProps(uiPath('finmed', 'reminder_setup', 'cyclic_row'))} style={styles.row2}>
+                          <View style={{ flex: 1 }}>
+                            <Text {...uiProps(uiPath('finmed', 'reminder_setup', 'cyclic_intake_label'))} style={styles.label}>Intake days</Text>
+                            <TextInput {...uiProps(uiPath('finmed', 'reminder_setup', 'cyclic_intake_input'))} style={styles.input} value={cycleIntake} onChangeText={setCycleIntake} keyboardType="number-pad" placeholderTextColor="#475569" />
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <Text {...uiProps(uiPath('finmed', 'reminder_setup', 'cyclic_pause_label'))} style={styles.label}>Pause days</Text>
+                            <TextInput {...uiProps(uiPath('finmed', 'reminder_setup', 'cyclic_pause_input'))} style={styles.input} value={cyclePause} onChangeText={setCyclePause} keyboardType="number-pad" placeholderTextColor="#475569" />
+                          </View>
                         </View>
-                        <View style={{ flex: 1 }}>
-                          <Text style={styles.label}>Pause days</Text>
-                          <TextInput style={styles.input} value={cyclePause} onChangeText={setCyclePause} keyboardType="number-pad" placeholderTextColor="#475569" />
-                        </View>
-                      </View>
+                        <Text {...uiProps(uiPath('finmed', 'reminder_setup', 'cyclic_time_label'))} style={styles.label}>Reminder time</Text>
+                        <TextInput
+                          {...uiProps(uiPath('finmed', 'reminder_setup', 'cyclic_time_input'))}
+                          style={styles.input}
+                          value={times[0]}
+                          onChangeText={(v) => setTimeAt(0, v)}
+                          placeholder="HH:MM"
+                          placeholderTextColor="#475569"
+                        />
+                      </>
                     )}
 
                     {freqType !== 'on_demand' && (
                       <>
-                        <Text style={styles.label}>Start date</Text>
-                        <TextInput style={styles.input} value={startDate} onChangeText={setStartDate} placeholder="YYYY-MM-DD" placeholderTextColor="#475569" />
-                        <Text style={styles.label}>End date (optional)</Text>
-                        <TextInput style={styles.input} value={endDate} onChangeText={setEndDate} placeholder="YYYY-MM-DD" placeholderTextColor="#475569" />
+                        <Text {...uiProps(uiPath('finmed', 'reminder_setup', 'start_date_label'))} style={styles.label}>Start date</Text>
+                        <TextInput {...uiProps(uiPath('finmed', 'reminder_setup', 'start_date_input'))} style={styles.input} value={startDate} onChangeText={setStartDate} placeholder="YYYY-MM-DD" placeholderTextColor="#475569" />
+                        <Text {...uiProps(uiPath('finmed', 'reminder_setup', 'end_date_label'))} style={styles.label}>End date (optional)</Text>
+                        <TextInput {...uiProps(uiPath('finmed', 'reminder_setup', 'end_date_input'))} style={styles.input} value={endDate} onChangeText={setEndDate} placeholder="YYYY-MM-DD" placeholderTextColor="#475569" />
                       </>
                     )}
                   </>
                 )}
 
-                <View style={styles.actions}>
-                  <TouchableOpacity style={styles.cancelBtn} onPress={onClose}>
+                <View {...uiProps(uiPath('finmed', 'reminder_setup', 'actions'))} style={styles.actions}>
+                  <TouchableOpacity {...uiProps(uiPath('finmed', 'reminder_setup', 'cancel_button'))} style={styles.cancelBtn} onPress={onClose}>
                     <Text style={styles.cancelBtnText}>Cancel</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
@@ -459,6 +568,7 @@ const TYPE_LABELS: Record<ReminderType, string> = {
   measurement: 'Measurement',
   symptom_check: 'Symptom Check',
   appointment: 'Appointment',
+  custom: 'Custom',
 };
 
 const TYPE_ICONS: Record<ReminderType, string> = {
@@ -466,6 +576,7 @@ const TYPE_ICONS: Record<ReminderType, string> = {
   measurement: '📏',
   symptom_check: '😐',
   appointment: '📅',
+  custom: '🔔',
 };
 
 const styles = StyleSheet.create({
@@ -525,6 +636,13 @@ const styles = StyleSheet.create({
   dayChipActive: { borderColor: '#F472B6', backgroundColor: '#2d0a1a' },
   dayChipText: { color: '#475569', fontSize: 11, fontWeight: '700' },
   dayChipTextActive: { color: '#F472B6' },
+  iconChip: {
+    width: 44, height: 44, borderRadius: 8,
+    borderWidth: 1, borderColor: '#1F3A59', backgroundColor: '#0E1A2B',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  iconChipActive: { borderColor: '#F472B6', backgroundColor: '#2d0a1a' },
+  iconChipText: { fontSize: 24 },
   timeRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   removeBtn: {
     width: 32, height: 40, alignItems: 'center', justifyContent: 'center',

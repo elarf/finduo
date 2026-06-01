@@ -10,12 +10,15 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNotificationCenter } from '../../context/NotificationCenterContext';
+import { topInset } from '../../lib/safeArea';
 import NotificationRow from './NotificationRow';
 
 export default function NotificationHistorySheet() {
-  const { bottom } = useSafeAreaInsets();
+  const { top, bottom } = useSafeAreaInsets();
   const { notifications, isPanelOpen, closePanel, markAllRead, allDone } =
     useNotificationCenter();
+
+  const headerOffset = topInset(66, top);
 
   if (!isPanelOpen) return null;
 
@@ -28,8 +31,12 @@ export default function NotificationHistorySheet() {
 
   return (
     <Modal visible={isPanelOpen} transparent animationType="slide" onRequestClose={closePanel}>
-      <View style={styles.overlay}>
-        <Pressable style={styles.backdrop} onPress={closePanel} />
+      <View style={[styles.overlay, { paddingTop: headerOffset }]}>
+        <Pressable
+          style={[styles.headerTapArea, { height: headerOffset }]}
+          onPress={closePanel}
+        />
+        <Pressable style={[styles.backdrop, { top: headerOffset }]} onPress={closePanel} />
         <View style={[styles.sheet, { paddingBottom: Math.max(bottom, 16) }]}>
           <View style={styles.handle} />
 
@@ -68,9 +75,17 @@ export default function NotificationHistorySheet() {
 
 const styles = StyleSheet.create({
   overlay: { flex: 1, justifyContent: 'flex-end' },
+  headerTapArea: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 2,
+  },
   backdrop: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0,0,0,0.6)',
+    zIndex: 1,
   },
   sheet: {
     backgroundColor: '#0B1728',
@@ -81,6 +96,7 @@ const styles = StyleSheet.create({
     maxHeight: '80%',
     paddingHorizontal: 16,
     paddingTop: 10,
+    zIndex: 3,
   },
   handle: {
     alignSelf: 'center',

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import {
   Image,
+  Pressable,
   Platform,
   StyleSheet,
   Text,
@@ -11,6 +12,7 @@ import {
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';
+import { useNotificationCenter } from '../context/NotificationCenterContext';
 import { uiPath, uiProps } from '../lib/devtools';
 import { topInset } from '../lib/safeArea';
 
@@ -23,6 +25,7 @@ interface Props {
 export default function AppHeader({ onBack, rightElement }: Props) {
   const navigation = useNavigation();
   const { user, avatarUrl } = useAuth();
+  const { isPanelOpen, closePanel } = useNotificationCenter();
   const { width } = useWindowDimensions();
   const { top } = useSafeAreaInsets();
   const isMobile = Platform.OS !== 'web' || width < 1024;
@@ -89,6 +92,14 @@ export default function AppHeader({ onBack, rightElement }: Props) {
       <View style={{ flex: 1 }} pointerEvents="none" />
 
       {rightSlot}
+
+      {isPanelOpen && (
+        <Pressable
+          style={s.closeOverlay}
+          onPress={closePanel}
+          {...uiProps(uiPath('app_header', 'close_overlay', 'pressable'))}
+        />
+      )}
     </View>
   );
 }
@@ -131,11 +142,13 @@ const s = StyleSheet.create({
   headerLogoCenter: {
     flex: 1,
     alignItems: 'center',
-    justifyContent: 'flex-end',
+    justifyContent: 'center',
+    minHeight: 66,
   },
   headerLogo: {
-    width: 168,
-    height: 52,
+    width: 214,
+    height: 66,
+    minHeight: 66,
   },
   spinner: {
     width: 36,
@@ -148,6 +161,10 @@ const s = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 2,
+  },
+  closeOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 10,
   },
   backArrow: {
     color: '#8FA8C9',

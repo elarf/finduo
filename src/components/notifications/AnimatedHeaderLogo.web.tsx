@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useReducer, useRef, useState } from 'react';
+import Lottie from 'lottie-react';
 import { Animated, Easing, Image, TouchableOpacity, StyleSheet, View, Text } from 'react-native';
-import LottieView from 'lottie-react-native';
 import { useNotificationCenter } from '../../context/NotificationCenterContext';
 import { getNotificationIcon } from '../../lib/notifications/icons';
 import type { NotificationSource } from '../../lib/notifications/types';
@@ -8,6 +8,7 @@ import type { NotificationSource } from '../../lib/notifications/types';
 type LogoState =
   | 'IDLE_LOGO'
   | 'ANIMATING_TO_FRAME'
+  | 'ANIMATING_TO_FRAME_OPEN'
   | 'IDLE_FRAME'
   | 'SHOWING'
   | 'ANIMATING_TO_LOGO';
@@ -15,8 +16,8 @@ type LogoState =
 type LogoAction =
   | { type: 'NEW_NOTIFICATION' }
   | { type: 'ANIMATION_COMPLETE' }
-  | { type: 'TAP_LOGO' }
-  | { type: 'CLOSE_PANEL' };
+  | { type: 'TAP_LOGO'; wasPanelOpen: boolean }
+  | { type: 'CLOSE_PANEL'; hasUnread: boolean };
 
 function logoReducer(state: LogoState, action: LogoAction): LogoState {
   switch (action.type) {
@@ -25,17 +26,20 @@ function logoReducer(state: LogoState, action: LogoAction): LogoState {
 
     case 'ANIMATION_COMPLETE':
       if (state === 'ANIMATING_TO_FRAME') return 'IDLE_FRAME';
+      if (state === 'ANIMATING_TO_FRAME_OPEN') return 'SHOWING';
       if (state === 'ANIMATING_TO_LOGO') return 'IDLE_LOGO';
       return state;
 
     case 'TAP_LOGO':
+      if (action.wasPanelOpen) {
+        return state === 'IDLE_LOGO' ? state : 'ANIMATING_TO_LOGO';
+      }
+      if (state === 'IDLE_LOGO') return 'ANIMATING_TO_FRAME_OPEN';
+      if (state === 'IDLE_FRAME') return 'SHOWING';
       return state;
 
     case 'CLOSE_PANEL':
-      if (state === 'SHOWING' || state === 'IDLE_FRAME') {
-        // Only animate back to logo if no unread notifications remain
-        return 'ANIMATING_TO_LOGO';
-      }
+      if (state === 'SHOWING' || state === 'IDLE_FRAME') return 'ANIMATING_TO_LOGO';
       return state;
 
     default:
@@ -49,11 +53,9 @@ export default function AnimatedHeaderLogo() {
   const [displayIndex, setDisplayIndex] = useState(0);
   const [previousIndex, setPreviousIndex] = useState<number | null>(null);
 
-  const lottieRef = useRef<LottieView>(null);
   const prevUnreadCount = useRef(unreadCount);
   const crossfade = useRef(new Animated.Value(1)).current;
 
-  // Detect new notifications
   useEffect(() => {
     if (unreadCount > prevUnreadCount.current && logoState === 'IDLE_LOGO') {
       dispatch({ type: 'NEW_NOTIFICATION' });
@@ -61,21 +63,33 @@ export default function AnimatedHeaderLogo() {
     prevUnreadCount.current = unreadCount;
   }, [unreadCount, logoState]);
 
-  // Handle panel close
   useEffect(() => {
     if (!isPanelOpen && (logoState === 'SHOWING' || logoState === 'IDLE_FRAME')) {
-      if (unreadCount === 0) {
-        dispatch({ type: 'CLOSE_PANEL' });
-      }
+      dispatch({ type: 'CLOSE_PANEL', hasUnread: unreadCount > 0 });
+    }
+  }, [isPanelOpen, logoState, unreadCount]);
+
+  // Keep visual state in sync if unread drops to zero while panel is closed.
+  useEffect(() => {
+    if (!isPanelOpen && logoState === 'IDLE_FRAME' && unreadCount === 0) {
+      dispatch({ type: 'CLOSE_PANEL', hasUnread: false });
     }
   }, [isPanelOpen, logoState, unreadCount]);
 
   const handleTap = () => {
-    openPanel();
-    dispatch({ type: 'TAP_LOGO' });
+    if (!isPanelOpen && logoState !== 'IDLE_LOGO') {
+      openPanel();
+    }
+    dispatch({ type: 'TAP_LOGO', wasPanelOpen: isPanelOpen });
   };
 
   const handleAnimationFinish = () => {
+    if (logoState === 'ANIMATING_TO_FRAME_OPEN') {
+      openPanel();
+    }
+    if (logoState === 'ANIMATING_TO_LOGO') {
+      closePanel();
+    }
     dispatch({ type: 'ANIMATION_COMPLETE' });
   };
 
@@ -160,14 +174,14 @@ export default function AnimatedHeaderLogo() {
         />
       )}
 
-      {logoState === 'ANIMATING_TO_FRAME' && (
-        <LottieView
-          ref={lottieRef}
-          source={require('../../../assets/toframe.json')}
-          autoPlay
+      {(logoState === 'ANIMATING_TO_FRAME' || logoState === 'ANIMATING_TO_FRAME_OPEN') && (
+        <Lottie
+          key={logoState}
+          animationData={require('../../../assets/toframe.json')}
           loop={false}
+          autoplay
           style={styles.logo}
-          onAnimationFinish={handleAnimationFinish}
+          onComplete={handleAnimationFinish}
         />
       )}
 
@@ -214,13 +228,13 @@ export default function AnimatedHeaderLogo() {
       )}
 
       {logoState === 'ANIMATING_TO_LOGO' && (
-        <LottieView
-          ref={lottieRef}
-          source={require('../../../assets/tologo.json')}
-          autoPlay
+        <Lottie
+          key={logoState}
+          animationData={require('../../../assets/tologo.json')}
           loop={false}
+          autoplay
           style={styles.logo}
-          onAnimationFinish={handleAnimationFinish}
+          onComplete={handleAnimationFinish}
         />
       )}
     </TouchableOpacity>
@@ -229,18 +243,21 @@ export default function AnimatedHeaderLogo() {
 
 const styles = StyleSheet.create({
   container: {
-    width: 168,
-    height: 52,
+    width: 214,
+    height: 66,
+    minHeight: 66,
     justifyContent: 'center',
     alignItems: 'center',
   },
   logo: {
-    width: 168,
-    height: 52,
+    width: 214,
+    height: 66,
+    minHeight: 66,
   },
   frameContainer: {
-    width: 168,
-    height: 52,
+    width: 214,
+    height: 66,
+    minHeight: 66,
     position: 'relative',
   },
   iconOverlay: {

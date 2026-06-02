@@ -762,6 +762,29 @@ export default function QuickNavScreen() {
               );
             })}
 
+            {/* FinHub */}
+            <TouchableOpacity
+              {...uiProps(uiPath('quick_nav_screen', 'nav', 'finhub_item'))}
+              style={styles.menuItem}
+              onPress={() => {
+                logUI(uiPath('quick_nav_screen', 'nav', 'finhub_item'), 'press');
+                handleClose();
+                (navigation as any).navigate('FinBiome');
+              }}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', width: '100%' }}>
+                <View style={{ width: 20 }}>
+                  <Image
+                    source={require('../../assets/findash.png')}
+                    style={{ width: 14, height: 14 }}
+                    resizeMode="contain"
+                  />
+                </View>
+                <Text style={[styles.menuItemText, { flex: 1, textAlign: 'center', color: '#00F5D4' }]}>FinHub</Text>
+                <View style={{ minWidth: 20 }} />
+              </View>
+            </TouchableOpacity>
+
             {/* FinGo */}
             <TouchableOpacity
               {...uiProps(uiPath('quick_nav_screen', 'nav', 'fingo_item'))}
@@ -777,25 +800,6 @@ export default function QuickNavScreen() {
                   <Icon name="Wrench" size={14} color="#FBBF24" />
                 </View>
                 <Text style={[styles.menuItemText, { flex: 1, textAlign: 'center', color: '#FBBF24' }]}>FinGo</Text>
-                <View style={{ minWidth: 20 }} />
-              </View>
-            </TouchableOpacity>
-
-            {/* FinBiome */}
-            <TouchableOpacity
-              {...uiProps(uiPath('quick_nav_screen', 'nav', 'finbiome_item'))}
-              style={styles.menuItem}
-              onPress={() => {
-                logUI(uiPath('quick_nav_screen', 'nav', 'finbiome_item'), 'press');
-                handleClose();
-                (navigation as any).navigate('FinBiome');
-              }}
-            >
-              <View style={{ flexDirection: 'row', alignItems: 'center', width: '100%' }}>
-                <View style={{ width: 20 }}>
-                  <Icon name="TreeDeciduous" size={14} color="#00F5D4" />
-                </View>
-                <Text style={[styles.menuItemText, { flex: 1, textAlign: 'center', color: '#00F5D4' }]}>FinBiome</Text>
                 <View style={{ minWidth: 20 }} />
               </View>
             </TouchableOpacity>

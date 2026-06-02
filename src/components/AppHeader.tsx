@@ -13,6 +13,7 @@ import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';
 import { useNotificationCenter } from '../context/NotificationCenterContext';
+import AnimatedHeaderLogo from './notifications/AnimatedHeaderLogo';
 import { uiPath, uiProps } from '../lib/devtools';
 import { topInset } from '../lib/safeArea';
 
@@ -47,7 +48,7 @@ export default function AppHeader({ onBack, rightElement }: Props) {
     <View style={[s.headerRow, { paddingTop: topInset(14, top) }]} {...uiProps(uiPath('app_header', 'container', 'view'))}>
       {onBack ? (
         <TouchableOpacity
-          style={s.backBtn}
+          style={s.avatarBtn}
           onPress={handleBack}
           {...uiProps(uiPath('app_header', 'back_button', 'touchable'))}
         >
@@ -77,14 +78,9 @@ export default function AppHeader({ onBack, rightElement }: Props) {
       )}
 
       {/* Logo: absolutely centred */}
-      <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
+      <View style={[StyleSheet.absoluteFill, { paddingTop: topInset(14, top) }]} pointerEvents="box-none">
         <View style={s.headerLogoCenter} pointerEvents="box-none">
-          <Image
-            source={require('../../assets/logo.png')}
-            style={s.headerLogo}
-            resizeMode="contain"
-            {...uiProps(uiPath('app_header', 'logo', 'image'))}
-          />
+          <AnimatedHeaderLogo />
         </View>
       </View>
 
@@ -122,6 +118,8 @@ const s = StyleSheet.create({
     borderWidth: 2,
     borderColor: '#1F3A59',
     zIndex: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   avatarImg: {
     width: '100%',
@@ -140,27 +138,14 @@ const s = StyleSheet.create({
     fontWeight: '700',
   },
   headerLogoCenter: {
-    flex: 1,
+    height: '100%',
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 66,
     transform: [{ translateY: -8 }],
-  },
-  headerLogo: {
-    width: 214,
-    height: 66,
-    minHeight: 66,
   },
   spinner: {
     width: 36,
     height: 36,
-    zIndex: 2,
-  },
-  backBtn: {
-    width: 44,
-    height: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
     zIndex: 2,
   },
   closeOverlay: {

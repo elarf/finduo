@@ -11,6 +11,26 @@ const LARGE_ICON = 'asset://assets/meds.png';
 const REPEAT_INTERVAL_MINUTES = 5;
 const DEFAULT_MAX_REPEAT_WINDOW_MINUTES = 120; // 2 hours
 
+function readMedicationReminderConfig(reminder: FinmedReminder): {
+  medicationId?: string;
+  doseAmount: number;
+  doseUnit: string;
+} | null {
+  if (reminder.type !== 'medication') return null;
+
+  const cfg = (reminder.type_config ?? {}) as MedicationReminderConfig & {
+    medicationId?: string;
+    doseAmount?: number;
+    doseUnit?: string;
+  };
+
+  return {
+    medicationId: cfg.medication_id ?? cfg.medicationId,
+    doseAmount: cfg.dose_amount ?? cfg.doseAmount ?? 1,
+    doseUnit: cfg.dose_unit ?? cfg.doseUnit ?? 'pill',
+  };
+}
+
 /**
  * Generate deterministic notification ID for a reminder slot and repeat index.
  * slot = index of the time in the day (0 for first time, 1 for second, etc.)
@@ -189,7 +209,10 @@ function nextCyclicIntakeDate(reminder: FinmedReminder): Date | null {
   return at;
 }
 
-export async function scheduleIntakeReminder(reminder: FinmedReminder): Promise<void> {
+export async function scheduleIntakeReminder(
+  reminder: FinmedReminder,
+  options?: { mirror?: boolean },
+): Promise<void> {
   if (!Capacitor.isNativePlatform()) return;
   if (!reminder.active || reminder.frequency_type === 'on_demand') return;
 
@@ -201,11 +224,9 @@ export async function scheduleIntakeReminder(reminder: FinmedReminder): Promise<
       if (after !== 'granted') return;
     }
 
-    const medConfig = reminder.type === 'medication'
-      ? (reminder.type_config as MedicationReminderConfig)
-      : null;
+    const medConfig = readMedicationReminderConfig(reminder);
     const body = medConfig
-      ? `${medConfig.dose_amount} ${medConfig.dose_unit} — time to take your medication`
+      ? `${medConfig.doseAmount} ${medConfig.doseUnit} — time to take your medication`
       : 'Time for your reminder';
 
     if (reminder.frequency_type === 'multiple_times_daily') {
@@ -280,16 +301,19 @@ export async function scheduleIntakeReminder(reminder: FinmedReminder): Promise<
       }
     }
 
-    // Mirror to in-app notification center
-    await mirrorNotification(
-      'finmed_intake_reminder',
-      reminder.label,
-      body,
-      {
-        reminderId: reminder.id,
-        medicationId: medConfig?.medication_id,
-      },
-    );
+    // By default, mirror to in-app center. Some callers (boot-time reschedule)
+    // should schedule native notifications without creating duplicate feed records.
+    if (options?.mirror !== false) {
+      await mirrorNotification(
+        'finmed_intake_reminder',
+        reminder.label,
+        body,
+        {
+          reminderId: reminder.id,
+          medicationId: medConfig?.medicationId,
+        },
+      );
+    }
   } catch {
     // non-fatal
   }
@@ -326,11 +350,9 @@ export async function rescheduleAfterSnooze(
   );
 
   // Schedule new batch from snoozed time
-  const medConfig = reminder.type === 'medication'
-    ? (reminder.type_config as MedicationReminderConfig)
-    : null;
+  const medConfig = readMedicationReminderConfig(reminder);
   const body = medConfig
-    ? `${medConfig.dose_amount} ${medConfig.dose_unit} — time to take your medication`
+    ? `${medConfig.doseAmount} ${medConfig.doseUnit} — time to take your medication`
     : 'Time for your reminder';
 
   await scheduleTimeSlotWithRepeats(
@@ -349,7 +371,7 @@ export async function rescheduleAfterSnooze(
     body,
     {
       reminderId: reminder.id,
-      medicationId: medConfig?.medication_id,
+      medicationId: medConfig?.medicationId,
     },
   );
 }

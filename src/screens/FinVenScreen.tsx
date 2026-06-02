@@ -190,7 +190,7 @@ export default function FinVenScreen() {
       <DashboardHeader
         onBack={() => {
           logUI(uiPath('finven', 'header', 'back_button'), 'press');
-          navigation.goBack();
+          navigation.navigate('FinBiome');
         }}
         rightElement={rightElement}
       />

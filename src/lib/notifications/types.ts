@@ -24,6 +24,7 @@ export interface InAppNotification {
     reminderId?: string;
     medicationId?: string;
     scheduleId?: string;
+    slotIndex?: number;
 
     // FinGo
     intervalId?: string;

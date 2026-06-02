@@ -552,7 +552,7 @@ export default function FinGoScreen() {
       <DashboardHeader
         onBack={() => {
           logUI(uiPath('fingo', 'header', 'back_button'), 'press');
-          navigation.goBack();
+          navigation.navigate('FinBiome');
         }}
         rightElement={
           <TouchableOpacity

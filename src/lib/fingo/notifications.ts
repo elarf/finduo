@@ -126,13 +126,31 @@ export function setupFinGoNotificationReceivedListener(): void {
 
   import('@capacitor/local-notifications').then(({ LocalNotifications }) => {
     LocalNotifications.addListener('localNotificationReceived', (event) => {
+      const extra = event.extra as
+        | { intervalId?: string; componentId?: string; assetId?: string }
+        | undefined;
+
       logNotif('RECEIVED', {
         module: 'fingo',
         notificationId: event.id,
         title: event.title,
         body: event.body,
-        extra: event.extra,
+        extra,
       });
+
+      // Mirror only FinGo service notifications that include required metadata.
+      if (extra?.intervalId && extra?.componentId && extra?.assetId) {
+        void mirrorNotification(
+          'fingo_service_due',
+          event.title,
+          event.body,
+          {
+            intervalId: extra.intervalId,
+            componentId: extra.componentId,
+            assetId: extra.assetId,
+          },
+        );
+      }
     }).catch(() => {});
   }).catch(() => {});
 }

@@ -6,6 +6,7 @@ import React, {
   useState,
   useRef,
 } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import type { InAppNotification, NotificationSource } from '../lib/notifications/types';
 import { loadNotifications, saveNotifications } from '../lib/notifications/storage';
 import { initNotificationBridge } from '../lib/notifications/bridge';
@@ -13,7 +14,7 @@ import { confirmMedicationIntake } from '../lib/finmed/actions';
 import { acknowledgeServiceInterval } from '../lib/fingo/actions';
 import { computeIntervalHealthFromLogs, formatIntervalRemaining, trackingMethodUnit } from '../lib/fingo/health';
 import { supabase } from '../lib/supabase';
-import type { MedicationReminderConfig } from '../types/finmed';
+import type { FinmedReminder, MedicationReminderConfig } from '../types/finmed';
 import type { Component, ComponentServiceInterval, UsageLog } from '../types/fingo';
 import { useAuth } from './AuthContext';
 
@@ -58,6 +59,72 @@ type SyntheticNotificationSeed = {
   body: string;
   metadata?: InAppNotification['metadata'];
 };
+
+function liveNotificationId(
+  source: NotificationSource,
+  metadata?: InAppNotification['metadata'],
+): string | null {
+  if (source === 'fingo_service_due' && metadata?.intervalId) {
+    return `live:fingo:${metadata.intervalId}`;
+  }
+
+  if (source === 'finmed_intake_reminder' && metadata?.reminderId) {
+    const slotKey = metadata.slotIndex ?? 'na';
+    return `live:finmed:${metadata.reminderId}:${slotKey}`;
+  }
+
+  return null;
+}
+
+function readMedicationReminderConfig(reminder: Pick<FinmedReminder, 'type' | 'type_config'>): {
+  medicationId?: string;
+  doseAmount: number;
+  doseUnit: string;
+} | null {
+  if (reminder.type !== 'medication') return null;
+
+  let parsedTypeConfig: unknown = reminder.type_config ?? {};
+  if (typeof parsedTypeConfig === 'string') {
+    try {
+      parsedTypeConfig = JSON.parse(parsedTypeConfig);
+    } catch {
+      parsedTypeConfig = {};
+    }
+  }
+
+  const cfg = (parsedTypeConfig ?? {}) as MedicationReminderConfig & {
+    medicationId?: string;
+    doseAmount?: number;
+    doseUnit?: string;
+    medication?: { id?: string };
+    dose?: { amount?: number; unit?: string };
+  };
+
+  const fallbackReminder = reminder as FinmedReminder & {
+    medication_id?: string;
+    medicationId?: string;
+  };
+
+  const rawMedicationId =
+    cfg.medication_id ??
+    cfg.medicationId ??
+    cfg.medication?.id ??
+    fallbackReminder.medication_id ??
+    fallbackReminder.medicationId;
+
+  const medicationId = typeof rawMedicationId === 'string' && rawMedicationId.trim().length > 0
+    ? rawMedicationId.trim()
+    : undefined;
+
+  const doseAmount = cfg.dose_amount ?? cfg.doseAmount ?? cfg.dose?.amount ?? 1;
+  const doseUnit = cfg.dose_unit ?? cfg.doseUnit ?? cfg.dose?.unit ?? 'pill';
+
+  return {
+    medicationId,
+    doseAmount,
+    doseUnit,
+  };
+}
 
 function formatNextTime(date: Date): string {
   const now = new Date();
@@ -142,6 +209,52 @@ function nextReminderDate(reminder: any): Date | null {
   return null;
 }
 
+function nextReminderSlotIndex(reminder: any, now = new Date()): number | undefined {
+  if (reminder.frequency_type !== 'multiple_times_daily') return undefined;
+  const times: string[] = reminder.frequency_config?.times ?? [];
+  if (times.length === 0) return undefined;
+
+  let bestIdx: number | undefined;
+  let bestTime: number | undefined;
+
+  for (let i = 0; i < times.length; i++) {
+    const [h, m] = times[i].split(':').map(Number);
+    if (Number.isNaN(h) || Number.isNaN(m)) continue;
+
+    const candidate = new Date(now);
+    candidate.setHours(h, m, 0, 0);
+    if (candidate <= now) continue;
+
+    const ts = candidate.getTime();
+    if (bestTime === undefined || ts < bestTime) {
+      bestTime = ts;
+      bestIdx = i;
+    }
+  }
+
+  return bestIdx;
+}
+
+function getUpcomingTodaySlots(reminder: any, now = new Date()): Array<{ slotIndex: number; at: Date }> {
+  if (reminder.frequency_type !== 'multiple_times_daily') return [];
+  const times: string[] = reminder.frequency_config?.times ?? [];
+
+  const slots: Array<{ slotIndex: number; at: Date }> = [];
+  for (let i = 0; i < times.length; i++) {
+    const [h, m] = times[i].split(':').map(Number);
+    if (Number.isNaN(h) || Number.isNaN(m)) continue;
+
+    const at = new Date(now);
+    at.setHours(h, m, 0, 0);
+    if (!isSameLocalDay(at, now)) continue;
+    if (at <= now) continue;
+
+    slots.push({ slotIndex: i, at });
+  }
+
+  return slots.sort((a, b) => a.at.getTime() - b.at.getTime());
+}
+
 function mergeWithSyntheticNotifications(
   prev: InAppNotification[],
   synthetic: SyntheticNotificationSeed[],
@@ -174,6 +287,7 @@ function mergeWithSyntheticNotifications(
 
 export function NotificationCenterProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
+  const queryClient = useQueryClient();
   const [notifications, setNotifications] = useState<InAppNotification[]>([]);
   const [loading, setLoading] = useState(true);
   const [isPanelOpen, setIsPanelOpen] = useState(false);
@@ -201,18 +315,46 @@ export function NotificationCenterProvider({ children }: { children: React.React
       body: string,
       metadata?: InAppNotification['metadata'],
     ) => {
-      const notification: InAppNotification = {
-        id: createNotificationId(),
-        source,
-        title,
-        body,
-        timestamp: new Date().toISOString(),
-        isRead: false,
-        isDone: false,
-        metadata,
-      };
+      const stableId = liveNotificationId(source, metadata);
+      const nowIso = new Date().toISOString();
 
-      setNotifications((prev) => [notification, ...prev]);
+      setNotifications((prev) => {
+        if (stableId) {
+          const existingIndex = prev.findIndex((n) => n.id === stableId);
+          const liveNotification: InAppNotification = {
+            id: stableId,
+            source,
+            title,
+            body,
+            timestamp: nowIso,
+            isRead: false,
+            isDone: false,
+            metadata,
+          };
+
+          if (existingIndex >= 0) {
+            return [
+              liveNotification,
+              ...prev.filter((_, idx) => idx !== existingIndex),
+            ];
+          }
+
+          return [liveNotification, ...prev];
+        }
+
+        const notification: InAppNotification = {
+          id: createNotificationId(),
+          source,
+          title,
+          body,
+          timestamp: nowIso,
+          isRead: false,
+          isDone: false,
+          metadata,
+        };
+
+        return [notification, ...prev];
+      });
     },
     [],
   );
@@ -302,31 +444,75 @@ export function NotificationCenterProvider({ children }: { children: React.React
         }
       }
 
-      // FinMed: include active medication reminders as upcoming entries.
-      const { data: remindersData } = await supabase
-        .from('finmed_reminders')
-        .select('*')
-        .eq('user_id', user.id)
-        .eq('active', true);
+      // FinMed: include active medication reminders as upcoming entries,
+      // but skip reminders/slots already resolved today.
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+
+      const [{ data: remindersData }, { data: reminderLogsData }] = await Promise.all([
+        supabase
+          .from('finmed_reminders')
+          .select('*')
+          .eq('user_id', user.id)
+          .eq('active', true),
+        supabase
+          .from('finmed_reminder_logs')
+          .select('reminder_id,action,metadata,created_at')
+          .eq('user_id', user.id)
+          .in('action', ['complete', 'ignore'])
+          .gte('created_at', todayStart.toISOString()),
+      ]);
+
+      const resolvedReminderKeys = new Set<string>();
+      for (const row of reminderLogsData ?? []) {
+        const metadata = (row as { metadata?: { slotIndex?: number } | null }).metadata;
+        const slotIndex = metadata?.slotIndex;
+        if (typeof slotIndex === 'number') {
+          resolvedReminderKeys.add(`${row.reminder_id}:${slotIndex}`);
+        } else {
+          resolvedReminderKeys.add(row.reminder_id);
+        }
+      }
 
       const reminders = remindersData ?? [];
       const now = new Date();
 
       for (const reminder of reminders) {
+        if (resolvedReminderKeys.has(reminder.id)) continue;
+
         if (reminder.type !== 'medication') continue;
         if (reminder.frequency_type === 'on_demand') continue;
         if (reminder.end_date && new Date(reminder.end_date) < now) continue;
 
-        const medConfig = reminder.type === 'medication'
-          ? (reminder.type_config as MedicationReminderConfig)
-          : null;
+        const medConfig = readMedicationReminderConfig(reminder as FinmedReminder);
+        const doseText = medConfig
+          ? `${medConfig.doseAmount} ${medConfig.doseUnit}`
+          : 'health check';
+
+        if (reminder.frequency_type === 'multiple_times_daily') {
+          const upcomingSlots = getUpcomingTodaySlots(reminder, now);
+          for (const slot of upcomingSlots) {
+            if (resolvedReminderKeys.has(`${reminder.id}:${slot.slotIndex}`)) continue;
+
+            const cadence = `Next ${formatNextTime(slot.at)}`;
+            synthetic.push({
+              id: `synthetic:finmed:${reminder.id}:${slot.slotIndex}`,
+              source: 'finmed_intake_reminder',
+              title: reminder.label,
+              body: `${doseText} - ${cadence}`,
+              metadata: {
+                reminderId: reminder.id,
+                medicationId: medConfig?.medicationId,
+                slotIndex: slot.slotIndex,
+              } as InAppNotification['metadata'] & { slotIndex?: number },
+            });
+          }
+          continue;
+        }
 
         const next = nextReminderDate(reminder);
         if (!next || !isSameLocalDay(next, now)) continue;
         const cadence = next ? `Next ${formatNextTime(next)}` : 'Upcoming reminder';
-        const doseText = medConfig
-          ? `${medConfig.dose_amount} ${medConfig.dose_unit}`
-          : 'health check';
 
         synthetic.push({
           id: `synthetic:finmed:${reminder.id}`,
@@ -335,8 +521,9 @@ export function NotificationCenterProvider({ children }: { children: React.React
           body: `${doseText} - ${cadence}`,
           metadata: {
             reminderId: reminder.id,
-            medicationId: medConfig?.medication_id,
-          },
+            medicationId: medConfig?.medicationId,
+            slotIndex: nextReminderSlotIndex(reminder, now),
+          } as InAppNotification['metadata'] & { slotIndex?: number },
         });
       }
 
@@ -372,64 +559,228 @@ export function NotificationCenterProvider({ children }: { children: React.React
 
   const markDone = useCallback(
     async (notificationId: string): Promise<{ success: boolean; error?: string }> => {
-      const notification = notificationsRef.current.find((n) => n.id === notificationId);
-      if (!notification || !user) {
-        return { success: false, error: 'Notification not found or user not logged in' };
-      }
-
-      // Execute functional action based on source
-      let result: { success: boolean; error?: string } = { success: false };
-
-      switch (notification.source) {
-        case 'finmed_intake_reminder': {
-          const { medicationId, scheduleId } = notification.metadata ?? {};
-          if (!medicationId) {
-            result = { success: false, error: 'Missing medication ID' };
-            break;
-          }
-
-          // Fetch medication data
-          const { data: med } = await supabase
-            .from('finmed_medications')
-            .select('*')
-            .eq('id', medicationId)
-            .single();
-
-          if (!med) {
-            result = { success: false, error: 'Medication not found' };
-            break;
-          }
-
-          // Use default dose of 1 (could be enhanced to look up actual dose from reminder)
-          result = await confirmMedicationIntake(user.id, med, scheduleId ?? null, 1, null);
-          break;
+      console.log('[NotificationCenter] markDone:start', { notificationId, userId: user?.id });
+      try {
+        const notification = notificationsRef.current.find((n) => n.id === notificationId);
+        if (!notification || !user) {
+          console.warn('[NotificationCenter] markDone:missing-notification-or-user', {
+            notificationId,
+            hasNotification: !!notification,
+            hasUser: !!user,
+          });
+          return { success: false, error: 'Notification not found or user not logged in' };
         }
 
-        case 'fingo_service_due': {
-          const { intervalId, componentId, assetId } = notification.metadata ?? {};
-          if (!intervalId || !componentId || !assetId) {
-            result = { success: false, error: 'Missing service interval data' };
+        console.log('[NotificationCenter] markDone:notification', {
+          id: notification.id,
+          source: notification.source,
+          isDone: notification.isDone,
+          isRead: notification.isRead,
+          metadata: notification.metadata,
+        });
+
+        // Execute functional action based on source
+        let result: { success: boolean; error?: string } = { success: false };
+
+        switch (notification.source) {
+          case 'finmed_intake_reminder': {
+            const { reminderId, medicationId, scheduleId, slotIndex } =
+              (notification.metadata ?? {}) as InAppNotification['metadata'] & { slotIndex?: number };
+            let warningMessage: string | undefined;
+
+            console.log('[NotificationCenter] markDone:finmed:metadata', {
+              reminderId,
+              medicationId,
+              scheduleId,
+              slotIndex,
+            });
+
+            let reminder: FinmedReminder | null = null;
+            if (reminderId) {
+              const { data: reminderData, error: reminderError } = await supabase
+                .from('finmed_reminders')
+                .select('*')
+                .eq('id', reminderId)
+                .single();
+
+              if (reminderError) {
+                console.warn('[NotificationCenter] markDone:finmed:reminder-fetch-failed', {
+                  reminderId,
+                  error: reminderError.message,
+                });
+                // Continue with metadata fallback when reminder fetch fails.
+                warningMessage = reminderError.message;
+              } else {
+                reminder = (reminderData as FinmedReminder | null) ?? null;
+                console.log('[NotificationCenter] markDone:finmed:reminder-fetched', {
+                  reminderId,
+                  type: reminder?.type,
+                  frequencyType: reminder?.frequency_type,
+                  typeConfig: reminder?.type_config,
+                });
+              }
+            }
+
+            const reminderType = reminder?.type ?? null;
+            const resolvedSlotIndex =
+              typeof slotIndex === 'number'
+                ? slotIndex
+                : (reminder ? nextReminderSlotIndex(reminder, new Date()) : undefined);
+
+            if (reminderType === 'medication' || (!reminderType && medicationId)) {
+              const medConfig = reminder ? readMedicationReminderConfig(reminder) : null;
+              const resolvedMedicationId = medConfig?.medicationId ?? medicationId;
+
+              if (!resolvedMedicationId) {
+                console.warn('[NotificationCenter] markDone:finmed:missing-medication-id', {
+                  reminderId,
+                  medicationId,
+                  medConfig,
+                  reminderTypeConfig: reminder?.type_config,
+                  resolvedSlotIndex,
+                });
+                // Fall back to reminder completion only so the UI still resolves the notification.
+                result = {
+                  success: true,
+                  error: 'Medication link missing; reminder marked complete only.',
+                };
+              } else {
+                const { data: med, error: medError } = await supabase
+                  .from('finmed_medications')
+                  .select('*')
+                  .eq('id', resolvedMedicationId)
+                  .single();
+
+                if (medError || !med) {
+                  console.warn('[NotificationCenter] markDone:finmed:medication-fetch-failed', {
+                    resolvedMedicationId,
+                    error: medError?.message,
+                  });
+                  result = { success: false, error: medError?.message ?? 'Medication not found' };
+                  break;
+                }
+
+                const doseAmount = medConfig?.doseAmount ?? 1;
+                console.log('[NotificationCenter] markDone:finmed:confirm-intake', {
+                  medicationId: med.id,
+                  scheduleId: scheduleId ?? null,
+                  doseAmount,
+                  resolvedSlotIndex,
+                });
+
+                result = await confirmMedicationIntake(user.id, med, scheduleId ?? null, doseAmount, null);
+                console.log('[NotificationCenter] markDone:finmed:confirm-intake-result', { result });
+                if (!result.success) break;
+              }
+            } else {
+              console.log('[NotificationCenter] markDone:finmed:non-medication-reminder-or-fallback');
+              result = { success: true };
+            }
+
+            // Mirror FinMed Today completion logging so notification-center completion behaves the same.
+            if (reminderId) {
+              const now = new Date().toISOString();
+              const { error: logError } = await supabase.from('finmed_reminder_logs').insert({
+                user_id: user.id,
+                reminder_id: reminderId,
+                scheduled_for: now,
+                action: 'complete',
+                completed_at: now,
+                ignored_at: null,
+                snoozed_until: null,
+                value: null,
+                note: null,
+                metadata: resolvedSlotIndex !== undefined ? { slotIndex: resolvedSlotIndex } : null,
+              });
+
+              if (logError) {
+                console.warn('[NotificationCenter] markDone:finmed:log-sync-failed', {
+                  reminderId,
+                  error: logError.message,
+                });
+                // Do not undo a successful confirmation if auxiliary reminder-log sync fails.
+                warningMessage = warningMessage ?? logError.message;
+              } else {
+                console.log('[NotificationCenter] markDone:finmed:log-sync-success', { reminderId });
+              }
+            }
+
+            if (result.success && warningMessage) {
+              result = { success: true, error: warningMessage };
+            }
+
             break;
           }
-          result = await acknowledgeServiceInterval(user.id, intervalId, componentId, assetId);
-          break;
+
+          case 'fingo_service_due': {
+            const { intervalId, componentId, assetId } = notification.metadata ?? {};
+            if (!intervalId || !componentId || !assetId) {
+              console.warn('[NotificationCenter] markDone:fingo:missing-metadata', {
+                intervalId,
+                componentId,
+                assetId,
+              });
+              result = { success: false, error: 'Missing service interval data' };
+              break;
+            }
+            result = await acknowledgeServiceInterval(user.id, intervalId, componentId, assetId);
+            console.log('[NotificationCenter] markDone:fingo:result', { result });
+            break;
+          }
+
+          default:
+            console.log('[NotificationCenter] markDone:default-source', { source: notification.source });
+            result = { success: true }; // Non-actionable notifications just mark as done
         }
 
-        default:
-          result = { success: true }; // Non-actionable notifications just mark as done
-      }
+        console.log('[NotificationCenter] markDone:pre-state-update', {
+          notificationId,
+          source: notification.source,
+          result,
+        });
 
-      if (result.success) {
-        setNotifications((prev) =>
-          prev.map((n) =>
-            n.id === notificationId ? { ...n, isDone: true, isRead: true } : n,
-          ),
-        );
-      }
+        if (result.success) {
+          setNotifications((prev) => {
+            const isActionableSource =
+              notification.source === 'finmed_intake_reminder' ||
+              notification.source === 'fingo_service_due';
 
-      return result;
+            const updated = isActionableSource
+              ? prev.filter((n) => n.id !== notificationId)
+              : prev.map((n) =>
+                  n.id === notificationId ? { ...n, isDone: true, isRead: true } : n,
+                );
+
+            const updatedItem = updated.find((n) => n.id === notificationId);
+            console.log('[NotificationCenter] markDone:state-updated', {
+              notificationId,
+              removed: isActionableSource,
+              updatedItem,
+            });
+            return updated;
+          });
+
+          if (notification.source === 'finmed_intake_reminder') {
+            await Promise.all([
+              queryClient.invalidateQueries({ queryKey: ['finmed_medications', user.id] }),
+              queryClient.invalidateQueries({ queryKey: ['finmed_reminders', user.id] }),
+              queryClient.invalidateQueries({ queryKey: ['finmed_reminder_logs', user.id] }),
+            ]);
+            console.log('[NotificationCenter] markDone:finmed:queries-invalidated', { userId: user.id });
+          }
+        }
+
+        console.log('[NotificationCenter] markDone:end', { notificationId, result });
+        return result;
+      } catch (err) {
+        console.error('[NotificationCenter] markDone:threw', { notificationId, err });
+        return {
+          success: false,
+          error: err instanceof Error ? err.message : 'Failed to complete notification action',
+        };
+      }
     },
-    [user],
+    [queryClient, user],
   );
 
   const allDone = useCallback(async () => {

@@ -16,7 +16,6 @@ import { createAsyncStoragePersister } from '@tanstack/query-async-storage-persi
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Capacitor } from '@capacitor/core';
 import { App as CapacitorApp } from '@capacitor/app';
-import { StackActions } from '@react-navigation/native';
 import { AuthProvider } from './src/context/AuthContext';
 import RootNavigator from './src/navigation';
 import { navigationRef, setPendingShortcut, getPendingShortcut, getPendingNotification, setPendingNotification, setLaunchReady } from './src/navigation/navigationRef';
@@ -54,8 +53,9 @@ function routeShortcut(shortcutId: string) {
       navigationRef.navigate('FinGo');
       setPendingShortcut(null);
       break;
+    case 'finhub':
     case 'tracking':
-      navigationRef.dispatch(StackActions.push('TrackingShortcut'));
+      navigationRef.navigate('FinHub');
       setPendingShortcut(null);
       break;
     default:

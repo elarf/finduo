@@ -8,6 +8,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';
+import { useNotificationCenter } from '../context/NotificationCenterContext';
 import { useFinmed } from '../hooks/useFinmed';
 import { supabase } from '../lib/supabase';
 import DashboardHeader from '../components/dashboard/layout/DashboardHeader';
@@ -49,6 +50,7 @@ export default function FinMedScreen() {
   const route = useRoute();
   const params = route.params as { action?: 'taken' | 'snooze'; reminderId?: string; slotIndex?: number } | undefined;
   const { session } = useAuth();
+  const { notifications } = useNotificationCenter();
   const user = session?.user ?? null;
   const { bottom } = useSafeAreaInsets();
 
@@ -311,6 +313,20 @@ export default function FinMedScreen() {
     setTodayLogs(todayOnly);
   }, [getReminderLogs]);
 
+  useEffect(() => {
+    if (activeTab !== 'today') return;
+    void refreshTodayLogs();
+  }, [activeTab, notifications, refreshTodayLogs]);
+
+  useEffect(() => {
+    if (activeTab !== 'progress') return;
+    setProgressLoading(true);
+    void getReminderLogs(progressFilter ?? undefined).then((logs) => {
+      setProgressLogs(logs);
+      setProgressLoading(false);
+    });
+  }, [activeTab, notifications, progressFilter, getReminderLogs]);
+
   const openLogSheet = (reminder: FinmedReminder, slotIndex = 0) => {
     console.log('[FinMed] openLogSheet called for:', reminder.label, 'type:', reminder.type, 'slot:', slotIndex);
     setLogReminder(reminder);
@@ -432,7 +448,7 @@ export default function FinMedScreen() {
   return (
     <View {...uiProps(uiPath('finmed', 'screen', 'container'))} style={styles.screen}>
       <DashboardHeader
-        onBack={() => { logUI(uiPath('finmed', 'header', 'back_button'), 'press'); navigation.goBack(); }}
+        onBack={() => { logUI(uiPath('finmed', 'header', 'back_button'), 'press'); navigation.navigate('FinBiome'); }}
         rightElement={
           <TouchableOpacity
             {...uiProps(uiPath('finmed', 'header', 'add_button'))}

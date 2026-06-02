@@ -24,8 +24,12 @@ export default function NotificationHistorySheet() {
 
   if (!isPanelOpen) return null;
 
-  const hasUnread = notifications.some((n) => !n.isRead);
-  const hasActionable = notifications.some(
+  const visibleNotifications = notifications.filter(
+    (n) => !(n.isDone && (n.source === 'finmed_intake_reminder' || n.source === 'fingo_service_due')),
+  );
+
+  const hasUnread = visibleNotifications.some((n) => !n.isRead);
+  const hasActionable = visibleNotifications.some(
     (n) =>
       !n.isDone &&
       (n.source === 'finmed_intake_reminder' || n.source === 'fingo_service_due'),
@@ -59,14 +63,14 @@ export default function NotificationHistorySheet() {
           </View>
 
           <ScrollView showsVerticalScrollIndicator={false}>
-            {notifications.length === 0 ? (
+            {visibleNotifications.length === 0 ? (
               <View style={styles.emptyState}>
                 <Image source={getNoNotificationImage()} style={styles.emptyIconImage} resizeMode="contain" />
                 <Text style={styles.emptyText}>No notifications</Text>
                 <Text style={styles.emptyHint}>You'll see reminders and alerts here</Text>
               </View>
             ) : (
-              notifications.map((notif) => <NotificationRow key={notif.id} notification={notif} />)
+              visibleNotifications.map((notif) => <NotificationRow key={notif.id} notification={notif} />)
             )}
           </ScrollView>
         </View>

@@ -167,7 +167,13 @@ export default function AnimatedHeaderLogo() {
   );
 
   return (
-    <TouchableOpacity onPress={handleTap} style={styles.container}>
+    <TouchableOpacity
+      onPress={handleTap}
+      style={styles.container}
+      accessibilityRole="button"
+      accessibilityLabel={unreadCount > 0 ? `Notification center, ${unreadCount} unread` : 'Notification center'}
+      accessibilityHint="Opens notification center"
+    >
       {logoState === 'IDLE_LOGO' && (
         <Image
           source={require('../../../assets/thelogo.png')}

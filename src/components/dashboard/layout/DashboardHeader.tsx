@@ -55,7 +55,7 @@ export default function DashboardHeader({ onBack, rightElement }: DashboardHeade
     })
   ).current;
 
-  // Avatar-to-spinner swipe gesture for entering FinBiome (mobile-web only)
+  // Avatar-to-spinner swipe gesture for entering FinHub (mobile-web only)
   const avatarToSpinnerThreshold = Math.max(150, width * 0.5); // 50% of screen width or 150px minimum
   const avatarToSpinnerPan = useRef(
     PanResponder.create({
@@ -71,7 +71,7 @@ export default function DashboardHeader({ onBack, rightElement }: DashboardHeade
         }
       },
       onPanResponderRelease: (_, gs) => {
-        // If swipe reached threshold, navigate to FinBiome
+        // If swipe reached threshold, navigate to FinHub route
         if (gs.dx > avatarToSpinnerThreshold) {
           logUI(uiPath('dashboard', 'header', 'avatar_swipe_to_finbiome'), 'gesture');
           navigation.navigate('FinBiome');
@@ -148,7 +148,7 @@ export default function DashboardHeader({ onBack, rightElement }: DashboardHeade
             logUI(uiPath('dashboard', 'header', 'finbiome_button'), 'press');
             navigation.navigate('FinBiome');
           }}
-          accessibilityLabel="Enter FinBiome"
+          accessibilityLabel="Enter FinHub"
           {...uiProps(uiPath('dashboard', 'header', 'finbiome_button'))}
         >
           <Icon

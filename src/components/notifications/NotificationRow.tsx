@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, Image } from 'react-native';
+import type { GestureResponderEvent } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../navigation';
@@ -71,13 +72,37 @@ export default function NotificationRow({ notification }: NotificationRowProps) 
     }
   };
 
-  const handleMarkDone = async () => {
-    setDoneLoading(true);
-    const result = await markDone(notification.id);
-    setDoneLoading(false);
+  const handleMarkDone = async (event?: GestureResponderEvent) => {
+    event?.stopPropagation();
+    console.log('[NotificationRow] Done pressed', {
+      id: notification.id,
+      source: notification.source,
+      isDone: notification.isDone,
+      doneLoading,
+      metadata: notification.metadata,
+    });
 
-    if (!result.success && result.error) {
-      Alert.alert('Error', result.error);
+    setDoneLoading(true);
+    try {
+      const result = await markDone(notification.id);
+      console.log('[NotificationRow] markDone result', {
+        id: notification.id,
+        source: notification.source,
+        result,
+      });
+
+      if (!result.success && result.error) {
+        Alert.alert('Error', result.error);
+      }
+    } catch (err) {
+      console.error('[NotificationRow] markDone threw', {
+        id: notification.id,
+        source: notification.source,
+        err,
+      });
+      Alert.alert('Error', err instanceof Error ? err.message : 'Failed to complete notification');
+    } finally {
+      setDoneLoading(false);
     }
   };
 
@@ -107,7 +132,9 @@ export default function NotificationRow({ notification }: NotificationRowProps) 
       {showDoneButton && (
         <TouchableOpacity
           style={[styles.doneButton, doneLoading && styles.doneButtonDisabled]}
-          onPress={handleMarkDone}
+          onPress={(event) => {
+            void handleMarkDone(event);
+          }}
           disabled={doneLoading}
         >
           {doneLoading ? (

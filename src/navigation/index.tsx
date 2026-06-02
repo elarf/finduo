@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Image, View } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { StackActions } from '@react-navigation/native';
 import { useQueryClient } from '@tanstack/react-query';
 import { navigationRef, isLaunchReady, getPendingShortcut, setPendingShortcut } from './navigationRef';
 import { initCapacitorBackButton } from '../lib/capacitorBack';
@@ -14,7 +13,7 @@ import { useHCAutoSync } from '../hooks/useHCAutoSync';
 import NotificationHistorySheet from '../components/notifications/NotificationHistorySheet';
 import LoginScreen from '../screens/LoginScreen';
 import DashboardScreen from '../screens/DashboardScreen';
-import FinBiomeScreen from '../screens/FinBiomeScreen';
+import FinHubScreen from '../screens/FinHubScreen';
 import FinGoScreen from '../screens/FinGoScreen';
 import FinMedScreen from '../screens/FinMedScreen';
 import FinVenScreen from '../screens/FinVenScreen';
@@ -43,6 +42,7 @@ export type RootStackParamList = {
 
   // Main screens
   Dashboard: { prefillEntry?: { type: 'expense' | 'income' } } | undefined;
+  FinHub: undefined;
   FinBiome: undefined;
   FinGo: undefined;
   FinMed: { action?: 'taken' | 'snooze'; reminderId?: string; slotIndex?: number } | undefined;
@@ -143,8 +143,9 @@ export default function RootNavigator() {
       case 'fingo':
         navigationRef.navigate('FinGo');
         break;
+      case 'finhub':
       case 'tracking':
-        navigationRef.dispatch(StackActions.push('TrackingShortcut'));
+        navigationRef.navigate('FinHub');
         break;
     }
     setPendingShortcut(null);
@@ -170,7 +171,8 @@ export default function RootNavigator() {
             <Stack.Navigator screenOptions={{ headerShown: false }}>
               {/* Main screens */}
               <Stack.Screen name="Dashboard" component={DashboardScreen} />
-              <Stack.Screen name="FinBiome" component={FinBiomeScreen} />
+              <Stack.Screen name="FinHub" component={FinHubScreen} />
+              <Stack.Screen name="FinBiome" component={FinHubScreen} />
               <Stack.Screen name="FinGo" component={FinGoScreen} />
               <Stack.Screen name="FinMed" component={FinMedScreen} />
               <Stack.Screen name="FinVen" component={FinVenScreen} />

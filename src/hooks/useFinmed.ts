@@ -315,7 +315,7 @@ export function useFinmed(user: User | null) {
       for (const reminder of reminders) {
         if (!reminder.active) continue;
         await cancelIntakeReminder(reminder);
-        await scheduleIntakeReminder(reminder);
+        await scheduleIntakeReminder(reminder, { mirror: false });
       }
     })();
   }, [reminders]);

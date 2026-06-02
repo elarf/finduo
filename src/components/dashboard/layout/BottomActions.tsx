@@ -81,7 +81,7 @@ export default function BottomActions() {
         >
           {!desktopView ? (
             <Image
-              source={require('../../../../assets/addincome.png')}
+              source={require('../../../../assets/addincome.webp')}
               style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, width: '100%', height: '100%' }}
               resizeMode="contain"
             />
@@ -106,7 +106,7 @@ export default function BottomActions() {
         >
           {!desktopView ? (
             <Image
-              source={require('../../../../assets/addtransfer.png')}
+              source={require('../../../../assets/addtransfer.webp')}
               style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, width: '100%', height: '100%' }}
               resizeMode="contain"
             />
@@ -128,7 +128,7 @@ export default function BottomActions() {
         >
           {!desktopView ? (
             <Image
-              source={require('../../../../assets/addexpensee.png')}
+              source={require('../../../../assets/addexpensee.webp')}
               style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, width: '100%', height: '100%' }}
               resizeMode="contain"
             />

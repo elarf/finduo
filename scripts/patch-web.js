@@ -31,7 +31,7 @@ const headTags = [
   '<meta name="apple-mobile-web-app-capable" content="yes">',
   '<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">',
   '<meta name="apple-mobile-web-app-title" content="Finduo">',
-  '<link rel="apple-touch-icon" href="/icon.png">',
+  '<link rel="apple-touch-icon" href="/icon.webp">',
   '<style>html,body{background-color:#060a14;}</style>',
 ].join('\n  ');
 

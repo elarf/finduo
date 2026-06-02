@@ -161,7 +161,7 @@ export default function AnimatedHeaderLogo() {
     >
       {logoState === 'IDLE_LOGO' && (
         <Image
-          source={require('../../../assets/thelogo.png')}
+          source={require('../../../assets/thelogo.webp')}
           style={styles.logo}
           resizeMode="contain"
         />
@@ -181,7 +181,7 @@ export default function AnimatedHeaderLogo() {
       {(logoState === 'IDLE_FRAME' || logoState === 'SHOWING') && (
         <View style={styles.frameContainer}>
           <Image
-            source={require('../../../assets/theframe.png')}
+            source={require('../../../assets/theframe.webp')}
             style={styles.logo}
             resizeMode="contain"
           />

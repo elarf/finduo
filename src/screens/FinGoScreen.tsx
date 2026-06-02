@@ -821,7 +821,7 @@ export default function FinGoScreen() {
       )}
       {overlayPhase === 'stopping' && (
         <TrackingAnimationOverlay
-          source={require('../../assets/driftstop.png')}
+          source={require('../../assets/driftstop.webp')}
           onComplete={() => { overlayAnimDone.current = true; tryFinishOverlay(); }}
         />
       )}

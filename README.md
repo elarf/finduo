@@ -335,7 +335,7 @@ finduo/
   public/
     manifest.json                  PWA web manifest
     sw.js                          Service worker (stale-while-revalidate)
-    icon.png                       PWA icon
+    icon.webp                       PWA icon
   scripts/
     patch-web.js                   Post-build: inject PWA tags + viewport meta into dist/index.html
     import-monefy.js               CLI tool to import Monefy CSV exports

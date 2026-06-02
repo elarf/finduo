@@ -2,19 +2,19 @@ import type { NotificationSource } from './types';
 import type { ImageSourcePropType } from 'react-native';
 
 const notificationImageBySource: Record<NotificationSource, ImageSourcePropType> = {
-  finmed_intake_reminder: require('../../../assets/meds.png'),
-  finmed_low_stock: require('../../../assets/medstockup.png'),
-  finmed_symptom_check: require('../../../assets/finmeds.png'),
-  finmed_measurement: require('../../../assets/finmeds.png'),
-  finmed_appointment: require('../../../assets/finmeds.png'),
-  fingo_service_due: require('../../../assets/maintenance.png'),
-  finven_expiry: require('../../../assets/finven.png'),
-  finven_low_stock: require('../../../assets/finven.png'),
-  finven_notification: require('../../../assets/finven.png'),
-  custom_reminder: require('../../../assets/notifdef.png'),
+  finmed_intake_reminder: require('../../../assets/meds.webp'),
+  finmed_low_stock: require('../../../assets/medstockup.webp'),
+  finmed_symptom_check: require('../../../assets/finmeds.webp'),
+  finmed_measurement: require('../../../assets/finmeds.webp'),
+  finmed_appointment: require('../../../assets/finmeds.webp'),
+  fingo_service_due: require('../../../assets/maintenance.webp'),
+  finven_expiry: require('../../../assets/finven.webp'),
+  finven_low_stock: require('../../../assets/finven.webp'),
+  finven_notification: require('../../../assets/finven.webp'),
+  custom_reminder: require('../../../assets/notifdef.webp'),
 };
 
-const noNotificationImage: ImageSourcePropType = require('../../../assets/nonoti.png');
+const noNotificationImage: ImageSourcePropType = require('../../../assets/nonoti.webp');
 
 export function getNotificationImage(source: NotificationSource): ImageSourcePropType {
   return notificationImageBySource[source];

@@ -16,31 +16,31 @@ const HUB_TILES: HubTile[] = [
   {
     key: 'findash',
     label: 'FinDash',
-    icon: require('../../assets/findash.png'),
+    icon: require('../../assets/findash.webp'),
     onPress: (navigation) => navigation.navigate('Dashboard'),
   },
   {
     key: 'fingo',
     label: 'FinGo',
-    icon: require('../../assets/fingo.png'),
+    icon: require('../../assets/fingo.webp'),
     onPress: (navigation) => navigation.navigate('FinGo'),
   },
   {
     key: 'finmed',
     label: 'FinMed',
-    icon: require('../../assets/finmeds.png'),
+    icon: require('../../assets/finmeds.webp'),
     onPress: (navigation) => navigation.navigate('FinMed'),
   },
   {
     key: 'finven',
     label: 'FinVen',
-    icon: require('../../assets/finven.png'),
+    icon: require('../../assets/finven.webp'),
     onPress: (navigation) => navigation.navigate('FinVen'),
   },
   {
     key: 'fincal',
     label: 'FinCal',
-    icon: require('../../assets/FinCal.png'),
+    icon: require('../../assets/FinCal.webp'),
     onPress: () => Alert.alert('FinCal', 'FinCal module is coming soon.'),
   },
 ];

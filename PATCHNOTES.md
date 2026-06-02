@@ -229,8 +229,8 @@
 
 #### FinGo — Back Button Image Refresh
 
-- `DashboardHeader` back button now uses `back.png` instead of the arrow-left icon
-- `ComponentDetailScreen` and `ServiceIntervalDetailScreen` back buttons replaced with `back.png` in a circular button container
+- `DashboardHeader` back button now uses `back.webp` instead of the arrow-left icon
+- `ComponentDetailScreen` and `ServiceIntervalDetailScreen` back buttons replaced with `back.webp` in a circular button container
 
 #### FinGo — Android Back Handler in Detail Screens
 
@@ -256,9 +256,9 @@
 - `src/components/fingo/DateTimeFields.tsx` — `cancel` event listener added to clean up input on dismiss
 - `src/screens/FinGoScreen.tsx` — `assetIsActive` state in asset modal; `setActiveAsset`/`updateLog` wired; `loadAssets()` chained after all component mutations; `setupFinGoChannels` on mount
 - `src/screens/HealthConnectScreen.tsx` — auto-attach `useEffect` for active bike (cycling) and active shoe (daily steps); `autoAttachBanner`; `recordedAt` set in all `buildEntry` paths
-- `src/screens/ComponentDetailScreen.tsx` — `registerBackHandler` for modal priority; `back.png` button with circular container style
-- `src/screens/ServiceIntervalDetailScreen.tsx` — `registerBackHandler` for modal priority; `back.png` button with circular container style
-- `assets/fingo/back.png` — new back button image asset
+- `src/screens/ComponentDetailScreen.tsx` — `registerBackHandler` for modal priority; `back.webp` button with circular container style
+- `src/screens/ServiceIntervalDetailScreen.tsx` — `registerBackHandler` for modal priority; `back.webp` button with circular container style
+- `assets/fingo/back.webp` — new back button image asset
 
 ---
 
@@ -336,13 +336,13 @@
 
 - Asset stat chips (distance, time, rides, steps) use PNG icons instead of Unicode symbols (`↔`, `⏱`, `↺`, `👟`)
 - Component cards in `AssetAccordion` show a large full-height PNG icon (was 16 px Lucide/SVG); meta counts display as icon+number chips
-- GoButton: "GO" text label replaced with `gps.png` icon
+- GoButton: "GO" text label replaced with `gps.webp` icon
 - `ComponentLibrarySheet`: component icons enlarged to 40 px with dedicated `rowIconWrap` container
-- `ComponentDetailScreen`: component icon enlarged from 36 px to 72 px; service type icon on identity header; `fix.png` on service record rows
+- `ComponentDetailScreen`: component icon enlarged from 36 px to 72 px; service type icon on identity header; `fix.webp` on service record rows
 - `ServiceIntervalDetailScreen`: service type icon on identity header; "Edit interval" action added to the actions modal (was "Set picture" placeholder); background `#060D18 → #000000`
-- All `＋` text add-buttons throughout FinGo replaced with `add.png`
+- All `＋` text add-buttons throughout FinGo replaced with `add.webp`
 - HealthConnect: steps, distance, and exercise record icons now use `FINGO_ASSETS.step/route/ride` with emoji fallback for unsupported types
-- Ride log rows in `AssetAccordion` now lead with `ride.png`
+- Ride log rows in `AssetAccordion` now lead with `ride.webp`
 
 ### Technical
 
@@ -556,13 +556,13 @@
 
 #### Quick Navigation — Add Button Asset
 
-- Section header add buttons (Accounts, Income, Expense, Tags) now use the `new.png` custom asset instead of a text `＋` character
+- Section header add buttons (Accounts, Income, Expense, Tags) now use the `new.webp` custom asset instead of a text `＋` character
 - Both the add and edit buttons are absolutely positioned side by side on the right of each section header — add button flush to the right edge, edit button with a 6px gap to its left
 - Both buttons use identical sizing and full-height proportions (`width: 36, height: 100%`) for visual consistency
 
 ### Assets
 
-- Added `new.png` — Custom add/create button asset for section headers in Quick Navigation
+- Added `new.webp` — Custom add/create button asset for section headers in Quick Navigation
 
 ---
 
@@ -653,11 +653,11 @@
 
 ### Assets
 
-- Added `addincome.png` — Custom income button asset
-- Added `addexpensee.png` — Custom expense button asset
-- Added `addtransfer.png` — Custom transfer button asset
-- Added `searchicon.png` — Custom search icon asset
-- Added `tothetop.png` — Custom scroll to top button asset
+- Added `addincome.webp` — Custom income button asset
+- Added `addexpensee.webp` — Custom expense button asset
+- Added `addtransfer.webp` — Custom transfer button asset
+- Added `searchicon.webp` — Custom search icon asset
+- Added `tothetop.webp` — Custom scroll to top button asset
 
 ### Technical
 
@@ -952,8 +952,8 @@
 #### PWA Android Home Screen Icon
 
 - Android PWA was showing a white background on the home screen icon and black/masked corners on launch
-- Root cause: a single `icon.png` served for both `"any"` and `"maskable"` purposes; `"maskable"` applies an inset safe-zone mask that cuts off the logo
-- Fix: separate `icon-maskable.png` (512×512, solid `#060A14` background, logo contained within inner 80% safe zone) for the `"maskable"` purpose entry in `manifest.json`
+- Root cause: a single `icon.webp` served for both `"any"` and `"maskable"` purposes; `"maskable"` applies an inset safe-zone mask that cuts off the logo
+- Fix: separate `icon-maskable.webp` (512×512, solid `#060A14` background, logo contained within inner 80% safe zone) for the `"maskable"` purpose entry in `manifest.json`
 
 #### PWA Android Stale Cached Icon
 
@@ -963,7 +963,7 @@
 ### Technical
 
 - `public/sw.js` — `CACHE_NAME` bumped from `finduo-v1` to `finduo-v2`
-- `public/manifest.json` — icon entries split by purpose; maskable entry points to `icon-maskable.png?v=1`
+- `public/manifest.json` — icon entries split by purpose; maskable entry points to `icon-maskable.webp?v=1`
 - `src/context/DashboardContext.tsx` — `activeSection` / `setActiveSection` added to provider value
 - `src/navigation/index.tsx` — `PoolScreen`, `LendingScreen`, `SettlementsScreen` removed from the navigator stack; `RootStackParamList` now contains only `Login` and `Dashboard`
 - `src/components/dashboard/layout/ContextBar.tsx` — new component

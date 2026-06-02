@@ -19,7 +19,7 @@ export default function ScrollTopFab() {
       {...uiProps(uiPath('dashboard', 'scroll_top_fab', 'button'))}
     >
       <Image
-        source={require('../../../../assets/tothetop.png')}
+        source={require('../../../../assets/tothetop.webp')}
         style={{ width: 56, height: 56 }}
         resizeMode="contain"
       />

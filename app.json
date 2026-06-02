@@ -4,11 +4,11 @@
     "slug": "elarf",
     "version": "1.6.2",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./public/icon.png",
     "userInterfaceStyle": "light",
     "scheme": "finduo",
     "splash": {
-      "image": "./assets/splash-icon.png",
+      "image": "./public/icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
@@ -20,14 +20,14 @@
       "package": "com.finduo.app",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/android-icon-foreground.png",
-        "backgroundImage": "./assets/android-icon-background.png",
-        "monochromeImage": "./assets/android-icon-monochrome.png"
+        "foregroundImage": "./public/icon.png",
+        "backgroundImage": "./public/icon-maskable.png",
+        "monochromeImage": "./public/icon-maskable.png"
       },
       "predictiveBackGestureEnabled": false
     },
     "web": {
-      "favicon": "./assets/favicon.png",
+      "favicon": "./public/icon.png",
       "output": "single",
       "name": "Finduo",
       "shortName": "Finduo",

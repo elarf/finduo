@@ -2,7 +2,7 @@
  * LoginScreen.
  *
  * Layout:
- *  - logo.png fills the top portion, full-width, contained (no crop)
+ *  - logo.webp fills the top portion, full-width, contained (no crop)
  *  - "Sign in with Google" button sits in a dark strip at the bottom
  *
  * Responsiveness:
@@ -65,7 +65,7 @@ export default function LoginScreen() {
         {/* Logo area: takes all vertical space above the footer */}
         <View style={styles.logoArea} {...uiProps(uiPath('login', 'logo', 'container'))}>
           <Image
-            source={require('../../assets/logo.png')}
+            source={require('../../assets/logo.webp')}
             style={styles.logoImage}
             resizeMode="contain"
             {...uiProps(uiPath('login', 'logo', 'image'))}

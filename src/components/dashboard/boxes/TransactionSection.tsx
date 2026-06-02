@@ -365,7 +365,7 @@ export default function TransactionSection() {
               {...uiProps(uiPath('dashboard', 'tx_section', 'search_button'))}
             >
               <Image
-                source={require('../../../../assets/searchicon.png')}
+                source={require('../../../../assets/searchicon.webp')}
                 style={{ height: 50, width: 50 }}
                 resizeMode="contain"
               />

@@ -72,7 +72,7 @@ export default function TrackingShortcutScreen() {
 
       {phase === 'stopping' && (
         <TrackingAnimationOverlay
-          source={require('../../assets/driftstop.png')}
+          source={require('../../assets/driftstop.webp')}
           onComplete={handleAnimComplete}
         />
       )}

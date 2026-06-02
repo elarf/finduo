@@ -225,7 +225,7 @@ export async function notifyDueIntervals(
       title: interval.name,
       body: notificationBody,
       smallIcon: 'ic_maintenance_monochrome',
-      largeIcon: 'asset://assets/maintenance.png',
+      largeIcon: 'asset://assets/maintenance.webp',
       channelId: CHANNEL_ID,
       schedule: { at: new Date(Date.now() + 1000) },
       extra: { intervalId: interval.id, componentId: interval.component_id, assetId },

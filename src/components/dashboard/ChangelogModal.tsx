@@ -155,7 +155,7 @@ export default function ChangelogModal({ visible, onClose }: ChangelogModalProps
               onPress={() => scrollRef.current?.scrollTo({ y: 0, animated: true })}
             >
               <Image
-                source={require('../../../assets/tothetop.png')}
+                source={require('../../../assets/tothetop.webp')}
                 style={{ width: 48, height: 48 }}
                 resizeMode="contain"
               />

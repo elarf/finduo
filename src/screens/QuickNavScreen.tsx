@@ -181,7 +181,7 @@ export default function QuickNavScreen() {
                     openCreateAccount();
                   }}
                 >
-                  <Image source={require('../../assets/new.png')} style={{ width: '90%', aspectRatio: 1 }} resizeMode="contain" />
+                  <Image source={require('../../assets/new.webp')} style={{ width: '90%', aspectRatio: 1 }} resizeMode="contain" />
                 </TouchableOpacity>
               )}
               {menuAccountsExpanded && (
@@ -203,7 +203,7 @@ export default function QuickNavScreen() {
                   }}
                 >
                   <Image
-                    source={require('../../assets/edit.png')}
+                    source={require('../../assets/edit.webp')}
                     style={{ width: '90%', aspectRatio: 1 }}
                     resizeMode="contain"
                   />
@@ -298,8 +298,8 @@ export default function QuickNavScreen() {
                       >
                         <Image
                           source={excludedAccountIds.includes(account.id)
-                            ? require('../../assets/invisible.png')
-                            : require('../../assets/visible.png')}
+                            ? require('../../assets/invisible.webp')
+                            : require('../../assets/visible.webp')}
                           style={{ width: 20, height: 20 }}
                           resizeMode="contain"
                         />
@@ -317,7 +317,7 @@ export default function QuickNavScreen() {
                             }}
                           >
                             <Image
-                              source={require('../../assets/edit.png')}
+                              source={require('../../assets/edit.webp')}
                               style={{ width: 20, height: 20 }}
                               resizeMode="contain"
                             />
@@ -348,7 +348,7 @@ export default function QuickNavScreen() {
                             }}
                           >
                             <Image
-                              source={require('../../assets/delete.png')}
+                              source={require('../../assets/delete.webp')}
                               style={{ width: 20, height: 20 }}
                               resizeMode="contain"
                             />
@@ -388,7 +388,7 @@ export default function QuickNavScreen() {
                     handleOpenCategory(null);
                   }}
                 >
-                  <Image source={require('../../assets/new.png')} style={{ width: '90%', aspectRatio: 1 }} resizeMode="contain" />
+                  <Image source={require('../../assets/new.webp')} style={{ width: '90%', aspectRatio: 1 }} resizeMode="contain" />
                 </TouchableOpacity>
               )}
               {menuIncomeCatExpanded && (
@@ -410,7 +410,7 @@ export default function QuickNavScreen() {
                   }}
                 >
                   <Image
-                    source={require('../../assets/edit.png')}
+                    source={require('../../assets/edit.webp')}
                     style={{ width: '90%', aspectRatio: 1 }}
                     resizeMode="contain"
                   />
@@ -453,8 +453,8 @@ export default function QuickNavScreen() {
                       >
                         <Image
                           source={hiddenCategoryIds.has(category.id)
-                            ? require('../../assets/invisible.png')
-                            : require('../../assets/visible.png')}
+                            ? require('../../assets/invisible.webp')
+                            : require('../../assets/visible.webp')}
                           style={{ width: 20, height: 20 }}
                           resizeMode="contain"
                         />
@@ -468,7 +468,7 @@ export default function QuickNavScreen() {
                           }}
                         >
                           <Image
-                            source={require('../../assets/edit.png')}
+                            source={require('../../assets/edit.webp')}
                             style={{ width: 20, height: 20 }}
                             resizeMode="contain"
                           />
@@ -490,7 +490,7 @@ export default function QuickNavScreen() {
                           }}
                         >
                           <Image
-                            source={require('../../assets/delete.png')}
+                            source={require('../../assets/delete.webp')}
                             style={{ width: 20, height: 20 }}
                             resizeMode="contain"
                           />
@@ -527,7 +527,7 @@ export default function QuickNavScreen() {
                     handleOpenCategory(null);
                   }}
                 >
-                  <Image source={require('../../assets/new.png')} style={{ width: '90%', aspectRatio: 1 }} resizeMode="contain" />
+                  <Image source={require('../../assets/new.webp')} style={{ width: '90%', aspectRatio: 1 }} resizeMode="contain" />
                 </TouchableOpacity>
               )}
               {menuExpenseCatExpanded && (
@@ -549,7 +549,7 @@ export default function QuickNavScreen() {
                   }}
                 >
                   <Image
-                    source={require('../../assets/edit.png')}
+                    source={require('../../assets/edit.webp')}
                     style={{ width: '90%', aspectRatio: 1 }}
                     resizeMode="contain"
                   />
@@ -592,8 +592,8 @@ export default function QuickNavScreen() {
                       >
                         <Image
                           source={hiddenCategoryIds.has(category.id)
-                            ? require('../../assets/invisible.png')
-                            : require('../../assets/visible.png')}
+                            ? require('../../assets/invisible.webp')
+                            : require('../../assets/visible.webp')}
                           style={{ width: 20, height: 20 }}
                           resizeMode="contain"
                         />
@@ -607,7 +607,7 @@ export default function QuickNavScreen() {
                           }}
                         >
                           <Image
-                            source={require('../../assets/edit.png')}
+                            source={require('../../assets/edit.webp')}
                             style={{ width: 20, height: 20 }}
                             resizeMode="contain"
                           />
@@ -629,7 +629,7 @@ export default function QuickNavScreen() {
                           }}
                         >
                           <Image
-                            source={require('../../assets/delete.png')}
+                            source={require('../../assets/delete.webp')}
                             style={{ width: 20, height: 20 }}
                             resizeMode="contain"
                           />
@@ -669,7 +669,7 @@ export default function QuickNavScreen() {
                     openCreateTag();
                   }}
                 >
-                  <Image source={require('../../assets/new.png')} style={{ width: '90%', aspectRatio: 1 }} resizeMode="contain" />
+                  <Image source={require('../../assets/new.webp')} style={{ width: '90%', aspectRatio: 1 }} resizeMode="contain" />
                 </TouchableOpacity>
               )}
               {menuTagsExpanded && (
@@ -691,7 +691,7 @@ export default function QuickNavScreen() {
                   }}
                 >
                   <Image
-                    source={require('../../assets/edit.png')}
+                    source={require('../../assets/edit.webp')}
                     style={{ width: '90%', aspectRatio: 1 }}
                     resizeMode="contain"
                   />
@@ -731,7 +731,7 @@ export default function QuickNavScreen() {
                       }}
                     >
                       <Image
-                        source={require('../../assets/edit.png')}
+                        source={require('../../assets/edit.webp')}
                         style={{ width: 20, height: 20 }}
                         resizeMode="contain"
                       />
@@ -751,7 +751,7 @@ export default function QuickNavScreen() {
                       }}
                     >
                       <Image
-                        source={require('../../assets/delete.png')}
+                        source={require('../../assets/delete.webp')}
                         style={{ width: 20, height: 20 }}
                         resizeMode="contain"
                       />
@@ -775,7 +775,7 @@ export default function QuickNavScreen() {
               <View style={{ flexDirection: 'row', alignItems: 'center', width: '100%' }}>
                 <View style={{ width: 20 }}>
                   <Image
-                    source={require('../../assets/findash.png')}
+                    source={require('../../assets/findash.webp')}
                     style={{ width: 14, height: 14 }}
                     resizeMode="contain"
                   />

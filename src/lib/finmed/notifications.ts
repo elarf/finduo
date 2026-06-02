@@ -5,7 +5,7 @@ import { logNotif } from '../devtools';
 import { mirrorNotification } from '../notifications/bridge';
 
 const SMALL_ICON = 'ic_meds_monochrome';
-const LARGE_ICON = 'asset://assets/meds.png';
+const LARGE_ICON = 'asset://assets/meds.webp';
 
 // MyTherapy-style escalating notifications
 const REPEAT_INTERVAL_MINUTES = 5;

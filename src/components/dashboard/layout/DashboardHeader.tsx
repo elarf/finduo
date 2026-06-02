@@ -91,7 +91,7 @@ export default function DashboardHeader({ onBack, rightElement }: DashboardHeade
           }}
           {...uiProps(uiPath('dashboard', 'header', 'back_button'))}
         >
-          <Image source={require('../../../../assets/fingo/back.png')} style={{ width: 22, height: 22 }} resizeMode="contain" />
+          <Image source={require('../../../../assets/fingo/back.webp')} style={{ width: 22, height: 22 }} resizeMode="contain" />
         </TouchableOpacity>
       ) : (
         <View {...avatarToSpinnerPan.panHandlers}>

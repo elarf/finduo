@@ -25,11 +25,11 @@ import { uiPath, uiProps, logUI } from '../../lib/devtools';
 import { recalculateMultipleComponents } from '../../lib/fingo/componentTracking';
 
 const ASSET_ICONS: Record<AssetType, ImageSourcePropType> = {
-  vehicle:   require('../../../assets/car.png'),
-  motorbike: require('../../../assets/emoto.png'),
-  bike:      require('../../../assets/ebike.png'),
-  shoe:      require('../../../assets/shoes.png'),
-  other:     require('../../../assets/car.png'),
+  vehicle:   require('../../../assets/car.webp'),
+  motorbike: require('../../../assets/emoto.webp'),
+  bike:      require('../../../assets/ebike.webp'),
+  shoe:      require('../../../assets/shoes.webp'),
+  other:     require('../../../assets/car.webp'),
 };
 
 const SERVICE_TYPE_ICONS: Record<ServiceIntervalType, any> = {

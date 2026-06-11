@@ -277,8 +277,9 @@ function mergeWithSyntheticNotifications(
   });
 
   const nonSynthetic = prev.filter(
-    (n) => !n.id.startsWith('synthetic:fingo:') && !n.id.startsWith('synthetic:finmed:'),
+  (n) => !n.id.startsWith('live:fingo:') && !n.id.startsWith('live:finmed:'),
   );
+
 
   return [...hydratedSynthetic, ...nonSynthetic].sort(
     (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
@@ -496,7 +497,7 @@ export function NotificationCenterProvider({ children }: { children: React.React
 
             const cadence = `Next ${formatNextTime(slot.at)}`;
             synthetic.push({
-              id: `synthetic:finmed:${reminder.id}:${slot.slotIndex}`,
+              id: `live:finmed:${reminder.id}:${slot.slotIndex}`,
               source: 'finmed_intake_reminder',
               title: reminder.label,
               body: `${doseText} - ${cadence}`,
@@ -515,7 +516,7 @@ export function NotificationCenterProvider({ children }: { children: React.React
         const cadence = next ? `Next ${formatNextTime(next)}` : 'Upcoming reminder';
 
         synthetic.push({
-          id: `synthetic:finmed:${reminder.id}`,
+          id: `live:finmed:${reminder.id}:na`,
           source: 'finmed_intake_reminder',
           title: reminder.label,
           body: `${doseText} - ${cadence}`,

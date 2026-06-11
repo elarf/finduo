@@ -1,5 +1,5 @@
 import { Capacitor } from '@capacitor/core';
-import { FINMED_INTAKE_CHANNEL, FINMED_LOW_STOCK_CHANNEL } from '../notificationChannels';
+import { FINMED_APPOINTMENT_CHANNEL, FINMED_CUSTOM_CHANNEL, FINMED_INTAKE_CHANNEL, FINMED_LOW_STOCK_CHANNEL, FINMED_MEASUREMENT_CHANNEL, FINMED_SYMPTOM_CHECK_CHANNEL } from '../notificationChannels';
 import type { FinmedReminder, FinmedMedication, MedicationReminderConfig } from '../../types/finmed';
 import { logNotif } from '../devtools';
 import { mirrorNotification } from '../notifications/bridge';
@@ -97,6 +97,7 @@ async function scheduleTimeSlotWithRepeats(
   title: string,
   body: string,
   reminder: FinmedReminder,
+  channelId: string = FINMED_INTAKE_CHANNEL, 
 ): Promise<void> {
   if (!Capacitor.isNativePlatform()) return;
 
@@ -113,7 +114,7 @@ async function scheduleTimeSlotWithRepeats(
     body,
     smallIcon: SMALL_ICON,
     largeIcon: LARGE_ICON,
-    channelId: FINMED_INTAKE_CHANNEL,
+    channelId: channelId,
     schedule: { at: scheduledTime, allowWhileIdle: true },
     extra: {
       reminderId,
@@ -133,7 +134,7 @@ async function scheduleTimeSlotWithRepeats(
       body: i === repeatCount ? `${body} (final reminder)` : body,
       smallIcon: SMALL_ICON,
       largeIcon: LARGE_ICON,
-      channelId: FINMED_INTAKE_CHANNEL,
+      channelId: channelId,
       schedule: { at: repeatTime, allowWhileIdle: true },
       extra: {
         reminderId,
@@ -209,6 +210,16 @@ function nextCyclicIntakeDate(reminder: FinmedReminder): Date | null {
   return at;
 }
 
+function channelForReminderType(type: FinmedReminder['type']): string {
+  switch (type) {
+    case 'measurement': return FINMED_MEASUREMENT_CHANNEL;
+    case 'appointment': return FINMED_APPOINTMENT_CHANNEL;
+    case 'symptom_check': return FINMED_SYMPTOM_CHECK_CHANNEL;
+    case 'custom': return FINMED_CUSTOM_CHANNEL;
+    default: return FINMED_INTAKE_CHANNEL;
+  }
+}
+
 export async function scheduleIntakeReminder(
   reminder: FinmedReminder,
   options?: { mirror?: boolean },
@@ -224,94 +235,49 @@ export async function scheduleIntakeReminder(
       if (after !== 'granted') return;
     }
 
+    const channel = channelForReminderType(reminder.type);
     const medConfig = readMedicationReminderConfig(reminder);
     const body = medConfig
       ? `${medConfig.doseAmount} ${medConfig.doseUnit} — time to take your medication`
       : 'Time for your reminder';
 
     if (reminder.frequency_type === 'multiple_times_daily') {
-      // Schedule escalating notifications for each daily time
       const times = reminder.frequency_config.times ?? ['08:00'];
       const now = new Date();
-
       for (let i = 0; i < times.length; i++) {
         const [hour, minute] = times[i].split(':').map(Number);
         const scheduledTime = new Date();
         scheduledTime.setHours(hour, minute, 0, 0);
-
-        // If time already passed today, schedule for tomorrow
-        if (scheduledTime <= now) {
-          scheduledTime.setDate(scheduledTime.getDate() + 1);
-        }
-
-        await scheduleTimeSlotWithRepeats(
-          reminder.id,
-          i,
-          scheduledTime,
-          reminder.label,
-          body,
-          reminder,
-        );
+        if (scheduledTime <= now) scheduledTime.setDate(scheduledTime.getDate() + 1);
+        await scheduleTimeSlotWithRepeats(reminder.id, i, scheduledTime, reminder.label, body, reminder, channel);
       }
     } else if (reminder.frequency_type === 'interval') {
-      // For interval reminders, schedule one time slot starting from now + interval
       const hours = reminder.frequency_config.interval_hours ?? 8;
       const scheduledTime = new Date(Date.now() + hours * 3_600_000);
-
-      await scheduleTimeSlotWithRepeats(
-        reminder.id,
-        0,
-        scheduledTime,
-        reminder.label,
-        body,
-        reminder,
-      );
+      await scheduleTimeSlotWithRepeats(reminder.id, 0, scheduledTime, reminder.label, body, reminder, channel);
     } else if (reminder.frequency_type === 'specific_day_of_week') {
-      // Schedule for next occurrence of each weekday at 08:00
       const weekdays = reminder.frequency_config.weekdays ?? [];
       const now = new Date();
-
       for (let i = 0; i < weekdays.length; i++) {
-        const targetWeekday = weekdays[i];
-        const daysUntil = (targetWeekday - now.getDay() + 7) % 7 || 7;
+        const daysUntil = (weekdays[i] - now.getDay() + 7) % 7 || 7;
         const scheduledTime = new Date(now);
         scheduledTime.setDate(scheduledTime.getDate() + daysUntil);
         scheduledTime.setHours(8, 0, 0, 0);
-
-        await scheduleTimeSlotWithRepeats(
-          reminder.id,
-          i,
-          scheduledTime,
-          reminder.label,
-          body,
-          reminder,
-        );
+        await scheduleTimeSlotWithRepeats(reminder.id, i, scheduledTime, reminder.label, body, reminder, channel);
       }
     } else if (reminder.frequency_type === 'cyclic') {
       const at = nextCyclicIntakeDate(reminder);
       if (at) {
-        await scheduleTimeSlotWithRepeats(
-          reminder.id,
-          0,
-          at,
-          reminder.label,
-          body,
-          reminder,
-        );
+        await scheduleTimeSlotWithRepeats(reminder.id, 0, at, reminder.label, body, reminder, channel);
       }
     }
 
-    // By default, mirror to in-app center. Some callers (boot-time reschedule)
-    // should schedule native notifications without creating duplicate feed records.
     if (options?.mirror !== false) {
       await mirrorNotification(
         'finmed_intake_reminder',
         reminder.label,
         body,
-        {
-          reminderId: reminder.id,
-          medicationId: medConfig?.medicationId,
-        },
+        { reminderId: reminder.id, medicationId: medConfig?.medicationId },
       );
     }
   } catch {
@@ -362,6 +328,7 @@ export async function rescheduleAfterSnooze(
     reminder.label,
     body,
     reminder,
+    channelForReminderType(reminder.type),
   );
 
   // Mirror to in-app notification center

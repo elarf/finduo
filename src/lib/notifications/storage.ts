@@ -9,7 +9,18 @@ export async function loadNotifications(): Promise<InAppNotification[]> {
     const json = await AsyncStorage.getItem(STORAGE_KEY);
     if (!json) return [];
     const store: NotificationStore = JSON.parse(json);
-    return store.notifications;
+    
+    // Migrate legacy synthetic: prefixes to live:
+    const migrated = store.notifications.map((n) => ({
+      ...n,
+      id: n.id
+        .replace(/^synthetic:fingo:/, 'live:fingo:')
+        .replace(/^synthetic:finmed:(.+)$/, (_, rest) =>
+          `live:finmed:${rest.includes(':') ? rest : `${rest}:na`}`
+        ),
+    }));
+    
+    return migrated;
   } catch (err) {
     console.error('[NotificationStorage] Load failed:', err);
     return [];

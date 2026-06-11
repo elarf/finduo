@@ -58,6 +58,38 @@ export async function setupFinMedChannels(): Promise<void> {
       visibility: 1,
       vibration: true,
     });
+    await LocalNotifications.createChannel({
+      id: 'finmed_measurement',
+      name: 'Measurement reminder',
+      description: 'Reminders to log health measurements',
+      importance: 3,
+      visibility: 1,
+      vibration: true,
+    });
+    await LocalNotifications.createChannel({
+      id: 'finmed_appointment',
+      name: 'Appointment reminder',
+      description: 'Upcoming appointment alerts',
+      importance: 5,
+      visibility: 1,
+      vibration: true,
+    });
+    await LocalNotifications.createChannel({
+      id: 'finmed_symptom_check',
+      name: 'Symptom check',
+      description: 'Reminders to log symptoms',
+      importance: 3,
+      visibility: 1,
+      vibration: true,
+    });
+    await LocalNotifications.createChannel({
+      id: 'finmed_custom',
+      name: 'Custom reminder',
+      description: 'Custom reminders',
+      importance: 3,
+      visibility: 1,
+      vibration: true,
+    });
   } catch {
     // non-fatal — channels may already exist
   }

@@ -6,7 +6,7 @@ import AppHeader from '../components/AppHeader';
 import type { RootStackParamList } from '../navigation';
 
 type HubTile = {
-  key: 'findash' | 'fingo' | 'finmed' | 'finven' | 'fincal';
+  key: 'findash' | 'fingo' | 'finmed' | 'finven' | 'fincal'| 'finmate';
   label: string;
   icon: any;
   onPress: (navigation: NativeStackNavigationProp<RootStackParamList>) => void;
@@ -42,6 +42,12 @@ const HUB_TILES: HubTile[] = [
     label: 'FinCal',
     icon: require('../../assets/FinCal.webp'),
     onPress: () => Alert.alert('FinCal', 'FinCal module is coming soon.'),
+  },
+  {
+    key: 'finmate',
+    label: 'FinMate',
+    icon: require('../../assets/finmate.webp'),
+    onPress: () => Alert.alert('FinMate', 'FinMate module is coming soon.'),
   },
 ];
 
@@ -125,7 +131,7 @@ const styles = StyleSheet.create({
     minHeight: 138,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#1F3A59',
+    borderColor: '#42edfc',
     backgroundColor: '#000000',
     alignItems: 'center',
     justifyContent: 'center',

@@ -4,9 +4,9 @@ import type { ImageSourcePropType } from 'react-native';
 const notificationImageBySource: Record<NotificationSource, ImageSourcePropType> = {
   finmed_intake_reminder: require('../../../assets/meds.webp'),
   finmed_low_stock: require('../../../assets/medstockup.webp'),
-  finmed_symptom_check: require('../../../assets/finmeds.webp'),
-  finmed_measurement: require('../../../assets/finmeds.webp'),
-  finmed_appointment: require('../../../assets/finmeds.webp'),
+  finmed_symptom_check: require('../../../assets/symptomcheck.webp'),
+  finmed_measurement: require('../../../assets/measure.webp'),
+  finmed_appointment: require('../../../assets/appointment.webp'),
   fingo_service_due: require('../../../assets/maintenance.webp'),
   finven_expiry: require('../../../assets/finven.webp'),
   finven_low_stock: require('../../../assets/finven.webp'),

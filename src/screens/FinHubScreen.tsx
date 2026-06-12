@@ -53,9 +53,12 @@ export default function FinHubScreen() {
       <AppHeader />
 
       <View testID="finhub.screen.content" style={styles.content}>
-        <Text testID="finhub.header.title" style={styles.title}>FinHub</Text>
-        <Text testID="finhub.header.subtitle" style={styles.subtitle}>Launch your modules</Text>
-
+        <Image
+          testID="finhub.header.logo"
+          source={require('../../assets/finhublogo.webp')}
+          style={styles.logo}
+          resizeMode="contain"
+        />
         <View testID="finhub.launcher.grid" style={styles.grid}>
           {HUB_TILES.map((tile) => (
             <TouchableOpacity
@@ -84,6 +87,12 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#000000',
+  },
+  logo: {
+    width: '100%',
+    alignSelf: 'center',
+    overflow: 'hidden',
+    maxHeight: 170,
   },
   content: {
     flex: 1,

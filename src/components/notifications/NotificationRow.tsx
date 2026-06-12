@@ -166,14 +166,14 @@ const styles = StyleSheet.create({
     borderBottomColor: '#FFFFFF',
   },
   iconContainer: {
-    width: 50,
-    height: 50,
+    width: 60,
+    height: 60,
     justifyContent: 'center',
     alignItems: 'center',
   },
   iconImage: {
-    width: 50,
-    height: 50,
+    width: 60,
+    height: 60,
   },
   content: {
     flex: 1,

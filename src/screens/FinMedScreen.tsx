@@ -526,18 +526,18 @@ export default function FinMedScreen() {
                         onPress={() => { logUI(uiPath('finmed', 'today', 'reminder_row', reminder.id), 'press'); openLogSheet(reminder, slotIndex); }}
                       >
                         <View style={styles.todayTimeCol}>
-                          <Text style={styles.todayTimeText}>{time ?? '—'}</Text>
                           <Image
                           source={
                             reminder.type === 'custom' && (reminder.type_config as any)?.icon
-                              ? REMINDER_TYPE_IMAGES['custom']
-                              : REMINDER_TYPE_IMAGES[reminder.type]
+                            ? REMINDER_TYPE_IMAGES['custom']
+                            : REMINDER_TYPE_IMAGES[reminder.type]
                           }
                           style={styles.todayTypeIcon}
                           resizeMode="contain"
                         />
                         </View>
                         <View style={styles.todayInfo}>
+                          <Text style={styles.todayTimeText}>{time ?? '—'}</Text>
                           <Text style={styles.todayMedName}>{reminder.label}</Text>
                           <Text style={styles.todayDose}>{REMINDER_TYPE_LABELS[reminder.type]}</Text>
                         </View>
@@ -602,18 +602,18 @@ export default function FinMedScreen() {
                             style={styles.resolvedCard}
                           >
                             <View style={styles.todayTimeCol}>
-                              <Text style={styles.todayTimeText}>{time ?? '—'}</Text>
                               <Image
-  source={
-    reminder.type === 'custom' && (reminder.type_config as any)?.icon
-      ? REMINDER_TYPE_IMAGES['custom']
-      : REMINDER_TYPE_IMAGES[reminder.type]
-  }
-  style={styles.todayTypeIcon}
-  resizeMode="contain"
-/>
+                                source={
+                                  reminder.type === 'custom' && (reminder.type_config as any)?.icon
+                                  ? REMINDER_TYPE_IMAGES['custom']
+                                  : REMINDER_TYPE_IMAGES[reminder.type]
+                                }
+                                  style={styles.todayTypeIcon}
+                                  resizeMode="contain"
+                                />
                             </View>
                             <View style={styles.todayInfo}>
+                              <Text style={styles.todayTimeText}>{time ?? '—'}</Text>
                               <Text style={styles.todayMedName}>{reminder.label}</Text>
                               <Text style={styles.todayDose}>{REMINDER_TYPE_LABELS[reminder.type]}</Text>
                             </View>
@@ -966,28 +966,28 @@ const styles = StyleSheet.create({
   emptyButtonText: { color: '#F472B6', fontWeight: '700' },
   // Today
   dateCard: {
-    backgroundColor: '#131c23', borderRadius: 10, borderWidth: 1, borderColor: '#1F3A59',
+    backgroundColor: '#1B4D6D', borderRadius: 10, borderWidth: 1, borderColor: '#1F3A59',
     padding: 14, marginBottom: 14, alignItems: 'center',
   },
-  dateCardText: { color: '#8FA8C9', fontSize: 14, fontWeight: '600' },
+  dateCardText: { color: '#FFFFFF', fontSize: 14, fontWeight: '600' },
   sectionHeader: {
     color: '#475569', fontSize: 11, fontWeight: '700',
     textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8,
   },
   todayCard: {
-    flexDirection: 'row', alignItems: 'center', backgroundColor: '#131c23',
+    flexDirection: 'row', alignItems: 'center', backgroundColor: '#000000',
     borderRadius: 10, borderWidth: 1, borderColor: '#1F3A59',
-    padding: 12, marginBottom: 8, gap: 10,
+    padding: 5, marginBottom: 8, gap: 10,
   },
   todayTimeCol: { width: 50, alignItems: 'center', gap: 2 },
   todayTimeText: { color: '#8FA8C9', fontSize: 12, fontWeight: '700' },
-  todayTypeIcon: { width: 24, height: 24 },
-  todayInfo: { flex: 1 },
+  todayTypeIcon: { width: 60, height: 60, marginLeft: 10},
+  todayInfo: { flex: 1 , paddingLeft: 10},
   todayMedName: { color: '#CBD5E1', fontSize: 14, fontWeight: '700' },
   todayDose: { color: '#475569', fontSize: 12, marginTop: 2 },
   takeBtn: {
     paddingHorizontal: 12, paddingVertical: 7, borderRadius: 7,
-    backgroundColor: '#2d0a1a', borderWidth: 1, borderColor: '#F472B6',
+    backgroundColor: '#2d0a1a', borderWidth: 1, borderColor: '#F472B6', marginRight: 10,
   },
   takeBtnText: { color: '#F472B6', fontSize: 12, fontWeight: '700' },
   accordionHeader: {
@@ -999,7 +999,7 @@ const styles = StyleSheet.create({
   resolvedBlock: { paddingBottom: 8 },
   resolvedHint: { color: '#475569', fontSize: 12, fontStyle: 'italic' },
   resolvedCard: {
-    flexDirection: 'row', alignItems: 'center', backgroundColor: '#131c23',
+    flexDirection: 'row', alignItems: 'center', backgroundColor: '#000000',
     borderRadius: 10, borderWidth: 1, borderColor: '#1F3A59',
     padding: 12, marginBottom: 6, gap: 10, opacity: 0.6,
   },

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet,
+  Image, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet,
   Text, TextInput, TouchableOpacity, View,
 } from 'react-native';
 import { useNavigation, useFocusEffect, useRoute } from '@react-navigation/native';
@@ -40,9 +40,17 @@ const REMINDER_TYPE_LABELS: Record<ReminderType, string> = {
 const REMINDER_TYPE_ICONS: Record<ReminderType, string> = {
   medication: '💊',
   measurement: '📏',
-  symptom_check: '😐',
+  symptom_check: '🩺',
   appointment: '📅',
   custom: '🔔',
+};
+
+const REMINDER_TYPE_IMAGES: Record<ReminderType, any> = {
+  medication: require('../../assets/meds.webp'),
+  measurement: require('../../assets/measure.webp'),
+  symptom_check: require('../../assets/symptomcheck.webp'),
+  appointment: require('../../assets/appointment.webp'),
+  custom: require('../../assets/alert.webp'),
 };
 
 export default function FinMedScreen() {
@@ -226,7 +234,7 @@ export default function FinMedScreen() {
         if (reminder.frequency_type === 'multiple_times_daily' && slotIndex !== undefined) {
           // Find the slot with matching slotIndex
           const slots = todayReminderSlots.filter((s) => s.reminder.id === reminder.id);
-          matchingSlot = slots[slotIndex];
+          matchingSlot = slots.find((s) => s.slotIndex === slotIndex);
         } else {
           matchingSlot = todayReminderSlots.find((s) => s.reminder.id === reminder.id);
         }
@@ -236,23 +244,18 @@ export default function FinMedScreen() {
 
     const upcoming = allTodayItems.filter((item) => {
       if ('reminder' in item) {
-        const { reminder, time } = item;
-        // Determine slot index for this item
-        const slotIndex = todayReminderSlots.findIndex(
-          (s) => s.reminder.id === reminder.id && s.time === time
-        );
+        const { reminder, slotIndex } = item;
 
-        // Build key to check completion
         let slotKey: string;
-        if (reminder.frequency_type === 'multiple_times_daily' && slotIndex >= 0) {
+        if (reminder.frequency_type === 'multiple_times_daily') {
           slotKey = `${reminder.id}:${slotIndex}`;
         } else {
           slotKey = reminder.id;
         }
 
         return !completedSlots.has(slotKey);
-      }
-      return true; // Keep legacy medication items
+        }
+        return true;
     });
 
     return { upcomingItems: upcoming, resolvedItems: resolved };
@@ -511,22 +514,28 @@ export default function FinMedScreen() {
                 <Text style={styles.sectionHeader}>Upcoming</Text>
                 {upcomingItems.map((item, idx) => {
                   if ('reminder' in item) {
-                    const { reminder, time } = item;
+                    const { reminder, time, slotIndex } = item;
                     const displayIcon = reminder.type === 'custom' && (reminder.type_config as any)?.icon
                       ? (reminder.type_config as any).icon
-                      : REMINDER_TYPE_ICONS[reminder.type];
-                    // Determine slot index from time in todayReminderSlots
-                    const slotIndex = todayReminderSlots.findIndex(s => s.reminder.id === reminder.id && s.time === time);
+                      : REMINDER_TYPE_IMAGES[reminder.type];
                     return (
                       <TouchableOpacity
                         {...uiProps(uiPath('finmed', 'today', 'reminder_row', reminder.id))}
                         key={`r_${reminder.id}_${idx}`}
                         style={styles.todayCard}
-                        onPress={() => { logUI(uiPath('finmed', 'today', 'reminder_row', reminder.id), 'press'); openLogSheet(reminder, slotIndex >= 0 ? slotIndex : 0); }}
+                        onPress={() => { logUI(uiPath('finmed', 'today', 'reminder_row', reminder.id), 'press'); openLogSheet(reminder, slotIndex); }}
                       >
                         <View style={styles.todayTimeCol}>
                           <Text style={styles.todayTimeText}>{time ?? '—'}</Text>
-                          <Text style={styles.todayTypeIcon}>{displayIcon}</Text>
+                          <Image
+                          source={
+                            reminder.type === 'custom' && (reminder.type_config as any)?.icon
+                              ? REMINDER_TYPE_IMAGES['custom']
+                              : REMINDER_TYPE_IMAGES[reminder.type]
+                          }
+                          style={styles.todayTypeIcon}
+                          resizeMode="contain"
+                        />
                         </View>
                         <View style={styles.todayInfo}>
                           <Text style={styles.todayMedName}>{reminder.label}</Text>
@@ -535,7 +544,7 @@ export default function FinMedScreen() {
                         <TouchableOpacity
                           {...uiProps(uiPath('finmed', 'today', 'complete_button', reminder.id))}
                           style={styles.takeBtn}
-                          onPress={() => { logUI(uiPath('finmed', 'today', 'complete_button', reminder.id), 'press'); openLogSheet(reminder, slotIndex >= 0 ? slotIndex : 0); }}
+                          onPress={() => { logUI(uiPath('finmed', 'today', 'complete_button', reminder.id), 'press'); openLogSheet(reminder, slotIndex); }}
                         >
                           <Text style={styles.takeBtnText}>✓</Text>
                         </TouchableOpacity>
@@ -553,7 +562,7 @@ export default function FinMedScreen() {
                     >
                       <View style={styles.todayTimeCol}>
                         <Text style={styles.todayTimeText}>{time}</Text>
-                        <Text style={styles.todayTypeIcon}>💊</Text>
+                        <Image source={REMINDER_TYPE_IMAGES['medication']} style={styles.todayTypeIcon} resizeMode="contain" />
                       </View>
                       <View style={styles.todayInfo}>
                         <Text style={styles.todayMedName}>{med.name}</Text>
@@ -586,7 +595,7 @@ export default function FinMedScreen() {
                       resolvedItems.map(({ reminder, time, log }) => {
                         const displayIcon = reminder.type === 'custom' && (reminder.type_config as any)?.icon
                           ? (reminder.type_config as any).icon
-                          : REMINDER_TYPE_ICONS[reminder.type];
+                          : REMINDER_TYPE_IMAGES[reminder.type];
                         return (
                           <View
                             key={`resolved_${reminder.id}_${log.id}`}
@@ -594,7 +603,15 @@ export default function FinMedScreen() {
                           >
                             <View style={styles.todayTimeCol}>
                               <Text style={styles.todayTimeText}>{time ?? '—'}</Text>
-                              <Text style={styles.todayTypeIcon}>{displayIcon}</Text>
+                              <Image
+  source={
+    reminder.type === 'custom' && (reminder.type_config as any)?.icon
+      ? REMINDER_TYPE_IMAGES['custom']
+      : REMINDER_TYPE_IMAGES[reminder.type]
+  }
+  style={styles.todayTypeIcon}
+  resizeMode="contain"
+/>
                             </View>
                             <View style={styles.todayInfo}>
                               <Text style={styles.todayMedName}>{reminder.label}</Text>
@@ -633,9 +650,10 @@ export default function FinMedScreen() {
                   if (!group || group.length === 0) return null;
                   return (
                     <View key={type} style={styles.treatmentGroup}>
-                      <Text style={styles.treatmentGroupTitle}>
-                        {REMINDER_TYPE_ICONS[type]}  {REMINDER_TYPE_LABELS[type]}
-                      </Text>
+                      <View style={styles.treatmentGroupTitleRow}>
+                        <Image source={REMINDER_TYPE_IMAGES[type]} style={styles.groupTitleIcon} resizeMode="contain" />
+                        <Text style={styles.treatmentGroupTitle}>{REMINDER_TYPE_LABELS[type]}</Text>
+                      </View>
                       {group.map((r) => {
                         const linkedMed = r.type === 'medication'
                           ? medications.find((m) => m.id === (r.type_config as any).medication_id)
@@ -667,7 +685,10 @@ export default function FinMedScreen() {
                 {/* Medications without reminders */}
                 {medications.length > 0 && (
                   <View style={styles.treatmentGroup}>
-                    <Text style={styles.treatmentGroupTitle}>💊  Medications (stock)</Text>
+                    <View style={styles.treatmentGroupTitleRow}>
+                      <Image source={REMINDER_TYPE_IMAGES['medication']} style={styles.groupTitleIcon} resizeMode="contain" />
+                      <Text style={styles.treatmentGroupTitle}>Medications (stock)</Text>
+                    </View>
                     {medications.map((med) => {
                       const isLow = med.stock_quantity <= med.stock_low_threshold;
                       return (
@@ -718,22 +739,18 @@ export default function FinMedScreen() {
                 >
                   <Text style={[styles.filterChipText, !progressFilter && styles.filterChipTextActive]}>All</Text>
                 </TouchableOpacity>
-                {reminders.map((r) => {
-                  const displayIcon = r.type === 'custom' && (r.type_config as any)?.icon
-                    ? (r.type_config as any).icon
-                    : REMINDER_TYPE_ICONS[r.type];
-                  return (
-                    <TouchableOpacity
-                      key={r.id}
-                      style={[styles.filterChip, progressFilter === r.id && styles.filterChipActive]}
-                      onPress={() => setProgressFilter(r.id)}
-                    >
-                      <Text style={[styles.filterChipText, progressFilter === r.id && styles.filterChipTextActive]}>
-                        {displayIcon} {r.label}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
+                {reminders.map((r) => (
+                  <TouchableOpacity
+                    key={r.id}
+                    style={[styles.filterChip, progressFilter === r.id && styles.filterChipActive]}
+                    onPress={() => setProgressFilter(r.id)}
+                  >
+                    <View style={styles.filterChipInner}>
+                      <Image source={REMINDER_TYPE_IMAGES[r.type]} style={styles.filterChipIcon} resizeMode="contain" />
+                      <Text style={[styles.filterChipText, progressFilter === r.id && styles.filterChipTextActive]}>{r.label}</Text>
+                    </View>
+                  </TouchableOpacity>
+                ))}
               </ScrollView>
             )}
 
@@ -745,15 +762,14 @@ export default function FinMedScreen() {
                 <Text style={styles.emptyHint}>Complete reminders to see your history here.</Text>
               </View>
             ) : (
-              groupedLogs.map(({ reminder, logs }) => {
-                const displayIcon = reminder && reminder.type === 'custom' && (reminder.type_config as any)?.icon
-                  ? (reminder.type_config as any).icon
-                  : reminder ? REMINDER_TYPE_ICONS[reminder.type] : '❓';
-                return (
+              groupedLogs.map(({ reminder, logs }) => (
                   <View key={reminder?.id ?? 'unknown'} style={styles.progressGroup}>
-                    <Text style={styles.progressGroupTitle}>
-                      {reminder ? `${displayIcon} ${reminder.label}` : 'Unknown reminder'}
-                    </Text>
+                    <View style={styles.progressGroupTitleRow}>
+                      {reminder && <Image source={REMINDER_TYPE_IMAGES[reminder.type]} style={styles.groupTitleIcon} resizeMode="contain" />}
+                      <Text style={styles.progressGroupTitle}>
+                        {reminder ? reminder.label : 'Unknown reminder'}
+                      </Text>
+                    </View>
                     {logs.map((log) => (
                       <View key={log.id} style={styles.logRow}>
                         <Text style={styles.logAction}>
@@ -768,8 +784,7 @@ export default function FinMedScreen() {
                       </View>
                     ))}
                   </View>
-                );
-              })
+              ))
             )}
           </>
         )}
@@ -966,7 +981,7 @@ const styles = StyleSheet.create({
   },
   todayTimeCol: { width: 50, alignItems: 'center', gap: 2 },
   todayTimeText: { color: '#8FA8C9', fontSize: 12, fontWeight: '700' },
-  todayTypeIcon: { fontSize: 16 },
+  todayTypeIcon: { width: 24, height: 24 },
   todayInfo: { flex: 1 },
   todayMedName: { color: '#CBD5E1', fontSize: 14, fontWeight: '700' },
   todayDose: { color: '#475569', fontSize: 12, marginTop: 2 },
@@ -996,9 +1011,11 @@ const styles = StyleSheet.create({
   deleteLogBtnText: { color: '#F472B6', fontSize: 20, fontWeight: '700', lineHeight: 20 },
   // Treatment
   treatmentGroup: { marginBottom: 20 },
+  treatmentGroupTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 },
+  groupTitleIcon: { width: 16, height: 16 },
   treatmentGroupTitle: {
     color: '#8FA8C9', fontSize: 12, fontWeight: '700',
-    textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8,
+    textTransform: 'uppercase', letterSpacing: 0.5,
   },
   reminderRow: {
     flexDirection: 'row', alignItems: 'center', backgroundColor: '#131c23',
@@ -1030,11 +1047,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8,
     borderWidth: 1, borderColor: '#1F3A59', backgroundColor: '#0E1A2B', marginRight: 6,
   },
+  filterChipInner: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  filterChipIcon: { width: 14, height: 14 },
   filterChipActive: { borderColor: '#F472B6', backgroundColor: '#2d0a1a' },
   filterChipText: { color: '#475569', fontSize: 12 },
   filterChipTextActive: { color: '#F472B6', fontWeight: '600' },
   progressGroup: { marginBottom: 20 },
-  progressGroupTitle: { color: '#8FA8C9', fontSize: 13, fontWeight: '700', marginBottom: 8 },
+  progressGroupTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 },
+  progressGroupTitle: { color: '#8FA8C9', fontSize: 13, fontWeight: '700' },
   logRow: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
     paddingVertical: 8, borderBottomWidth: 1, borderColor: '#0E1A2B',

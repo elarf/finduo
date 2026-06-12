@@ -490,35 +490,32 @@ export function useFinmed(user: User | null) {
 
   // ─── Derived: today's reminder slots ─────────────────────────────────────────
 
-  const getTodayReminders = useCallback((): Array<{ reminder: FinmedReminder; time: string | null }> => {
-    const now = new Date();
-    const todayDow = now.getDay();
-    const todayStr = now.toISOString().slice(0, 10);
+  const getTodayReminders = useCallback((): Array<{ reminder: FinmedReminder; time: string | null; slotIndex: number }> => {
+      const now = new Date();
+      const todayDow = now.getDay();
+      const todayStr = now.toISOString().slice(0, 10);
 
-    return reminders
-      .filter((r) => r.active && r.start_date <= todayStr && (!r.end_date || r.end_date >= todayStr))
-      .flatMap((r) => {
-        if (r.frequency_type === 'on_demand') return [];
-        if (r.type === 'appointment') {
-          const cfg = r.type_config as { date?: string; time?: string };
-          if (cfg.date === todayStr) return [{ reminder: r, time: cfg.time ?? null }];
-          return [];
-        }
-        const fc = r.frequency_config;
-        if (r.frequency_type === 'multiple_times_daily') {
-          return (fc.times ?? ['08:00']).map((t) => ({ reminder: r, time: t }));
-        }
-        if (r.frequency_type === 'specific_day_of_week') {
-          if (!(fc.weekdays ?? []).includes(todayDow)) return [];
-          const time = fc.times?.[0] ?? null;
-          return [{ reminder: r, time }];
-        }
-        // interval / cyclic — show once without specific time
-        return [{ reminder: r, time: null }];
-      })
-      .sort((a, b) => (a.time ?? '99:99').localeCompare(b.time ?? '99:99'));
+      return reminders
+        .filter((r) => r.active && r.start_date <= todayStr && (!r.end_date || r.end_date >= todayStr))
+        .flatMap((r) => {
+          if (r.frequency_type === 'on_demand') return [];
+          if (r.type === 'appointment') {
+            const cfg = r.type_config as { date?: string; time?: string };
+            if (cfg.date === todayStr) return [{ reminder: r, time: cfg.time ?? null, slotIndex: 0 }];
+            return [];
+          }
+          const fc = r.frequency_config;
+          if (r.frequency_type === 'multiple_times_daily') {
+            return (fc.times ?? ['08:00']).map((t, i) => ({ reminder: r, time: t, slotIndex: i }));
+          }
+          if (r.frequency_type === 'specific_day_of_week') {
+            if (!(fc.weekdays ?? []).includes(todayDow)) return [];
+            return [{ reminder: r, time: fc.times?.[0] ?? null, slotIndex: 0 }];
+          }
+          return [{ reminder: r, time: null, slotIndex: 0 }];
+        })
+        .sort((a, b) => (a.time ?? '99:99').localeCompare(b.time ?? '99:99'));
   }, [reminders]);
-
   return {
     // legacy medication API
     medications, loading,

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, Image } from 'react-native';
+import { View, Text, Pressable, StyleSheet, ActivityIndicator, Alert, Image } from 'react-native';
 import type { GestureResponderEvent } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -111,9 +111,11 @@ export default function NotificationRow({ notification }: NotificationRowProps) 
     (notification.source === 'finmed_intake_reminder' || notification.source === 'fingo_service_due');
 
   return (
-    <TouchableOpacity
+    <Pressable
       style={[styles.row, !notification.isRead && styles.rowUnread]}
       onPress={handleTap}
+      android_ripple={null}
+
     >
       <View style={styles.iconContainer}>
         <Image source={iconImage} style={styles.iconImage} resizeMode="contain" />
@@ -130,7 +132,7 @@ export default function NotificationRow({ notification }: NotificationRowProps) 
       </View>
 
       {showDoneButton && (
-        <TouchableOpacity
+        <Pressable
           style={[styles.doneButton, doneLoading && styles.doneButtonDisabled]}
           onPress={(event) => {
             void handleMarkDone(event);
@@ -142,9 +144,9 @@ export default function NotificationRow({ notification }: NotificationRowProps) 
           ) : (
             <Text style={styles.doneButtonText}>Done</Text>
           )}
-        </TouchableOpacity>
+        </Pressable>
       )}
-    </TouchableOpacity>
+    </Pressable>
   );
 }
 
@@ -153,13 +155,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     padding: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#0E1A2B',
+    borderBottomColor: '#42EDFC',
     alignItems: 'center',
     gap: 12,
     backgroundColor: '#000000',
   },
   rowUnread: {
-    backgroundColor: '#03070F',
+    backgroundColor: '#000000',
+    borderBottomWidth: 1,
+    borderBottomColor: '#FFFFFF',
   },
   iconContainer: {
     width: 50,
@@ -173,6 +177,7 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
+    gap: 8,
   },
   title: {
     color: '#8FA8C9',

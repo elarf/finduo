@@ -126,7 +126,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     borderWidth: 1,
     borderColor: '#1F3A59',
-    backgroundColor: '#0B1728',
+    backgroundColor: '#131c23',
   },
   fadeTop: {
     position: 'absolute', top: 0, left: 0, right: 0,
@@ -161,7 +161,7 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
   kbSheet: {
-    backgroundColor: '#0B1728',
+    backgroundColor: '#131c23',
     borderRadius: 14,
     borderWidth: 1,
     borderColor: '#1F3A59',

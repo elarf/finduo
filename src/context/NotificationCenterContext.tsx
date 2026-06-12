@@ -10,6 +10,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import type { InAppNotification, NotificationSource } from '../lib/notifications/types';
 import { loadNotifications, saveNotifications } from '../lib/notifications/storage';
 import { initNotificationBridge } from '../lib/notifications/bridge';
+import { initMarkDoneBridge } from '../lib/notifications/actionBridge';
 import { confirmMedicationIntake } from '../lib/finmed/actions';
 import { acknowledgeServiceInterval } from '../lib/fingo/actions';
 import { computeIntervalHealthFromLogs, formatIntervalRemaining, trackingMethodUnit } from '../lib/fingo/health';
@@ -171,18 +172,31 @@ function nextReminderDate(reminder: any): Date | null {
   }
 
   if (reminder.frequency_type === 'specific_day_of_week') {
-    const weekdays: number[] = reminder.frequency_config?.weekdays ?? [];
-    if (weekdays.length === 0) return null;
+  const weekdays: number[] = reminder.frequency_config?.weekdays ?? [];
+  if (weekdays.length === 0) return null;
 
-    const candidates = weekdays.map((weekday) => {
-      const d = new Date(now);
-      const daysUntil = (weekday - d.getDay() + 7) % 7 || 7;
-      d.setDate(d.getDate() + daysUntil);
-      d.setHours(8, 0, 0, 0);
+  const timeStr = reminder.frequency_config?.times?.[0] ?? '08:00';
+  const [h, m] = timeStr.split(':').map(Number);
+
+  const candidates = weekdays.map((weekday) => {
+    const d = new Date(now);
+    const daysUntil = (weekday - d.getDay() + 7) % 7;
+    if (daysUntil === 0) {
+      // Ma van — ellenőrzük hogy az időpont még nem múlt el
+      d.setHours(h, m, 0, 0);
+      if (d > now) return d;
+      // Már elmúlt, jövő hétre
+      d.setDate(d.getDate() + 7);
+      d.setHours(h, m, 0, 0);
       return d;
-    });
-    candidates.sort((a, b) => a.getTime() - b.getTime());
-    return candidates[0] ?? null;
+    }
+    d.setDate(d.getDate() + daysUntil);
+    d.setHours(h, m, 0, 0);
+    return d;
+  });
+
+  candidates.sort((a, b) => a.getTime() - b.getTime());
+  return candidates[0] ?? null;
   }
 
   if (reminder.frequency_type === 'cyclic') {
@@ -247,7 +261,6 @@ function getUpcomingTodaySlots(reminder: any, now = new Date()): Array<{ slotInd
     const at = new Date(now);
     at.setHours(h, m, 0, 0);
     if (!isSameLocalDay(at, now)) continue;
-    if (at <= now) continue;
 
     slots.push({ slotIndex: i, at });
   }
@@ -431,7 +444,7 @@ export function NotificationCenterProvider({ children }: { children: React.React
               : `${comp.name}: ${formatIntervalRemaining(health)} remaining`;
 
             synthetic.push({
-              id: `synthetic:fingo:${interval.id}`,
+              id: `live:fingo:${interval.id}`,
               source: 'fingo_service_due',
               title: interval.name,
               body,
@@ -481,7 +494,6 @@ export function NotificationCenterProvider({ children }: { children: React.React
       for (const reminder of reminders) {
         if (resolvedReminderKeys.has(reminder.id)) continue;
 
-        if (reminder.type !== 'medication') continue;
         if (reminder.frequency_type === 'on_demand') continue;
         if (reminder.end_date && new Date(reminder.end_date) < now) continue;
 
@@ -490,24 +502,29 @@ export function NotificationCenterProvider({ children }: { children: React.React
           ? `${medConfig.doseAmount} ${medConfig.doseUnit}`
           : 'health check';
 
-        if (reminder.frequency_type === 'multiple_times_daily') {
-          const upcomingSlots = getUpcomingTodaySlots(reminder, now);
-          for (const slot of upcomingSlots) {
-            if (resolvedReminderKeys.has(`${reminder.id}:${slot.slotIndex}`)) continue;
+        if (reminder.frequency_type === 'specific_day_of_week') {
+          const weekdays: number[] = reminder.frequency_config?.weekdays ?? [];
+          const todayWeekday = now.getDay();
+          if (!weekdays.includes(todayWeekday)) continue;
 
-            const cadence = `Next ${formatNextTime(slot.at)}`;
-            synthetic.push({
-              id: `live:finmed:${reminder.id}:${slot.slotIndex}`,
-              source: 'finmed_intake_reminder',
-              title: reminder.label,
-              body: `${doseText} - ${cadence}`,
-              metadata: {
-                reminderId: reminder.id,
-                medicationId: medConfig?.medicationId,
-                slotIndex: slot.slotIndex,
-              } as InAppNotification['metadata'] & { slotIndex?: number },
-            });
-          }
+          const timeStr = reminder.frequency_config?.times?.[0] ?? '08:00';
+          const [h, m] = timeStr.split(':').map(Number);
+          const at = new Date(now);
+          at.setHours(h, m, 0, 0);
+
+          if (resolvedReminderKeys.has(reminder.id)) continue;
+
+          const cadence = `Today at ${timeStr}`;
+          synthetic.push({
+            id: `live:finmed:${reminder.id}:na`,
+            source: 'finmed_intake_reminder',
+            title: reminder.label,
+            body: `${doseText} - ${cadence}`,
+            metadata: {
+              reminderId: reminder.id,
+              medicationId: medConfig?.medicationId,
+            } as InAppNotification['metadata'],
+          });
           continue;
         }
 
@@ -559,6 +576,7 @@ export function NotificationCenterProvider({ children }: { children: React.React
   }, []);
 
   const markDone = useCallback(
+    
     async (notificationId: string): Promise<{ success: boolean; error?: string }> => {
       console.log('[NotificationCenter] markDone:start', { notificationId, userId: user?.id });
       try {
@@ -783,6 +801,10 @@ export function NotificationCenterProvider({ children }: { children: React.React
     },
     [queryClient, user],
   );
+  // Initialize markDone bridge
+  useEffect(() => {
+    initMarkDoneBridge(markDone);
+  }, [markDone]);
 
   const allDone = useCallback(async () => {
     const actionableNotifs = notificationsRef.current.filter(

@@ -24,6 +24,7 @@ import { setupTrackingActionListener } from './src/lib/fingo/trackingNotificatio
 import { setupFinMedChannels } from './src/lib/fingo/notifications';
 import { setupIntakeNotificationActions, setupIntakeNotificationActionListener, setupIntakeNotificationReceivedListener } from './src/lib/finmed/notifications';
 import { navigationRef as navRef } from './src/navigation/navigationRef';
+import { bridgeMarkDone } from './src/lib/notifications/actionBridge';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -76,22 +77,15 @@ export default function App() {
     // Setup FinMed notification action handlers
     setupIntakeNotificationActionListener(
       (reminderId, slotIndex) => {
-        // Handle "Taken" action - navigate to FinMed and trigger completion
-        console.log('[App] Taken action:', { reminderId, slotIndex });
-        if (navigationRef.isReady()) {
-          navigationRef.navigate('FinMed', { action: 'taken', reminderId, slotIndex });
-        }
+        const notifId = `live:finmed:${reminderId}:${slotIndex ?? 'na'}`;
+        void bridgeMarkDone(notifId);
       },
       (reminderId, slotIndex) => {
-        // Handle "Snooze" action - navigate to FinMed and show snooze sheet
-        console.log('[App] Snooze action:', { reminderId, slotIndex });
         if (navigationRef.isReady()) {
           navigationRef.navigate('FinMed', { action: 'snooze', reminderId, slotIndex });
         }
       },
       (reminderId, slotIndex) => {
-        // Handle "Tap" action - navigate to FinMed screen
-        console.log('[App] Tap action:', { reminderId, slotIndex });
         if (navigationRef.isReady()) {
           navigationRef.navigate('FinMed');
         }

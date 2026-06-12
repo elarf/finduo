@@ -336,7 +336,7 @@ export function useFinmed(user: User | null) {
         if (old && payload.active) await scheduleIntakeReminder({ ...old, ...payload, id: maybeId });
       } else {
         const { data, error } = await supabase.from('finmed_reminders').insert({
-          user_id: user.id, ...payload,
+          ...payload, user_id: user.id, 
         }).select().single();
         if (error) throw error;
         await scheduleIntakeReminder(data as FinmedReminder);
@@ -510,7 +510,8 @@ export function useFinmed(user: User | null) {
         }
         if (r.frequency_type === 'specific_day_of_week') {
           if (!(fc.weekdays ?? []).includes(todayDow)) return [];
-          return [{ reminder: r, time: null }];
+          const time = fc.times?.[0] ?? null;
+          return [{ reminder: r, time }];
         }
         // interval / cyclic — show once without specific time
         return [{ reminder: r, time: null }];

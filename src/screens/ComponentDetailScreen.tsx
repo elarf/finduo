@@ -988,7 +988,7 @@ const styles = StyleSheet.create({
   },
   // Stats expanded
   statsExpanded: {
-    backgroundColor: '#0B1728',
+    backgroundColor: '#131c23',
     borderWidth: 1,
     borderTopWidth: 0,
     borderColor: '#1F3A59',
@@ -1324,7 +1324,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.5)',
   },
   swapModalSheet: {
-    backgroundColor: '#0B1728',
+    backgroundColor: '#131c23',
     borderTopLeftRadius: 16,
     borderTopRightRadius: 16,
     borderTopWidth: 1,

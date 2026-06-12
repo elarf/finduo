@@ -62,7 +62,7 @@ export default function NotificationHistorySheet() {
             </View>
           </View>
 
-          <ScrollView showsVerticalScrollIndicator={false}>
+          <ScrollView showsVerticalScrollIndicator={false} >
             {visibleNotifications.length === 0 ? (
               <View style={styles.emptyState}>
                 <Image source={getNoNotificationImage()} style={styles.emptyIconImage} resizeMode="contain" />
@@ -94,11 +94,10 @@ const styles = StyleSheet.create({
     zIndex: 1,
   },
   sheet: {
-    backgroundColor: '#0B1728',
+    backgroundColor: '#000000',
     borderTopLeftRadius: 16,
     borderTopRightRadius: 16,
-    borderTopWidth: 1,
-    borderColor: '#1F3A59',
+    borderTopWidth: 2,
     maxHeight: '80%',
     paddingHorizontal: 16,
     paddingTop: 10,
@@ -143,10 +142,11 @@ const styles = StyleSheet.create({
   emptyState: {
     paddingVertical: 48,
     alignItems: 'center',
+    backgroundColor: '#000000',
   },
   emptyIconImage: {
-    width: 64,
-    height: 64,
+    width: 200,
+    height: 200,
     marginBottom: 12,
   },
   emptyText: {

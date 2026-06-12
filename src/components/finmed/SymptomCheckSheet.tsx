@@ -284,13 +284,13 @@ const styles = StyleSheet.create({
   overlay: { flex: 1, justifyContent: 'flex-end' },
   backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.6)' },
   sheet: {
-    backgroundColor: '#0B1728',
+    backgroundColor: '#131c23',
     borderTopLeftRadius: 16, borderTopRightRadius: 16,
     borderTopWidth: 1, borderColor: '#1F3A59',
     maxHeight: '90%', paddingHorizontal: 16, paddingTop: 10,
   },
   pickerSheet: {
-    backgroundColor: '#0B1728',
+    backgroundColor: '#131c23',
     borderTopLeftRadius: 16, borderTopRightRadius: 16,
     borderTopWidth: 1, borderColor: '#1F3A59',
     maxHeight: '85%', paddingHorizontal: 16, paddingTop: 10,
@@ -331,7 +331,7 @@ const styles = StyleSheet.create({
   severityRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   severityHint: { color: '#475569', fontSize: 10, width: 56, textAlign: 'center' },
   severityDots: { flex: 1, flexDirection: 'row', justifyContent: 'space-between' },
-  dot: { width: 16, height: 16, borderRadius: 8, borderWidth: 1, borderColor: '#1F3A59', backgroundColor: '#0B1728' },
+  dot: { width: 16, height: 16, borderRadius: 8, borderWidth: 1, borderColor: '#1F3A59', backgroundColor: '#131c23' },
   dotActive: { backgroundColor: '#F472B6', borderColor: '#F472B6' },
   severityValue: { color: '#8FA8C9', fontSize: 11, textAlign: 'right', marginTop: 4 },
   noteInput: {

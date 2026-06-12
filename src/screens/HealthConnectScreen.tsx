@@ -1099,7 +1099,7 @@ const styles = StyleSheet.create({
   },
   // Aggregated — workout cards
   workoutCard: {
-    backgroundColor: '#0B1728',
+    backgroundColor: '#131c23',
     borderRadius: 10,
     borderWidth: 1,
     borderColor: '#1F3A59',
@@ -1202,7 +1202,7 @@ const styles = StyleSheet.create({
   stepsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#0B1728',
+    backgroundColor: '#131c23',
     borderRadius: 10,
     borderWidth: 1,
     borderColor: '#1F3A59',
@@ -1237,7 +1237,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.5)',
   },
   sheetContent: {
-    backgroundColor: '#0B1728',
+    backgroundColor: '#131c23',
     borderTopLeftRadius: 16,
     borderTopRightRadius: 16,
     borderTopWidth: 1,

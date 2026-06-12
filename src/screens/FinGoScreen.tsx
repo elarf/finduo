@@ -1082,7 +1082,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   modalSheet: {
-    backgroundColor: '#0B1728',
+    backgroundColor: '#131c23',
     borderTopLeftRadius: 16,
     borderTopRightRadius: 16,
     padding: 20,
@@ -1161,7 +1161,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     borderColor: '#1F3A59',
-    backgroundColor: '#0B1728',
+    backgroundColor: '#131c23',
   },
   activeToggleDotOn: {
     borderColor: '#4ade80',

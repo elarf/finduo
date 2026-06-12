@@ -951,7 +951,7 @@ const styles = StyleSheet.create({
   emptyButtonText: { color: '#F472B6', fontWeight: '700' },
   // Today
   dateCard: {
-    backgroundColor: '#0B1728', borderRadius: 10, borderWidth: 1, borderColor: '#1F3A59',
+    backgroundColor: '#131c23', borderRadius: 10, borderWidth: 1, borderColor: '#1F3A59',
     padding: 14, marginBottom: 14, alignItems: 'center',
   },
   dateCardText: { color: '#8FA8C9', fontSize: 14, fontWeight: '600' },
@@ -960,7 +960,7 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8,
   },
   todayCard: {
-    flexDirection: 'row', alignItems: 'center', backgroundColor: '#0B1728',
+    flexDirection: 'row', alignItems: 'center', backgroundColor: '#131c23',
     borderRadius: 10, borderWidth: 1, borderColor: '#1F3A59',
     padding: 12, marginBottom: 8, gap: 10,
   },
@@ -984,7 +984,7 @@ const styles = StyleSheet.create({
   resolvedBlock: { paddingBottom: 8 },
   resolvedHint: { color: '#475569', fontSize: 12, fontStyle: 'italic' },
   resolvedCard: {
-    flexDirection: 'row', alignItems: 'center', backgroundColor: '#0B1728',
+    flexDirection: 'row', alignItems: 'center', backgroundColor: '#131c23',
     borderRadius: 10, borderWidth: 1, borderColor: '#1F3A59',
     padding: 12, marginBottom: 6, gap: 10, opacity: 0.6,
   },
@@ -1001,7 +1001,7 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8,
   },
   reminderRow: {
-    flexDirection: 'row', alignItems: 'center', backgroundColor: '#0B1728',
+    flexDirection: 'row', alignItems: 'center', backgroundColor: '#131c23',
     borderRadius: 10, borderWidth: 1, borderColor: '#1F3A59', padding: 14, marginBottom: 6,
   },
   reminderRowLeft: { flex: 1 },
@@ -1009,7 +1009,7 @@ const styles = StyleSheet.create({
   reminderRowMeta: { color: '#475569', fontSize: 12, marginTop: 2 },
   reminderRowChevron: { color: '#475569', fontSize: 18 },
   medRow: {
-    flexDirection: 'row', alignItems: 'center', backgroundColor: '#0B1728',
+    flexDirection: 'row', alignItems: 'center', backgroundColor: '#131c23',
     borderRadius: 10, borderWidth: 1, borderColor: '#1F3A59', padding: 14, marginBottom: 6,
   },
   medRowLeft: { flex: 1 },
@@ -1045,7 +1045,7 @@ const styles = StyleSheet.create({
   // Modals
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
   modalSheet: {
-    backgroundColor: '#0B1728', borderTopLeftRadius: 16, borderTopRightRadius: 16,
+    backgroundColor: '#131c23', borderTopLeftRadius: 16, borderTopRightRadius: 16,
     padding: 20, paddingBottom: 40, borderTopWidth: 1, borderColor: '#1F3A59',
   },
   modalTitle: { color: '#CBD5E1', fontSize: 16, fontWeight: '700', marginBottom: 14 },

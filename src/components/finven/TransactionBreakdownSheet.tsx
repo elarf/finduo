@@ -316,7 +316,7 @@ const styles = StyleSheet.create({
   backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.6)' },
   wrapper: { justifyContent: 'flex-end' },
   sheet: {
-    backgroundColor: '#0B1728',
+    backgroundColor: '#131c23',
     borderTopLeftRadius: 16,
     borderTopRightRadius: 16,
     borderTopWidth: 1,
@@ -384,7 +384,7 @@ const styles = StyleSheet.create({
   productSelectedName: { color: '#60A5FA', fontSize: 13, fontWeight: '600' },
   changeText: { color: '#475569', fontSize: 11 },
   productDropdown: {
-    backgroundColor: '#0B1728',
+    backgroundColor: '#131c23',
     borderWidth: 1,
     borderColor: '#1F3A59',
     borderRadius: 8,
@@ -430,7 +430,7 @@ const styles = StyleSheet.create({
   lineFields: { flexDirection: 'row', gap: 6, marginBottom: 6 },
   fieldLabel: { color: '#475569', fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.3, marginBottom: 3 },
   fieldInput: {
-    backgroundColor: '#0B1728',
+    backgroundColor: '#131c23',
     borderWidth: 1,
     borderColor: '#1F3A59',
     borderRadius: 6,
@@ -445,7 +445,7 @@ const styles = StyleSheet.create({
     borderRadius: 5,
     borderWidth: 1,
     borderColor: '#1F3A59',
-    backgroundColor: '#0B1728',
+    backgroundColor: '#131c23',
     marginRight: 4,
   },
   locationChipActive: { borderColor: '#60A5FA', backgroundColor: '#071a2e' },

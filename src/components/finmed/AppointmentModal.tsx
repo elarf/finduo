@@ -115,7 +115,7 @@ const styles = StyleSheet.create({
   backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.6)' },
   wrapper: { justifyContent: 'flex-end' },
   sheet: {
-    backgroundColor: '#0B1728',
+    backgroundColor: '#131c23',
     borderTopLeftRadius: 16, borderTopRightRadius: 16,
     borderTopWidth: 1, borderColor: '#1F3A59',
     paddingHorizontal: 16, paddingTop: 10,

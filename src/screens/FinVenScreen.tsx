@@ -565,7 +565,7 @@ const styles = StyleSheet.create({
   emptyButtonText: { color: '#60A5FA', fontWeight: '700' },
   // Inventory tab
   locationGroup: {
-    backgroundColor: '#0B1728',
+    backgroundColor: '#131c23',
     borderRadius: 10,
     borderWidth: 1,
     borderColor: '#1F3A59',
@@ -592,7 +592,7 @@ const styles = StyleSheet.create({
   productRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#0B1728',
+    backgroundColor: '#131c23',
     borderRadius: 10,
     borderWidth: 1,
     borderColor: '#1F3A59',
@@ -617,7 +617,7 @@ const styles = StyleSheet.create({
   shoppingRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#0B1728',
+    backgroundColor: '#131c23',
     borderRadius: 10,
     borderWidth: 1,
     borderColor: '#1F3A59',
@@ -647,7 +647,7 @@ const styles = StyleSheet.create({
   // Modal
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
   modalSheet: {
-    backgroundColor: '#0B1728',
+    backgroundColor: '#131c23',
     borderTopLeftRadius: 16,
     borderTopRightRadius: 16,
     padding: 20,

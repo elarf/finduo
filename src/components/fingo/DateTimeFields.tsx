@@ -160,7 +160,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   timeCard: {
-    backgroundColor: '#0B1728',
+    backgroundColor: '#131c23',
     borderRadius: 12,
     borderWidth: 1,
     borderColor: '#1F3A59',

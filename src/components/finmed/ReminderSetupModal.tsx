@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   KeyboardAvoidingView, Modal, Platform, Pressable,
-  ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View,
+  ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, Image,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { logUI, uiPath, uiProps } from '../../lib/devtools';
@@ -187,7 +187,7 @@ export default function ReminderSetupModal({
   const buildFrequencyConfig = (): FrequencyConfig => {
     if (freqType === 'interval') return { interval_hours: parseFloat(intervalHours) || 8 };
     if (freqType === 'multiple_times_daily') return { times };
-    if (freqType === 'specific_day_of_week') return { weekdays };
+    if (freqType === 'specific_day_of_week') return { weekdays, times: [times[0]] };
     if (freqType === 'cyclic') return {
       cycle_intake_days: parseInt(cycleIntake, 10) || 21,
       cycle_pause_days: parseInt(cyclePause, 10) || 7,
@@ -255,7 +255,7 @@ export default function ReminderSetupModal({
       <View {...uiProps(uiPath('finmed', 'reminder_setup', 'overlay'))} style={styles.overlay}>
         <Pressable {...uiProps(uiPath('finmed', 'reminder_setup', 'backdrop'))} style={styles.backdrop} onPress={onClose} />
         <KeyboardAvoidingView {...uiProps(uiPath('finmed', 'reminder_setup', 'wrapper'))} behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.wrapper}>
-          <View {...uiProps(uiPath('finmed', 'reminder_setup', 'sheet'))} style={[styles.sheet, { paddingBottom: Math.max(bottom, 16) }]}>
+          <View {...uiProps(uiPath('finmed', 'reminder_setup', 'sheet'))} style={[styles.sheet, { paddingBottom: Math.max(bottom + 20, 36) }]}>
             <View {...uiProps(uiPath('finmed', 'reminder_setup', 'handle'))} style={styles.handle} />
             <Text {...uiProps(uiPath('finmed', 'reminder_setup', 'title'))} style={styles.title}>
               {editing
@@ -274,7 +274,7 @@ export default function ReminderSetupModal({
                     style={styles.typeCard}
                     onPress={() => { logUI(uiPath('finmed', 'reminder_setup', 'type', t), 'press'); selectType(t); }}
                   >
-                    <Text style={styles.typeIcon}>{TYPE_ICONS[t]}</Text>
+                    <Image source={TYPE_IMAGES[t]} style={styles.typeIcon} resizeMode="contain" />
                     <Text style={styles.typeLabel}>{lbl}</Text>
                   </TouchableOpacity>
                 ))}
@@ -284,7 +284,7 @@ export default function ReminderSetupModal({
                     style={styles.typeCard}
                     onPress={() => { logUI(uiPath('finmed', 'reminder_setup', 'type', 'med_stock'), 'press'); onClose(); onCreateMedStock(); }}
                   >
-                    <Text style={styles.typeIcon}>💊</Text>
+                    <Image source={require('../../../assets/medstockup.webp')} style={styles.typeIcon} resizeMode="contain" />
                     <Text style={styles.typeLabel}>Med Stock</Text>
                   </TouchableOpacity>
                 )}
@@ -571,24 +571,24 @@ const TYPE_LABELS: Record<ReminderType, string> = {
   custom: 'Custom',
 };
 
-const TYPE_ICONS: Record<ReminderType, string> = {
-  medication: '💊',
-  measurement: '📏',
-  symptom_check: '😐',
-  appointment: '📅',
-  custom: '🔔',
+const TYPE_IMAGES: Record<ReminderType, any> = {
+  medication: require('../../../assets/meds.webp'),
+  measurement: require('../../../assets/measure.webp'),
+  symptom_check: require('../../../assets/symptomcheck.webp'),
+  appointment: require('../../../assets/appointment.webp'),
+  custom: require('../../../assets/alert.webp'),
 };
 
 const styles = StyleSheet.create({
   overlay: { flex: 1, justifyContent: 'flex-end' },
   backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.6)' },
-  wrapper: { justifyContent: 'flex-end' },
+  wrapper: { justifyContent: 'flex-end', paddingBottom: 0 },
   sheet: {
-    backgroundColor: '#0B1728',
+    backgroundColor: '#131c23',
     borderTopLeftRadius: 16,
     borderTopRightRadius: 16,
     borderTopWidth: 1,
-    borderColor: '#1F3A59',
+    borderColor: '#42edfc',
     maxHeight: '92%',
     paddingHorizontal: 16,
     paddingTop: 10,
@@ -601,11 +601,11 @@ const styles = StyleSheet.create({
   typeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, paddingBottom: 20 },
   typeCard: {
     flex: 1, minWidth: '45%',
-    borderRadius: 12, borderWidth: 1, borderColor: '#1F3A59',
-    backgroundColor: '#0E1A2B', paddingVertical: 20,
+    borderRadius: 12, borderWidth: 1, borderColor: '#42edfc',
+    backgroundColor: '#000000', paddingVertical: 20,
     alignItems: 'center', gap: 6,
   },
-  typeIcon: { fontSize: 28 },
+  typeIcon: { width: 80, height: 80 },
   typeLabel: { color: '#CBD5E1', fontSize: 13, fontWeight: '600' },
   label: {
     color: '#475569', fontSize: 11, fontWeight: '700',
